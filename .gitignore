@@ -1,0 +1,30 @@
+# 本地长期记忆（只保留在当前工作区）
+/.codex/memory.md
+
+# 本地配置与密钥
+.env
+.env.*
+!.env.example
+
+# 依赖、缓存与构建产物
+node_modules/
+dist/
+build/
+.next/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# 本地录音、上传文件和运行数据
+/recordings/
+/uploads/
+/storage/
+/data/local/
+
+# 编辑器与系统文件
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
