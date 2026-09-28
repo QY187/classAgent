@@ -43,6 +43,11 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)) -> Cours
     return course
 
 
+@app.get("/courses", response_model=list[CourseRead])
+def list_courses(db: Session = Depends(get_db)) -> list[Course]:
+    return list(db.scalars(select(Course).order_by(Course.created_at.desc())))
+
+
 @app.post("/courses/{course_id}/lessons", response_model=LessonRead, status_code=201)
 def create_lesson(course_id: str, payload: LessonCreate, db: Session = Depends(get_db)) -> Lesson:
     if db.get(Course, course_id) is None:
@@ -51,6 +56,21 @@ def create_lesson(course_id: str, payload: LessonCreate, db: Session = Depends(g
     db.add(lesson)
     db.commit()
     db.refresh(lesson)
+    return lesson
+
+
+@app.get("/courses/{course_id}/lessons", response_model=list[LessonRead])
+def list_lessons(course_id: str, db: Session = Depends(get_db)) -> list[Lesson]:
+    if db.get(Course, course_id) is None:
+        raise HTTPException(status_code=404, detail="课程不存在")
+    return list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc())))
+
+
+@app.get("/lessons/{lesson_id}", response_model=LessonRead)
+def get_lesson(lesson_id: str, db: Session = Depends(get_db)) -> Lesson:
+    lesson = db.get(Lesson, lesson_id)
+    if lesson is None:
+        raise HTTPException(status_code=404, detail="课次不存在")
     return lesson
 
 
