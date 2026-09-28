@@ -13,7 +13,7 @@ ClassAgent 是一个面向学生的上课助手 Agent。核心体验是：课上
 - `docs/`：产品、设计与技术方案。
 - `apps/api/`：FastAPI 后端和异步 Worker。
 - `apps/web/`：Next.js 前端技术验证页面。
-- `docker-compose.yml`：PostgreSQL、Redis、MinIO、API 和 Worker 的本地开发环境。
+- `docker-compose.yml`：PostgreSQL、Redis、API 和 Worker 的本地开发环境。
 
 ## 技术验证版启动
 
@@ -35,4 +35,4 @@ npm run dev
 
 前端地址：<http://localhost:3000>。
 
-当前默认使用 `TRANSCRIPTION_PROVIDER=mock`，上传音频后会生成一条模拟转写片段，用来验证上传、异步任务、状态和结果保存链路。真实 ASR 服务接入前，不应把模拟内容当作实际课堂转写结果。
+当前 Compose 默认使用本地持久化卷保存音频，不依赖 MinIO 镜像；生产环境可以将 `STORAGE_BACKEND` 改为 `s3`，接入 S3 兼容对象存储。默认使用 `TRANSCRIPTION_PROVIDER=mock`，上传音频后会生成一条模拟转写片段，用来验证上传、异步任务、状态和结果保存链路。真实 ASR 服务接入前，不应把模拟内容当作实际课堂转写结果。

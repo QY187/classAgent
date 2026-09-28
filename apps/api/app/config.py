@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     s3_secret_key: str = "minioadmin"
     s3_bucket: str = "classagent-audio"
     s3_secure: bool = False
+    storage_backend: str = "local"
+    local_storage_path: str = "./data/local/uploads"
     transcription_provider: str = "mock"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
@@ -19,4 +21,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
