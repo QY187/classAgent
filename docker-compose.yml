@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: classagent
+      POSTGRES_PASSWORD: classagent
+      POSTGRES_DB: classagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  api:
+    build: ./apps/api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql+psycopg://classagent:classagent@postgres:5432/classagent
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: classagent-audio
+      S3_SECURE: "false"
+      TRANSCRIPTION_PROVIDER: mock
+    volumes:
+      - ./apps/api/app:/app/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+
+  worker:
+    build: ./apps/api
+    command: celery -A app.tasks.celery_app worker --loglevel=INFO
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql+psycopg://classagent:classagent@postgres:5432/classagent
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: classagent-audio
+      S3_SECURE: "false"
+      TRANSCRIPTION_PROVIDER: mock
+    volumes:
+      - ./apps/api/app:/app/app
+    depends_on:
+      - postgres
+      - redis
+      - minio
+
+volumes:
+  postgres_data:
+  minio_data:

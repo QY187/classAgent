@@ -7,6 +7,7 @@
 .env
 .env.*
 !.env.example
+!**/.env.example
 
 # 依赖、缓存与构建产物
 node_modules/

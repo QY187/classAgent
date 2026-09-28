@@ -1,0 +1,47 @@
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class CourseCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    semester: str | None = None
+
+
+class CourseRead(CourseCreate):
+    id: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LessonCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    lesson_date: str | None = None
+
+
+class LessonRead(LessonCreate):
+    id: str
+    course_id: str
+    status: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobRead(BaseModel):
+    id: str
+    lesson_id: str
+    stage: str
+    progress: int
+    error_message: str | None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TranscriptSegmentRead(BaseModel):
+    id: str
+    speaker: str
+    start_ms: int
+    end_ms: int
+    text: str
+    source: str
+    model_config = ConfigDict(from_attributes=True)
+
