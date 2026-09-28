@@ -14,8 +14,11 @@ ClassAgent 是一个面向学生的上课助手 Agent。核心体验是：课上
 - `apps/api/`：FastAPI 后端和异步 Worker。
 - `apps/web/`：Next.js 前端页面框架，包含课程库、课程详情和课次详情。
 - `docker-compose.yml`：PostgreSQL、Redis、API 和 Worker 的本地开发环境。
+- `docs/local-development.md`：本地启动、验证、停止和故障排查说明。
 
 ## 技术验证版启动
+
+完整步骤见 [本地开发启动说明](docs/local-development.md)。
 
 需要先启动 Docker Desktop，然后在仓库根目录执行：
 
