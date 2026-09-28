@@ -1,4 +1,5 @@
 # 本地长期记忆（只保留在当前工作区）
+/AGENTS.md
 /.agent
 /.codex/memory.md
 
