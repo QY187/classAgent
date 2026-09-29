@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { errorMessage, request } from "../../../lib/api";
 
+const stageLabel: Record<string, string> = { queued: "等待处理", transcribing: "正在转写", completed: "处理完成", failed: "处理失败" };
 type Lesson = { id: string; course_id: string; title: string; lesson_date?: string | null; status: string };
 type Job = { id: string; lesson_id: string; stage: string; progress: number; error_message?: string | null };
 type Segment = { id: string; speaker: string; start_ms: number; end_ms: number; text: string; source: string };
-const stageLabel: Record<string, string> = { queued: "等待处理", transcribing: "正在转写", completed: "处理完成", failed: "处理失败" };
 
 function formatTime(ms: number) { const seconds = Math.floor(ms / 1000); return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`; }
 
@@ -18,32 +18,72 @@ export default function LessonPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [message, setMessage] = useState("");
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<number | null>(null);
 
   async function load() {
     try {
-    setLesson(await request<Lesson>(`/lessons/${lessonId}`));
-    try { setJob(await request<Job>(`/lessons/${lessonId}/jobs/latest`)); } catch { setJob(null); }
-    try { setSegments(await request<Segment[]>(`/lessons/${lessonId}/transcript`)); } catch { setSegments([]); }
+      setLesson(await request<Lesson>(`/lessons/${lessonId}`));
+      try { setJob(await request<Job>(`/lessons/${lessonId}/jobs/latest`)); } catch { setJob(null); }
+      try { setSegments(await request<Segment[]>(`/lessons/${lessonId}/transcript`)); } catch { setSegments([]); }
     } catch (error) { setMessage(errorMessage(error)); }
   }
+
   useEffect(() => { if (lessonId) load(); }, [lessonId]);
   useEffect(() => { if (!job || ["completed", "failed"].includes(job.stage)) return; const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer); }, [job?.stage, lessonId]);
 
-  async function uploadAudio(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function uploadFile(file: File) {
     if (uploading) return;
     setUploading(true); setMessage("音频上传中，请稍候…");
     try {
-    const body = new FormData(); body.append("file", file);
-    setJob(await request<Job>(`/lessons/${lessonId}/audio`, { method: "POST", body }));
-    setSegments([]); setMessage("上传成功，已加入处理队列。");
+      const body = new FormData(); body.append("file", file);
+      setJob(await request<Job>(`/lessons/${lessonId}/audio`, { method: "POST", body }));
+      setSegments([]); setMessage("上传成功，已加入处理队列。");
     } catch (error) { setMessage(errorMessage(error)); }
-    finally { setUploading(false); event.target.value = ""; }
+    finally { setUploading(false); }
   }
+
+  async function uploadAudio(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) await uploadFile(file);
+    event.target.value = "";
+  }
+
+  async function startRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { setMessage("当前浏览器不支持录音，请改用音频文件上传。"); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      chunksRef.current = []; streamRef.current = stream; recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) chunksRef.current.push(event.data); };
+      recorder.onstop = async () => {
+        const type = recorder.mimeType || "audio/webm";
+        const file = new File([new Blob(chunksRef.current, { type })], `classagent-recording-${Date.now()}.webm`, { type });
+        streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null;
+        await uploadFile(file);
+      };
+      recorder.start(1000); setRecording(true); setRecordingSeconds(0); setMessage("正在录音，请保持当前页面打开。");
+      recordingTimerRef.current = window.setInterval(() => setRecordingSeconds((seconds) => seconds + 1), 1000);
+    } catch (error) { setMessage(error instanceof DOMException && error.name === "NotAllowedError" ? "麦克风权限被拒绝，请允许浏览器访问麦克风后重试。" : "无法启动录音，请改用音频文件上传。"); }
+  }
+
+  function stopRecording() {
+    if (!recorderRef.current || recorderRef.current.state === "inactive") return;
+    recorderRef.current.stop();
+    if (recordingTimerRef.current !== null) window.clearInterval(recordingTimerRef.current);
+    recordingTimerRef.current = null; setRecording(false); setMessage("录音已结束，正在上传…");
+  }
+
+  useEffect(() => () => { if (recordingTimerRef.current !== null) window.clearInterval(recordingTimerRef.current); recorderRef.current?.stop(); streamRef.current?.getTracks().forEach((track) => track.stop()); }, []);
 
   if (!lesson) return <main className="content"><div className="empty-state"><p role="status">{message || "正在加载课次…"}</p>{message && <><Link href="/">返回课程库</Link><button className="button button-secondary" onClick={load}>重试</button></>}</div></main>;
   const progress = job?.progress ?? 0;
-  return <main className="content"><Link className="back-link" href={`/courses/${lesson.course_id}`}>← 返回课程</Link><div className="page-heading"><div><div className="eyebrow">课次详情</div><h1>{lesson.title}</h1><p>{lesson.lesson_date || "未设置日期"} · 课堂资料</p></div><label className="button button-primary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading} />{uploading ? "上传中…" : "上传课堂音频"}</label></div>{message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}<div className="detail-grid"><section className="panel"><div className="panel-header"><h2>文字记录</h2>{job && <span className={`pill pill-${job.stage}`}>{stageLabel[job.stage] || job.stage}</span>}</div><div className="panel-body">{job && job.stage !== "completed" && <div style={{ marginBottom: 18 }}><div style={{ display: "flex", justifyContent: "space-between", color: "#6b7280", fontSize: 12 }}><span>{stageLabel[job.stage] || job.stage}</span><span>{progress}%</span></div><div className="job-progress"><span style={{ width: `${progress}%` }} /></div>{job.error_message && <div className="notice" style={{ marginTop: 10 }}>{job.error_message}</div>}</div>}{segments.length ? <div className="transcript">{segments.map((segment) => <div className="transcript-segment" key={segment.id}><div><div className="speaker">{segment.speaker}</div><div className="timecode">{formatTime(segment.start_ms)}</div></div><div className="transcript-text">{segment.text}</div></div>)}</div> : <div className="empty-state"><div className="empty-icon">◌</div><strong>{job?.stage === "completed" ? "暂时没有转写片段" : "上传音频后生成文字记录"}</strong><p>完成处理后，课堂内容会按说话人和时间点显示在这里。</p></div>}</div></section><aside className="panel"><div className="panel-header"><h2>音频与处理</h2></div><div className="panel-body"><div className="upload-box"><div style={{ fontSize: 28 }}>♫</div><strong>上传这节课的录音</strong><p>支持常见音频格式，系统会在后台完成处理。</p><label className="button button-secondary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading} />选择音频文件</label></div><div className="notice" style={{ marginTop: 16 }}>当前技术验证版使用 mock 转写。下一步接入真实 ASR 后，这里会展示真实课堂文字。</div></div></aside></div></main>;
+  const recordingTime = `${String(Math.floor(recordingSeconds / 60)).padStart(2, "0")}:${String(recordingSeconds % 60).padStart(2, "0")}`;
+  return <main className="content"><Link className="back-link" href={`/courses/${lesson.course_id}`}>← 返回课程</Link><div className="page-heading"><div><div className="eyebrow">课次详情</div><h1>{lesson.title}</h1><p>{lesson.lesson_date || "未设置日期"} · 课堂资料</p></div><label className="button button-primary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading || recording} />{uploading ? "上传中…" : "上传课堂音频"}</label></div>{message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}<div className="detail-grid"><section className="panel"><div className="panel-header"><h2>文字记录</h2>{job && <span className={`pill pill-${job.stage}`}>{stageLabel[job.stage] || job.stage}</span>}</div><div className="panel-body">{job && job.stage !== "completed" && <div style={{ marginBottom: 18 }}><div style={{ display: "flex", justifyContent: "space-between", color: "#6b7280", fontSize: 12 }}><span>{stageLabel[job.stage] || job.stage}</span><span>{progress}%</span></div><div className="job-progress"><span style={{ width: `${progress}%` }} /></div>{job.error_message && <div className="notice" style={{ marginTop: 10 }}>{job.error_message}</div>}</div>}{segments.length ? <div className="transcript">{segments.map((segment) => <div className="transcript-segment" key={segment.id}><div><div className="speaker">{segment.speaker}</div><div className="timecode">{formatTime(segment.start_ms)}</div></div><div className="transcript-text">{segment.text}</div></div>)}</div> : <div className="empty-state"><div className="empty-icon">◌</div><strong>{job?.stage === "completed" ? "暂时没有转写片段" : "上传音频后生成文字记录"}</strong><p>完成处理后，课堂内容会按说话人和时间点显示在这里。</p></div>}</div></section><aside className="panel"><div className="panel-header"><h2>音频与处理</h2></div><div className="panel-body"><div className="upload-box"><div style={{ fontSize: 28 }}>♫</div><strong>{recording ? `正在录音 ${recordingTime}` : "录音或上传这节课的音频"}</strong><p>{recording ? "录音结束后会自动上传并开始处理。" : "可以直接使用浏览器麦克风，也可以选择已有文件。"}</p>{recording ? <button className="button button-primary" onClick={stopRecording} disabled={uploading}>结束录音</button> : <div style={{ display: "flex", justifyContent: "center", gap: 9, flexWrap: "wrap" }}><button className="button button-primary" onClick={startRecording} disabled={uploading}>开始录音</button><label className="button button-secondary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading} />选择音频文件</label></div>}</div><div className="notice" style={{ marginTop: 16 }}>浏览器录音使用当前设备的麦克风。首次使用时，请在浏览器弹窗中允许麦克风权限。当前技术验证版的文字结果仍使用 mock 转写。</div></div></aside></div></main>;
 }
