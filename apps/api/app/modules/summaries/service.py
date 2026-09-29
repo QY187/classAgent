@@ -3,8 +3,12 @@ import re
 from typing import Any
 
 import httpx
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
 from ...config import get_settings
+from ...models import Lesson, LessonSummary
+from . import mapper
 
 
 SUMMARY_SCHEMA = {
@@ -70,3 +74,31 @@ def generate_summary(segments: list[dict[str, Any]]) -> str:
     if not text:
         raise RuntimeError("DeepSeek 没有返回纪要内容")
     return json.dumps(_parse_json(text), ensure_ascii=False)
+
+
+def get_summary(db: Session, lesson_id: str) -> LessonSummary:
+    if db.get(Lesson, lesson_id) is None:
+        raise HTTPException(status_code=404, detail="课次不存在")
+    summary = mapper.find_summary(db, lesson_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail="该课次暂无智能纪要")
+    return summary
+
+
+def request_summary(db: Session, lesson_id: str) -> LessonSummary:
+    if db.get(Lesson, lesson_id) is None:
+        raise HTTPException(status_code=404, detail="课次不存在")
+    if not mapper.has_transcript(db, lesson_id):
+        raise HTTPException(status_code=400, detail="请先完成文字记录，再生成智能纪要")
+    summary = mapper.find_summary(db, lesson_id)
+    if summary is None:
+        summary = LessonSummary(lesson_id=lesson_id, provider=get_settings().summary_provider)
+        db.add(summary)
+    summary.status = "queued"
+    summary.error_message = None
+    db.commit()
+    db.refresh(summary)
+    from ...tasks import generate_summary as generate_summary_task
+
+    generate_summary_task.delay(lesson_id)
+    return summary

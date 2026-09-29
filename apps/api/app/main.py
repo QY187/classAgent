@@ -2,9 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import Base, engine
-from .modules.courses.router import router as courses_router
-from .modules.lessons.router import router as lessons_router
-from .modules.summaries.router import router as summaries_router
+from .modules.courses.controller import router as courses_router
+from .modules.lessons.controller import router as lessons_router
+from .modules.summaries.controller import router as summaries_router
 
 
 app = FastAPI(title="ClassAgent API", version="0.1.0")
