@@ -1,18 +1,10 @@
-import json
-from pathlib import Path
-from uuid import uuid4
-
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import delete, select
-from sqlalchemy.orm import Session
 
-from .config import get_settings
-from .db import Base, engine, get_db
-from .models import AudioFile, Course, Lesson, LessonSummary, ProcessingJob, TranscriptSegment
-from .schemas import CourseCreate, CourseRead, JobRead, LessonCreate, LessonRead, SummaryRead, TranscriptSegmentRead
-from .storage import upload_file
-from .tasks import generate_summary, process_audio
+from .db import Base, engine
+from .modules.courses import router as courses_router
+from .modules.lessons import router as lessons_router
+from .modules.summaries import router as summaries_router
 
 
 app = FastAPI(title="ClassAgent API", version="0.1.0")
@@ -30,136 +22,11 @@ def create_tables() -> None:
     Base.metadata.create_all(bind=engine)
 
 
-@app.get("/health")
+@app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/courses", response_model=CourseRead, status_code=201)
-def create_course(payload: CourseCreate, db: Session = Depends(get_db)) -> Course:
-    course = Course(name=payload.name, semester=payload.semester)
-    db.add(course)
-    db.commit()
-    db.refresh(course)
-    return course
-
-
-@app.get("/courses", response_model=list[CourseRead])
-def list_courses(db: Session = Depends(get_db)) -> list[Course]:
-    return list(db.scalars(select(Course).order_by(Course.created_at.desc())))
-
-
-@app.post("/courses/{course_id}/lessons", response_model=LessonRead, status_code=201)
-def create_lesson(course_id: str, payload: LessonCreate, db: Session = Depends(get_db)) -> Lesson:
-    if db.get(Course, course_id) is None:
-        raise HTTPException(status_code=404, detail="课程不存在")
-    lesson = Lesson(course_id=course_id, title=payload.title, lesson_date=payload.lesson_date)
-    db.add(lesson)
-    db.commit()
-    db.refresh(lesson)
-    return lesson
-
-
-@app.get("/courses/{course_id}/lessons", response_model=list[LessonRead])
-def list_lessons(course_id: str, db: Session = Depends(get_db)) -> list[Lesson]:
-    if db.get(Course, course_id) is None:
-        raise HTTPException(status_code=404, detail="课程不存在")
-    return list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc())))
-
-
-@app.get("/lessons/{lesson_id}", response_model=LessonRead)
-def get_lesson(lesson_id: str, db: Session = Depends(get_db)) -> Lesson:
-    lesson = db.get(Lesson, lesson_id)
-    if lesson is None:
-        raise HTTPException(status_code=404, detail="课次不存在")
-    return lesson
-
-
-@app.post("/lessons/{lesson_id}/audio", response_model=JobRead, status_code=202)
-def upload_audio(lesson_id: str, file: UploadFile = File(...), browser_transcript: str | None = Form(None), db: Session = Depends(get_db)) -> ProcessingJob:
-    lesson = db.get(Lesson, lesson_id)
-    if lesson is None:
-        raise HTTPException(status_code=404, detail="课次不存在")
-    if not file.content_type or not file.content_type.startswith("audio/"):
-        raise HTTPException(status_code=400, detail="请上传音频文件")
-
-    object_key = f"lessons/{lesson_id}/{uuid4()}-{Path(file.filename or 'audio').name}"
-    file.file.seek(0, 2)
-    size_bytes = file.file.tell()
-    file.file.seek(0)
-    upload_file(object_key, file.file, size_bytes, file.content_type)
-    audio = AudioFile(
-        lesson_id=lesson_id,
-        filename=file.filename or "audio",
-        content_type=file.content_type,
-        object_key=object_key,
-        size_bytes=size_bytes,
-    )
-    db.execute(delete(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id))
-    if browser_transcript and browser_transcript.strip():
-        try:
-            chunks = json.loads(browser_transcript)
-        except json.JSONDecodeError:
-            chunks = [{"text": browser_transcript.strip(), "start_ms": 0, "end_ms": 0}]
-        if not isinstance(chunks, list):
-            chunks = [{"text": browser_transcript.strip(), "start_ms": 0, "end_ms": 0}]
-        for chunk in chunks:
-            if not isinstance(chunk, dict) or not str(chunk.get("text", "")).strip():
-                continue
-            start_ms = max(0, int(chunk.get("start_ms", 0) or 0))
-            end_ms = max(start_ms, int(chunk.get("end_ms", start_ms) or start_ms))
-            db.add(TranscriptSegment(
-                lesson_id=lesson_id,
-                speaker="说话人 1",
-                start_ms=start_ms,
-                end_ms=end_ms,
-                text=str(chunk["text"]).strip(),
-                source="browser",
-            ))
-    job = ProcessingJob(lesson_id=lesson_id, stage="queued", progress=0)
-    lesson.status = "queued"
-    db.add_all([audio, job])
-    db.commit()
-    db.refresh(job)
-    process_audio.delay(job.id)
-    return job
-
-@app.get("/lessons/{lesson_id}/jobs/latest", response_model=JobRead)
-def latest_job(lesson_id: str, db: Session = Depends(get_db)) -> ProcessingJob:
-    job = db.scalar(select(ProcessingJob).where(ProcessingJob.lesson_id == lesson_id).order_by(ProcessingJob.created_at.desc()))
-    if job is None:
-        raise HTTPException(status_code=404, detail="该课次暂无处理任务")
-    return job
-
-
-@app.get("/lessons/{lesson_id}/transcript", response_model=list[TranscriptSegmentRead])
-def get_transcript(lesson_id: str, db: Session = Depends(get_db)) -> list[TranscriptSegment]:
-    return list(db.scalars(select(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id).order_by(TranscriptSegment.start_ms)))
-
-
-@app.get("/lessons/{lesson_id}/summary", response_model=SummaryRead)
-def get_summary(lesson_id: str, db: Session = Depends(get_db)) -> LessonSummary:
-    if db.get(Lesson, lesson_id) is None:
-        raise HTTPException(status_code=404, detail="课次不存在")
-    summary = db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
-    if summary is None:
-        raise HTTPException(status_code=404, detail="该课次暂无智能纪要")
-    return summary
-
-
-@app.post("/lessons/{lesson_id}/summary", response_model=SummaryRead, status_code=202)
-def request_summary(lesson_id: str, db: Session = Depends(get_db)) -> LessonSummary:
-    if db.get(Lesson, lesson_id) is None:
-        raise HTTPException(status_code=404, detail="课次不存在")
-    if db.scalar(select(TranscriptSegment.id).where(TranscriptSegment.lesson_id == lesson_id).limit(1)) is None:
-        raise HTTPException(status_code=400, detail="请先完成文字记录，再生成智能纪要")
-    summary = db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
-    if summary is None:
-        summary = LessonSummary(lesson_id=lesson_id, provider=get_settings().summary_provider)
-        db.add(summary)
-    summary.status = "queued"
-    summary.error_message = None
-    db.commit()
-    db.refresh(summary)
-    generate_summary.delay(lesson_id)
-    return summary
+app.include_router(courses_router)
+app.include_router(lessons_router)
+app.include_router(summaries_router)
