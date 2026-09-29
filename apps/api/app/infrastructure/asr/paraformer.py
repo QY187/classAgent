@@ -165,5 +165,11 @@ def _response_error(response: Any, prefix: str) -> str:
     output = getattr(response, "output", None) or {}
     code = getattr(response, "code", None) or output.get("code")
     message = getattr(response, "message", None) or output.get("message") or output.get("task_status")
+    if not code or not message:
+        for item in _walk_dicts(output):
+            code = code or item.get("code")
+            message = message or item.get("message")
+            if code and message:
+                break
     detail = ": ".join(str(item) for item in (code, message) if item)
     return f"{prefix}{(': ' + detail) if detail else ''}"
