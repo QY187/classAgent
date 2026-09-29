@@ -44,4 +44,14 @@ npm run dev
 - `/courses/{courseId}`：课程详情，可创建课次并查看处理状态。
 - `/lessons/{lessonId}`：课次详情，可上传音频并查看异步转写结果。
 
-当前 Compose 默认使用本地持久化卷保存音频，不依赖 MinIO 镜像；生产环境可以将 `STORAGE_BACKEND` 改为 `s3`，接入 S3 兼容对象存储。默认使用 `TRANSCRIPTION_PROVIDER=mock`，上传音频后会生成一条模拟转写片段，用来验证上传、异步任务、状态和结果保存链路。真实 ASR 服务接入前，不应把模拟内容当作实际课堂转写结果。
+当前 Compose 默认使用本地持久化卷保存音频，不依赖 MinIO 镜像；生产环境可以将 `STORAGE_BACKEND` 改为 `s3`，接入 S3 兼容对象存储。配置 `TRANSCRIPTION_PROVIDER=paraformer` 后，Worker 会通过阿里云百炼官方 `dashscope` SDK 将音频上传到临时 OSS，并调用 Paraformer 文件转写，保存带时间戳和说话人的片段。`mock` 仍可用于没有 ASR Key 时验证上传和队列链路。
+
+真实 ASR 配置：
+
+```env
+DASHSCOPE_API_KEY=你的阿里云百炼 Key
+TRANSCRIPTION_PROVIDER=paraformer
+ASR_MODEL=paraformer-v2
+```
+
+Key 只放在本地 `.env`，不要提交到 Git。上传到百炼的临时音频由官方接口处理，Worker 不会把 Key 暴露给浏览器。

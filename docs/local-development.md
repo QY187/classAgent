@@ -101,7 +101,7 @@ npm run dev
 6. 等待状态从“排队中”变为“转写中”，再变为“处理完成”。
 7. 在“文字记录”区域查看转写结果。
 
-当前默认配置使用 `TRANSCRIPTION_PROVIDER=mock`，因此会生成一条模拟转写结果。它只用于验证上传、队列、Worker、状态和结果保存链路，不代表真实课堂转写质量。
+当前 `.env` 已配置 `TRANSCRIPTION_PROVIDER=paraformer`，Worker 会调用阿里云 Paraformer 文件转写并保存时间戳片段。没有百炼 Key 时可临时改成 `TRANSCRIPTION_PROVIDER=mock`，但模拟结果不代表真实课堂转写质量。
 
 ## 6. 查看日志
 
@@ -228,7 +228,6 @@ npm run dev
 ## 10. 当前版本边界
 
 - 当前没有账号登录和多用户隔离。
-- 当前默认使用 mock 转写，不连接真实 ASR 服务。
+- 当前默认使用阿里云 Paraformer 文件转写；将 `TRANSCRIPTION_PROVIDER` 改为 `mock` 可断开真实 ASR 做本地链路验证。
 - 当前只验证音频上传和转写链路，智能纪要、搜索和课程问答尚未接入。
 - 本地开发默认使用 Docker 持久化卷保存音频；生产环境再切换到 S3 兼容对象存储。
-
