@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -96,14 +97,25 @@ def upload_audio(lesson_id: str, file: UploadFile = File(...), browser_transcrip
     )
     db.execute(delete(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id))
     if browser_transcript and browser_transcript.strip():
-        db.add(TranscriptSegment(
-            lesson_id=lesson_id,
-            speaker="说话人 1",
-            start_ms=0,
-            end_ms=0,
-            text=browser_transcript.strip(),
-            source="browser",
-        ))
+        try:
+            chunks = json.loads(browser_transcript)
+        except json.JSONDecodeError:
+            chunks = [{"text": browser_transcript.strip(), "start_ms": 0, "end_ms": 0}]
+        if not isinstance(chunks, list):
+            chunks = [{"text": browser_transcript.strip(), "start_ms": 0, "end_ms": 0}]
+        for chunk in chunks:
+            if not isinstance(chunk, dict) or not str(chunk.get("text", "")).strip():
+                continue
+            start_ms = max(0, int(chunk.get("start_ms", 0) or 0))
+            end_ms = max(start_ms, int(chunk.get("end_ms", start_ms) or start_ms))
+            db.add(TranscriptSegment(
+                lesson_id=lesson_id,
+                speaker="说话人 1",
+                start_ms=start_ms,
+                end_ms=end_ms,
+                text=str(chunk["text"]).strip(),
+                source="browser",
+            ))
     job = ProcessingJob(lesson_id=lesson_id, stage="queued", progress=0)
     lesson.status = "queued"
     db.add_all([audio, job])

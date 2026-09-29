@@ -9,6 +9,7 @@ const stageLabel: Record<string, string> = { queued: "等待处理", transcribin
 type Lesson = { id: string; course_id: string; title: string; lesson_date?: string | null; status: string };
 type Job = { id: string; lesson_id: string; stage: string; progress: number; error_message?: string | null };
 type Segment = { id: string; speaker: string; start_ms: number; end_ms: number; text: string; source: string };
+type TranscriptChunk = { start_ms: number; end_ms: number; text: string };
 type RecognitionResult = { isFinal: boolean; 0: { transcript: string }; length: number };
 type RecognitionEvent = Event & { results: { [index: number]: RecognitionResult; length: number } };
 type Recognition = { lang: string; continuous: boolean; interimResults: boolean; onresult: ((event: RecognitionEvent) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void; stop: () => void; abort: () => void };
@@ -36,7 +37,10 @@ export default function LessonPage() {
   const recordingTimerRef = useRef<number | null>(null);
   const recognitionRef = useRef<Recognition | null>(null);
   const recognitionActiveRef = useRef(false);
-  const finalTranscriptRef = useRef("");
+  const transcriptChunksRef = useRef<TranscriptChunk[]>([]);
+  const pendingTranscriptRef = useRef("");
+  const segmentStartRef = useRef(0);
+  const recordingStartedAtRef = useRef<number | null>(null);
 
   async function load() {
     try {
@@ -61,6 +65,52 @@ export default function LessonPage() {
     finally { setUploading(false); }
   }
 
+  function recordingElapsedMs() {
+    return recordingStartedAtRef.current === null ? 0 : Math.max(0, Date.now() - recordingStartedAtRef.current);
+  }
+
+  function refreshLiveTranscript() {
+    const text = [...transcriptChunksRef.current.map((chunk) => chunk.text), pendingTranscriptRef.current].filter(Boolean).join("");
+    setLiveTranscript(text);
+  }
+
+  function addTranscriptChunk(text: string, endMs: number) {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+    const startMs = segmentStartRef.current;
+    transcriptChunksRef.current.push({ start_ms: startMs, end_ms: Math.max(startMs + 1, endMs), text: cleanText });
+    segmentStartRef.current = Math.max(startMs + 1, endMs);
+  }
+
+  function flushPendingAtMinute(elapsedMs: number) {
+    if (pendingTranscriptRef.current.trim() && elapsedMs - segmentStartRef.current >= 60_000) {
+      addTranscriptChunk(pendingTranscriptRef.current, elapsedMs);
+      pendingTranscriptRef.current = "";
+      refreshLiveTranscript();
+    }
+  }
+
+  function consumeFinalTranscript(text: string, elapsedMs: number) {
+    flushPendingAtMinute(elapsedMs);
+    let pending = `${pendingTranscriptRef.current}${text}`;
+    while (pending) {
+      const sentence = pending.match(/^(.+?[。！？!?；;])/);
+      if (!sentence) break;
+      addTranscriptChunk(sentence[1], elapsedMs);
+      pending = pending.slice(sentence[1].length);
+    }
+    pendingTranscriptRef.current = pending;
+    refreshLiveTranscript();
+  }
+
+  function finalizeTranscript() {
+    const elapsedMs = recordingElapsedMs();
+    if (pendingTranscriptRef.current.trim()) addTranscriptChunk(pendingTranscriptRef.current, elapsedMs);
+    pendingTranscriptRef.current = "";
+    refreshLiveTranscript();
+    return JSON.stringify(transcriptChunksRef.current);
+  }
+
   async function uploadAudio(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (file) await uploadFile(file);
@@ -76,17 +126,17 @@ export default function LessonPage() {
       const RecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = RecognitionAPI ? new RecognitionAPI() : null;
       chunksRef.current = []; streamRef.current = stream; recorderRef.current = recorder;
-      finalTranscriptRef.current = ""; setLiveTranscript("");
+      transcriptChunksRef.current = []; pendingTranscriptRef.current = ""; segmentStartRef.current = 0; recordingStartedAtRef.current = Date.now(); setLiveTranscript("");
       if (recognition) {
         recognition.lang = "zh-CN"; recognition.continuous = true; recognition.interimResults = true;
         recognition.onresult = (event) => {
           let interim = "";
           for (let index = event.results.length - 1; index >= 0; index -= 1) {
             const result = event.results[index];
-            if (result.isFinal) { finalTranscriptRef.current += result[0].transcript; break; }
+            if (result.isFinal) { consumeFinalTranscript(result[0].transcript, recordingElapsedMs()); break; }
             interim = result[0].transcript + interim;
           }
-          setLiveTranscript(`${finalTranscriptRef.current}${interim}`);
+          setLiveTranscript(`${transcriptChunksRef.current.map((chunk) => chunk.text).join("")}${pendingTranscriptRef.current}${interim}`);
         };
         recognition.onerror = () => setMessage("浏览器语音识别暂时中断，录音仍会继续保存。");
         recognition.onend = () => { if (recognitionActiveRef.current) { try { recognition.start(); } catch { /* 浏览器正在重启识别 */ } } };
@@ -103,10 +153,10 @@ export default function LessonPage() {
         setRecordingName(file.name);
         streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null;
         recognitionActiveRef.current = false; recognitionRef.current?.stop(); recognitionRef.current = null;
-        await uploadFile(file, finalTranscriptRef.current);
+        await uploadFile(file, finalizeTranscript());
       };
       recorder.start(1000); setRecording(true); setRecordingSeconds(0); setMessage("正在录音，请保持当前页面打开。");
-      recordingTimerRef.current = window.setInterval(() => setRecordingSeconds((seconds) => seconds + 1), 1000);
+      recordingTimerRef.current = window.setInterval(() => setRecordingSeconds((seconds) => { const next = seconds + 1; flushPendingAtMinute(next * 1000); return next; }), 1000);
     } catch (error) { setMessage(error instanceof DOMException && error.name === "NotAllowedError" ? "麦克风权限被拒绝，请允许浏览器访问麦克风后重试。" : "无法启动录音，请改用音频文件上传。"); }
   }
 
