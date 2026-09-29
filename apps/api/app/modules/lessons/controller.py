@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 
-from ...db import get_db
-from ...schemas import JobRead, LessonRead, TranscriptSegmentRead
+from ...core.db import get_db
+from ...shared.schemas import JobRead, LessonRead, TranscriptSegmentRead
 from . import service
 
 

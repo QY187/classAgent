@@ -5,9 +5,9 @@ from uuid import uuid4
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from ...models import AudioFile, Lesson, ProcessingJob, TranscriptSegment
-from ...storage import upload_file
-from ...tasks import process_audio
+from ...shared.models import AudioFile, Lesson, ProcessingJob, TranscriptSegment
+from ...infrastructure.storage import upload_file
+from ...infrastructure.tasks import process_audio
 from . import mapper
 
 

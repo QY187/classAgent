@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ...models import LessonSummary, TranscriptSegment
+from ...shared.models import LessonSummary, TranscriptSegment
 
 
 def find_summary(db: Session, lesson_id: str) -> LessonSummary | None:

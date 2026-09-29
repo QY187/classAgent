@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ...models import AudioFile, Lesson, ProcessingJob, TranscriptSegment
+from ...shared.models import AudioFile, Lesson, ProcessingJob, TranscriptSegment
 
 
 def find_lesson(db: Session, lesson_id: str) -> Lesson | None:

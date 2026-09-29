@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .db import Base, engine
+from .core.db import Base, engine
 from .modules.courses.controller import router as courses_router
 from .modules.lessons.controller import router as lessons_router
 from .modules.summaries.controller import router as summaries_router

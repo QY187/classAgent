@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from ...db import get_db
-from ...models import Course, Lesson
-from ...schemas import CourseCreate, CourseRead, LessonCreate, LessonRead
+from ...core.db import get_db
+from ...shared.models import Course, Lesson
+from ...shared.schemas import CourseCreate, CourseRead, LessonCreate, LessonRead
 from . import service
 
 

@@ -1,8 +1,8 @@
 from celery import Celery
 from sqlalchemy import select
 
-from .config import get_settings
-from .modules.summaries.service import generate_summary as build_summary
+from ..core.config import get_settings
+from ..modules.summaries.service import generate_summary as build_summary
 
 
 celery_app = Celery("classagent", broker=get_settings().redis_url, backend=get_settings().redis_url)
@@ -11,8 +11,8 @@ celery_app.conf.update(task_track_started=True, result_expires=3600)
 
 @celery_app.task(name="classagent.process_audio")
 def process_audio(job_id: str) -> None:
-    from .db import SessionLocal
-    from .models import Lesson, LessonSummary, ProcessingJob, TranscriptSegment
+    from ..core.db import SessionLocal
+    from ..shared.models import Lesson, LessonSummary, ProcessingJob, TranscriptSegment
 
     db = SessionLocal()
     try:
@@ -68,8 +68,8 @@ def process_audio(job_id: str) -> None:
 
 @celery_app.task(name="classagent.generate_summary")
 def generate_summary(lesson_id: str) -> None:
-    from .db import SessionLocal
-    from .models import Lesson, LessonSummary, TranscriptSegment
+    from ..core.db import SessionLocal
+    from ..shared.models import Lesson, LessonSummary, TranscriptSegment
 
     db = SessionLocal()
     summary = None

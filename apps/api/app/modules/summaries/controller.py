@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from ...db import get_db
-from ...schemas import SummaryRead
+from ...core.db import get_db
+from ...shared.schemas import SummaryRead
 from . import service
 
 

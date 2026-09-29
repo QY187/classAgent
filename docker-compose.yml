@@ -55,7 +55,7 @@ services:
 
   worker:
     build: ./apps/api
-    command: celery -A app.tasks.celery_app worker --loglevel=INFO
+    command: celery -A app.infrastructure.tasks.celery_app worker --loglevel=INFO
     working_dir: /app
     environment:
       DATABASE_URL: postgresql+psycopg://classagent:classagent@postgres:5432/classagent

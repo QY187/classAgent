@@ -6,8 +6,8 @@ import httpx
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from ...config import get_settings
-from ...models import Lesson, LessonSummary
+from ...core.config import get_settings
+from ...shared.models import Lesson, LessonSummary
 from . import mapper
 
 
@@ -98,7 +98,7 @@ def request_summary(db: Session, lesson_id: str) -> LessonSummary:
     summary.error_message = None
     db.commit()
     db.refresh(summary)
-    from ...tasks import generate_summary as generate_summary_task
+    from ...infrastructure.tasks import generate_summary as generate_summary_task
 
     generate_summary_task.delay(lesson_id)
     return summary

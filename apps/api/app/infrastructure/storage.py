@@ -3,7 +3,7 @@ from typing import BinaryIO
 
 from minio import Minio
 
-from .config import get_settings
+from ..core.config import get_settings
 
 
 def get_client() -> Minio:

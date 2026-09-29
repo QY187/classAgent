@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ...models import Course, Lesson
+from ...shared.models import Course, Lesson
 
 
 def save_course(db: Session, course: Course) -> Course:
