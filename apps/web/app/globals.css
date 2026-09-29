@@ -121,12 +121,33 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .modal h2 { margin-bottom: 21px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 21px; }
 .notice { color: var(--muted); background: #f4f7fb; border-radius: 10px; padding: 11px 13px; font-size: 12px; line-height: 1.6; }
+.summary-panel { margin-bottom: 20px; }
+.summary-caption { display: block; color: var(--muted); font-size: 11px; margin-top: 5px; }
+.summary-content { display: grid; gap: 23px; }
+.summary-overview { padding: 17px 18px; border-radius: 12px; background: linear-gradient(135deg, #f2f4ff, #f3fbf8); }
+.summary-overview p { margin: 8px 0 0; color: #33415e; font-size: 14px; line-height: 1.75; }
+.summary-label { color: var(--blue); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
+.summary-section { display: grid; gap: 10px; }
+.summary-topic { padding: 13px 15px; border: 1px solid #edf0f5; border-radius: 11px; }
+.summary-topic-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; color: #263553; font-size: 13px; }
+.summary-topic-head span { color: #9aa7ba; font-size: 11px; white-space: nowrap; }
+.summary-topic ul, .summary-section ul { margin: 8px 0 0; padding-left: 19px; color: #58667e; font-size: 13px; line-height: 1.7; }
+.summary-concepts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.summary-concept, .summary-note { display: grid; gap: 5px; padding: 13px 15px; border-radius: 11px; background: #fafbfe; }
+.summary-concept strong, .summary-note strong { color: #2b3a58; font-size: 13px; }
+.summary-concept span, .summary-note span { color: #66748a; font-size: 12px; line-height: 1.65; }
+.summary-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.summary-placeholder { padding: 26px 18px; text-align: center; color: var(--muted); }
+.summary-placeholder .empty-icon { margin-bottom: 6px; }
+.summary-placeholder strong { color: var(--ink); font-size: 14px; }
+.summary-placeholder p { margin: 7px 0 0; font-size: 12px; }
 @media (max-width: 900px) {
   .sidebar { width: 218px; }
   .topbar { padding: 0 28px; }
   .content { padding: 34px 28px; }
   .course-grid { grid-template-columns: repeat(2, 1fr); }
   .detail-grid { grid-template-columns: 1fr; }
+  .summary-concepts, .summary-columns { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .sidebar { width: 66px; padding: 18px 8px; }

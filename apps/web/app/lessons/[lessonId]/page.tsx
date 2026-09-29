@@ -10,6 +10,15 @@ type Lesson = { id: string; course_id: string; title: string; lesson_date?: stri
 type Job = { id: string; lesson_id: string; stage: string; progress: number; error_message?: string | null };
 type Segment = { id: string; speaker: string; start_ms: number; end_ms: number; text: string; source: string };
 type TranscriptChunk = { start_ms: number; end_ms: number; text: string };
+type Summary = { id: string; lesson_id: string; status: string; content?: string | null; provider: string; error_message?: string | null };
+type SummaryContent = {
+  overview?: string;
+  topics?: { title: string; time_range?: string; points?: string[]; source_indexes?: number[] }[];
+  key_concepts?: { term: string; definition: string; source_indexes?: number[] }[];
+  examples?: { title: string; explanation: string; source_indexes?: number[] }[];
+  assignments?: string[];
+  to_verify?: string[];
+};
 type RecognitionResult = { isFinal: boolean; 0: { transcript: string }; length: number };
 type RecognitionEvent = Event & { results: { [index: number]: RecognitionResult; length: number } };
 type Recognition = { lang: string; continuous: boolean; interimResults: boolean; onresult: ((event: RecognitionEvent) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void; stop: () => void; abort: () => void };
@@ -24,6 +33,8 @@ export default function LessonPage() {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -47,11 +58,12 @@ export default function LessonPage() {
       setLesson(await request<Lesson>(`/lessons/${lessonId}`));
       try { setJob(await request<Job>(`/lessons/${lessonId}/jobs/latest`)); } catch { setJob(null); }
       try { setSegments(await request<Segment[]>(`/lessons/${lessonId}/transcript`)); } catch { setSegments([]); }
+      try { setSummary(await request<Summary>(`/lessons/${lessonId}/summary`)); } catch { setSummary(null); }
     } catch (error) { setMessage(errorMessage(error)); }
   }
 
   useEffect(() => { if (lessonId) load(); }, [lessonId]);
-  useEffect(() => { if (!job || ["completed", "failed"].includes(job.stage)) return; const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer); }, [job?.stage, lessonId]);
+  useEffect(() => { if ((!job || ["completed", "failed"].includes(job.stage)) && (!summary || ["completed", "failed"].includes(summary.status))) return; const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer); }, [job?.stage, summary?.status, lessonId]);
 
   async function uploadFile(file: File, browserTranscript?: string) {
     if (uploading) return;
@@ -60,7 +72,7 @@ export default function LessonPage() {
       const body = new FormData(); body.append("file", file);
       if (browserTranscript?.trim()) body.append("browser_transcript", browserTranscript.trim());
       setJob(await request<Job>(`/lessons/${lessonId}/audio`, { method: "POST", body }));
-      setSegments([]); setMessage("上传成功，已加入处理队列。");
+      setSegments([]); setSummary(null); setMessage("上传成功，已加入处理队列。");
     } catch (error) { setMessage(errorMessage(error)); }
     finally { setUploading(false); }
   }
@@ -115,6 +127,21 @@ export default function LessonPage() {
     const file = event.target.files?.[0];
     if (file) await uploadFile(file);
     event.target.value = "";
+  }
+
+  async function requestSummary() {
+    if (summaryLoading || !segments.length) return;
+    setSummaryLoading(true); setMessage("正在生成智能纪要，请稍候…");
+    try {
+      setSummary(await request<Summary>(`/lessons/${lessonId}/summary`, { method: "POST" }));
+      setMessage("纪要已加入生成队列。");
+    } catch (error) { setMessage(errorMessage(error)); }
+    finally { setSummaryLoading(false); }
+  }
+
+  function parseSummaryContent(content?: string | null): SummaryContent | null {
+    if (!content) return null;
+    try { return JSON.parse(content) as SummaryContent; } catch { return null; }
   }
 
   async function startRecording() {
@@ -188,5 +215,6 @@ export default function LessonPage() {
   if (!lesson) return <main className="content"><div className="empty-state"><p role="status">{message || "正在加载课次…"}</p>{message && <><Link href="/">返回课程库</Link><button className="button button-secondary" onClick={load}>重试</button></>}</div></main>;
   const progress = job?.progress ?? 0;
   const recordingTime = `${String(Math.floor(recordingSeconds / 60)).padStart(2, "0")}:${String(recordingSeconds % 60).padStart(2, "0")}`;
-  return <main className="content"><Link className="back-link" href={`/courses/${lesson.course_id}`}>← 返回课程</Link><div className="page-heading"><div><div className="eyebrow">课次详情</div><h1>{lesson.title}</h1><p>{lesson.lesson_date || "未设置日期"} · 课堂资料</p></div><label className="button button-primary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading || recording} />{uploading ? "上传中…" : "上传课堂音频"}</label></div>{message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}<div className="detail-grid"><section className="panel"><div className="panel-header"><h2>文字记录</h2><div style={{ display: "flex", alignItems: "center", gap: 10 }}>{job && <span className={`pill pill-${job.stage}`}>{stageLabel[job.stage] || job.stage}</span>}{(segments.length > 0 || liveTranscript) && <button className="button button-quiet" onClick={downloadTranscript}>下载文字记录</button>}</div></div><div className="panel-body">{recording && liveTranscript && <div className="notice" style={{ marginBottom: 18 }}><strong>浏览器实时转写</strong><div style={{ marginTop: 7, whiteSpace: "pre-wrap" }}>{liveTranscript}</div></div>}{job && job.stage !== "completed" && <div style={{ marginBottom: 18 }}><div style={{ display: "flex", justifyContent: "space-between", color: "#6b7280", fontSize: 12 }}><span>{stageLabel[job.stage] || job.stage}</span><span>{progress}%</span></div><div className="job-progress"><span style={{ width: `${progress}%` }} /></div>{job.error_message && <div className="notice" style={{ marginTop: 10 }}>{job.error_message}</div>}</div>}{segments.length ? <div className="transcript">{segments.map((segment) => <div className="transcript-segment" key={segment.id}><div><div className="speaker">{segment.speaker}</div><div className="timecode">{formatTime(segment.start_ms)}</div></div><div className="transcript-text">{segment.text}</div></div>)}</div> : <div className="empty-state"><div className="empty-icon">◌</div><strong>{job?.stage === "completed" ? "暂时没有转写片段" : "上传音频后生成文字记录"}</strong><p>完成处理后，课堂内容会按说话人和时间点显示在这里。</p></div>}</div></section><aside className="panel"><div className="panel-header"><h2>音频与处理</h2></div><div className="panel-body"><div className="upload-box"><div style={{ fontSize: 28 }}>♫</div><strong>{recording ? `正在录音 ${recordingTime}` : "录音或上传这节课的音频"}</strong><p>{recording ? "录音结束后会自动上传并开始处理。" : "可以直接使用浏览器麦克风，也可以选择已有文件。"}</p>{recording ? <button className="button button-primary" onClick={stopRecording} disabled={uploading}>结束录音</button> : <div style={{ display: "flex", justifyContent: "center", gap: 9, flexWrap: "wrap" }}><button className="button button-primary" onClick={startRecording} disabled={uploading}>开始录音</button><label className="button button-secondary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading} />选择音频文件</label></div>}</div>{recordingUrl && <div style={{ marginTop: 16, padding: 12, border: "1px solid #e7e9ee", borderRadius: 9 }}><div style={{ color: "#596274", fontSize: 12, marginBottom: 8 }}>本地录音文件：{recordingName}</div><audio controls src={recordingUrl} style={{ width: "100%" }} /><a className="button button-secondary" href={recordingUrl} download={recordingName} style={{ display: "inline-block", marginTop: 10 }}>下载录音文件</a></div>}<div className="notice" style={{ marginTop: 16 }}>浏览器会在录音时尝试实时识别中文。录音文件仍会自动保存到后端；当前浏览器转写不支持时，页面会提示，但不会影响录音。</div></div></aside></div></main>;
+  const summaryContent = parseSummaryContent(summary?.content);
+  return <main className="content"><Link className="back-link" href={`/courses/${lesson.course_id}`}>← 返回课程</Link><div className="page-heading"><div><div className="eyebrow">课次详情</div><h1>{lesson.title}</h1><p>{lesson.lesson_date || "未设置日期"} · 课堂资料</p></div><label className="button button-primary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading || recording} />{uploading ? "上传中…" : "上传课堂音频"}</label></div>{message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}<section className="panel summary-panel"><div className="panel-header"><div><h2>智能纪要</h2><span className="summary-caption">根据本节课文字记录生成，可重新生成</span></div><div style={{ display: "flex", alignItems: "center", gap: 10 }}>{summary && <span className={`pill pill-${summary.status}`}>{summary.status === "completed" ? "已完成" : summary.status === "generating" ? "生成中" : summary.status === "failed" ? "生成失败" : "等待生成"}</span>}<button className="button button-secondary" onClick={requestSummary} disabled={!segments.length || summaryLoading || summary?.status === "generating"}>{summaryLoading || summary?.status === "queued" || summary?.status === "generating" ? "生成中…" : summary ? "重新生成" : "生成智能纪要"}</button></div></div><div className="panel-body">{summary?.status === "completed" && summaryContent ? <div className="summary-content"><div className="summary-overview"><div className="summary-label">一句话概览</div><p>{summaryContent.overview || "暂无概览"}</p></div>{Boolean(summaryContent.topics?.length) && <div className="summary-section"><div className="summary-label">课堂主题</div>{summaryContent.topics?.map((topic, index) => <div className="summary-topic" key={`${topic.title}-${index}`}><div className="summary-topic-head"><strong>{topic.title}</strong>{topic.time_range && <span>{topic.time_range}</span>}</div><ul>{topic.points?.map((point) => <li key={point}>{point}</li>)}</ul></div>)}</div>}{Boolean(summaryContent.key_concepts?.length) && <div className="summary-section"><div className="summary-label">重点知识</div><div className="summary-concepts">{summaryContent.key_concepts?.map((concept) => <div className="summary-concept" key={concept.term}><strong>{concept.term}</strong><span>{concept.definition}</span></div>)}</div></div>}{Boolean(summaryContent.examples?.length) && <div className="summary-section"><div className="summary-label">例题与案例</div>{summaryContent.examples?.map((example) => <div className="summary-note" key={example.title}><strong>{example.title}</strong><span>{example.explanation}</span></div>)}</div>}<div className="summary-columns">{Boolean(summaryContent.assignments?.length) && <div className="summary-section"><div className="summary-label">作业与预告</div><ul>{summaryContent.assignments?.map((item) => <li key={item}>{item}</li>)}</ul></div>}{Boolean(summaryContent.to_verify?.length) && <div className="summary-section"><div className="summary-label">待核对</div><ul>{summaryContent.to_verify?.map((item) => <li key={item}>{item}</li>)}</ul></div>}</div></div> : summary?.status === "failed" ? <div className="notice">{summary.error_message || "纪要生成失败，请重试。"}</div> : summary?.status === "queued" || summary?.status === "generating" ? <div className="summary-placeholder"><div className="empty-icon">✦</div><strong>正在整理这节课的重点</strong><p>纪要生成完成后会自动出现在这里。</p></div> : <div className="summary-placeholder"><div className="empty-icon">✦</div><strong>{segments.length ? "生成一份可复习的课堂纪要" : "先完成文字记录"}</strong><p>{segments.length ? "提取课程主题、关键概念、例题、作业和待核对内容。" : "上传或录制课堂音频，完成文字记录后即可生成。"}</p></div>}</div></section><div className="detail-grid"><section className="panel"><div className="panel-header"><h2>文字记录</h2><div style={{ display: "flex", alignItems: "center", gap: 10 }}>{job && <span className={`pill pill-${job.stage}`}>{stageLabel[job.stage] || job.stage}</span>}{(segments.length > 0 || liveTranscript) && <button className="button button-quiet" onClick={downloadTranscript}>下载文字记录</button>}</div></div><div className="panel-body">{recording && liveTranscript && <div className="notice" style={{ marginBottom: 18 }}><strong>浏览器实时转写</strong><div style={{ marginTop: 7, whiteSpace: "pre-wrap" }}>{liveTranscript}</div></div>}{job && job.stage !== "completed" && <div style={{ marginBottom: 18 }}><div style={{ display: "flex", justifyContent: "space-between", color: "#6b7280", fontSize: 12 }}><span>{stageLabel[job.stage] || job.stage}</span><span>{progress}%</span></div><div className="job-progress"><span style={{ width: `${progress}%` }} /></div>{job.error_message && <div className="notice" style={{ marginTop: 10 }}>{job.error_message}</div>}</div>}{segments.length ? <div className="transcript">{segments.map((segment) => <div className="transcript-segment" key={segment.id}><div><div className="speaker">{segment.speaker}</div><div className="timecode">{formatTime(segment.start_ms)}</div></div><div className="transcript-text">{segment.text}</div></div>)}</div> : <div className="empty-state"><div className="empty-icon">◌</div><strong>{job?.stage === "completed" ? "暂时没有转写片段" : "上传音频后生成文字记录"}</strong><p>完成处理后，课堂内容会按说话人和时间点显示在这里。</p></div>}</div></section><aside className="panel"><div className="panel-header"><h2>音频与处理</h2></div><div className="panel-body"><div className="upload-box"><div style={{ fontSize: 28 }}>♫</div><strong>{recording ? `正在录音 ${recordingTime}` : "录音或上传这节课的音频"}</strong><p>{recording ? "录音结束后会自动上传并开始处理。" : "可以直接使用浏览器麦克风，也可以选择已有文件。"}</p>{recording ? <button className="button button-primary" onClick={stopRecording} disabled={uploading}>结束录音</button> : <div style={{ display: "flex", justifyContent: "center", gap: 9, flexWrap: "wrap" }}><button className="button button-primary" onClick={startRecording} disabled={uploading}>开始录音</button><label className="button button-secondary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading} />选择音频文件</label></div>}</div>{recordingUrl && <div style={{ marginTop: 16, padding: 12, border: "1px solid #e7e9ee", borderRadius: 9 }}><div style={{ color: "#596274", fontSize: 12, marginBottom: 8 }}>本地录音文件：{recordingName}</div><audio controls src={recordingUrl} style={{ width: "100%" }} /><a className="button button-secondary" href={recordingUrl} download={recordingName} style={{ display: "inline-block", marginTop: 10 }}>下载录音文件</a></div>}<div className="notice" style={{ marginTop: 16 }}>浏览器会在录音时尝试实时识别中文。录音文件仍会自动保存到后端；当前浏览器转写不支持时，页面会提示，但不会影响录音。</div></div></aside></div></main>;
 }

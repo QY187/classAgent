@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     storage_backend: str = "local"
     local_storage_path: str = "./data/local/uploads"
     transcription_provider: str = "mock"
+    deepseek_api_key: str = ""
+    summary_model: str = "deepseek-chat"
+    summary_provider: str = "deepseek"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

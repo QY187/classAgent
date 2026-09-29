@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import Base, engine, get_db
-from .models import AudioFile, Course, Lesson, ProcessingJob, TranscriptSegment
-from .schemas import CourseCreate, CourseRead, JobRead, LessonCreate, LessonRead, TranscriptSegmentRead
+from .models import AudioFile, Course, Lesson, LessonSummary, ProcessingJob, TranscriptSegment
+from .schemas import CourseCreate, CourseRead, JobRead, LessonCreate, LessonRead, SummaryRead, TranscriptSegmentRead
 from .storage import upload_file
-from .tasks import process_audio
+from .tasks import generate_summary, process_audio
 
 
 app = FastAPI(title="ClassAgent API", version="0.1.0")
@@ -135,3 +135,31 @@ def latest_job(lesson_id: str, db: Session = Depends(get_db)) -> ProcessingJob:
 @app.get("/lessons/{lesson_id}/transcript", response_model=list[TranscriptSegmentRead])
 def get_transcript(lesson_id: str, db: Session = Depends(get_db)) -> list[TranscriptSegment]:
     return list(db.scalars(select(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id).order_by(TranscriptSegment.start_ms)))
+
+
+@app.get("/lessons/{lesson_id}/summary", response_model=SummaryRead)
+def get_summary(lesson_id: str, db: Session = Depends(get_db)) -> LessonSummary:
+    if db.get(Lesson, lesson_id) is None:
+        raise HTTPException(status_code=404, detail="课次不存在")
+    summary = db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
+    if summary is None:
+        raise HTTPException(status_code=404, detail="该课次暂无智能纪要")
+    return summary
+
+
+@app.post("/lessons/{lesson_id}/summary", response_model=SummaryRead, status_code=202)
+def request_summary(lesson_id: str, db: Session = Depends(get_db)) -> LessonSummary:
+    if db.get(Lesson, lesson_id) is None:
+        raise HTTPException(status_code=404, detail="课次不存在")
+    if db.scalar(select(TranscriptSegment.id).where(TranscriptSegment.lesson_id == lesson_id).limit(1)) is None:
+        raise HTTPException(status_code=400, detail="请先完成文字记录，再生成智能纪要")
+    summary = db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
+    if summary is None:
+        summary = LessonSummary(lesson_id=lesson_id, provider=get_settings().summary_provider)
+        db.add(summary)
+    summary.status = "queued"
+    summary.error_message = None
+    db.commit()
+    db.refresh(summary)
+    generate_summary.delay(lesson_id)
+    return summary

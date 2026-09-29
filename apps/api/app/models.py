@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -78,3 +78,17 @@ class TranscriptSegment(Base):
     source: Mapped[str] = mapped_column(String(30), default="mock")
     lesson: Mapped[Lesson] = relationship(back_populates="transcript_segments")
 
+
+class LessonSummary(Base):
+    __tablename__ = "lesson_summaries"
+    __table_args__ = (UniqueConstraint("lesson_id", name="uq_lesson_summaries_lesson_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    lesson_id: Mapped[str] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(30), default="queued")
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider: Mapped[str] = mapped_column(String(50), default="dashscope")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+    lesson: Mapped[Lesson] = relationship()

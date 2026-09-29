@@ -45,3 +45,14 @@ class TranscriptSegmentRead(BaseModel):
     source: str
     model_config = ConfigDict(from_attributes=True)
 
+
+class SummaryRead(BaseModel):
+    id: str
+    lesson_id: str
+    status: str
+    content: str | None
+    provider: str
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)

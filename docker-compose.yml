@@ -39,6 +39,9 @@ services:
       S3_BUCKET: classagent-audio
       S3_SECURE: "false"
       TRANSCRIPTION_PROVIDER: mock
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      SUMMARY_MODEL: ${SUMMARY_MODEL:-deepseek-chat}
+      SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-deepseek}
     volumes:
       - ./apps/api/app:/app/app
       - audio_data:/data/uploads
@@ -64,6 +67,9 @@ services:
       S3_BUCKET: classagent-audio
       S3_SECURE: "false"
       TRANSCRIPTION_PROVIDER: mock
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      SUMMARY_MODEL: ${SUMMARY_MODEL:-deepseek-chat}
+      SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-deepseek}
     volumes:
       - ./apps/api/app:/app/app
       - audio_data:/data/uploads
