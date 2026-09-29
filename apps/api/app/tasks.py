@@ -1,4 +1,5 @@
 from celery import Celery
+from sqlalchemy import select
 
 from .config import get_settings
 
@@ -32,14 +33,16 @@ def process_audio(job_id: str) -> None:
         if get_settings().transcription_provider != "mock":
             raise RuntimeError("尚未配置真实语音识别服务，请将 TRANSCRIPTION_PROVIDER 设置为 mock 以运行技术验证版")
 
-        db.add(TranscriptSegment(
-            lesson_id=lesson.id,
-            speaker="说话人 1",
-            start_ms=0,
-            end_ms=1000,
-            text="这是技术验证版的模拟转写结果。接入真实 ASR 服务后，这里会替换为课堂原文。",
-            source="mock",
-        ))
+        has_transcript = db.scalar(select(TranscriptSegment.id).where(TranscriptSegment.lesson_id == lesson.id).limit(1))
+        if has_transcript is None:
+            db.add(TranscriptSegment(
+                lesson_id=lesson.id,
+                speaker="说话人 1",
+                start_ms=0,
+                end_ms=1000,
+                text="这是技术验证版的模拟转写结果。接入真实 ASR 服务后，这里会替换为课堂原文。",
+                source="mock",
+            ))
         job.stage = "completed"
         job.progress = 100
         lesson.status = "completed"
@@ -57,4 +60,3 @@ def process_audio(job_id: str) -> None:
         raise
     finally:
         db.close()
-

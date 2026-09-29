@@ -1,9 +1,9 @@
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -75,7 +75,7 @@ def get_lesson(lesson_id: str, db: Session = Depends(get_db)) -> Lesson:
 
 
 @app.post("/lessons/{lesson_id}/audio", response_model=JobRead, status_code=202)
-def upload_audio(lesson_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)) -> ProcessingJob:
+def upload_audio(lesson_id: str, file: UploadFile = File(...), browser_transcript: str | None = Form(None), db: Session = Depends(get_db)) -> ProcessingJob:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
         raise HTTPException(status_code=404, detail="课次不存在")
@@ -94,6 +94,16 @@ def upload_audio(lesson_id: str, file: UploadFile = File(...), db: Session = Dep
         object_key=object_key,
         size_bytes=size_bytes,
     )
+    db.execute(delete(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id))
+    if browser_transcript and browser_transcript.strip():
+        db.add(TranscriptSegment(
+            lesson_id=lesson_id,
+            speaker="说话人 1",
+            start_ms=0,
+            end_ms=0,
+            text=browser_transcript.strip(),
+            source="browser",
+        ))
     job = ProcessingJob(lesson_id=lesson_id, stage="queued", progress=0)
     lesson.status = "queued"
     db.add_all([audio, job])
