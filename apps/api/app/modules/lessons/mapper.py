@@ -1,7 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ...shared.models import AudioFile, Lesson, ProcessingJob, TranscriptSegment
+from ...shared.models import AudioFile, Lesson, ProcessingJob, TranscriptRevision, TranscriptSegment
 
 
 def find_lesson(db: Session, lesson_id: str) -> Lesson | None:
@@ -9,8 +9,9 @@ def find_lesson(db: Session, lesson_id: str) -> Lesson | None:
 
 
 def clear_transcript(db: Session, lesson_id: str) -> None:
-    from sqlalchemy import delete
-
+    db.execute(delete(TranscriptRevision).where(TranscriptRevision.segment_id.in_(
+        select(TranscriptSegment.id).where(TranscriptSegment.lesson_id == lesson_id)
+    )))
     db.execute(delete(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id))
 
 

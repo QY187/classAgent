@@ -77,6 +77,19 @@ class TranscriptSegment(Base):
     text: Mapped[str] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(30), default="browser")
     lesson: Mapped[Lesson] = relationship(back_populates="transcript_segments")
+    revisions: Mapped[list["TranscriptRevision"]] = relationship(back_populates="segment", cascade="all, delete-orphan")
+
+
+class TranscriptRevision(Base):
+    __tablename__ = "transcript_revisions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    segment_id: Mapped[str] = mapped_column(ForeignKey("transcript_segments.id", ondelete="CASCADE"))
+    previous_text: Mapped[str] = mapped_column(Text)
+    updated_text: Mapped[str] = mapped_column(Text)
+    previous_source: Mapped[str] = mapped_column(String(30))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    segment: Mapped[TranscriptSegment] = relationship(back_populates="revisions")
 
 
 class LessonSummary(Base):

@@ -91,6 +91,7 @@ def generate_summary(lesson_id: str) -> None:
         db.commit()
 
         transcript_segments = list(db.scalars(select(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id).order_by(TranscriptSegment.start_ms)))
+        transcript_snapshot = [(segment.id, segment.text) for segment in transcript_segments]
         payload = [
             {
                 "index": index,
@@ -101,8 +102,15 @@ def generate_summary(lesson_id: str) -> None:
             }
             for index, segment in enumerate(transcript_segments, start=1)
         ]
-        summary.content = build_summary(payload)
-        summary.status = "completed"
+        generated_content = build_summary(payload)
+        db.expire_all()
+        current_segments = list(db.scalars(select(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id).order_by(TranscriptSegment.start_ms)))
+        if transcript_snapshot == [(segment.id, segment.text) for segment in current_segments]:
+            summary.content = generated_content
+            summary.status = "completed"
+        else:
+            summary.content = None
+            summary.status = "stale"
         db.commit()
     except Exception as exc:
         db.rollback()

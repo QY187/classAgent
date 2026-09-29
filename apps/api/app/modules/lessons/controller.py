@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 
 from ...core.db import get_db
-from ...shared.schemas import JobRead, LessonRead, TranscriptSegmentRead
+from ...shared.schemas import JobRead, LessonRead, TranscriptSegmentRead, TranscriptSegmentUpdate
 from . import service
 
 
@@ -27,3 +27,8 @@ def latest_job(lesson_id: str, db: Session = Depends(get_db)):
 @router.get("/lessons/{lesson_id}/transcript", response_model=list[TranscriptSegmentRead])
 def get_transcript(lesson_id: str, db: Session = Depends(get_db)):
     return service.get_transcript(db, lesson_id)
+
+
+@router.patch("/lessons/{lesson_id}/transcript/{segment_id}", response_model=TranscriptSegmentRead)
+def update_transcript_segment(lesson_id: str, segment_id: str, payload: TranscriptSegmentUpdate, db: Session = Depends(get_db)):
+    return service.update_transcript_segment(db, lesson_id, segment_id, payload.text)

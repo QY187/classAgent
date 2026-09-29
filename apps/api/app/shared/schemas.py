@@ -46,6 +46,10 @@ class TranscriptSegmentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TranscriptSegmentUpdate(BaseModel):
+    text: str = Field(min_length=1, max_length=10000)
+
+
 class SummaryRead(BaseModel):
     id: str
     lesson_id: str

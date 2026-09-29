@@ -3,10 +3,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ...shared.models import AudioFile, Lesson, LessonSummary, ProcessingJob, TranscriptSegment
+from ...shared.models import AudioFile, Lesson, LessonSummary, ProcessingJob, TranscriptRevision, TranscriptSegment
 from ...infrastructure.storage import upload_file
 from . import mapper
 
@@ -73,6 +73,36 @@ def latest_job(db: Session, lesson_id: str) -> ProcessingJob:
 
 def get_transcript(db: Session, lesson_id: str) -> list[TranscriptSegment]:
     return mapper.find_transcript(db, lesson_id)
+
+
+def update_transcript_segment(db: Session, lesson_id: str, segment_id: str, text: str) -> TranscriptSegment:
+    get_lesson(db, lesson_id)
+    segment = db.get(TranscriptSegment, segment_id)
+    if segment is None or segment.lesson_id != lesson_id:
+        raise HTTPException(status_code=404, detail="文字片段不存在")
+
+    corrected = text.strip()
+    if not corrected:
+        raise HTTPException(status_code=400, detail="文字记录不能为空")
+    if corrected == segment.text:
+        return segment
+
+    db.add(TranscriptRevision(
+        segment_id=segment.id,
+        previous_text=segment.text,
+        updated_text=corrected,
+        previous_source=segment.source,
+    ))
+    segment.text = corrected
+    segment.source = "manual"
+    summary = db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
+    if summary is not None:
+        summary.status = "stale"
+        summary.content = None
+        summary.error_message = None
+    db.commit()
+    db.refresh(segment)
+    return segment
 
 
 def _parse_browser_transcript(value: str | None) -> list[dict[str, int | str]]:
