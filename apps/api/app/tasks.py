@@ -2,7 +2,7 @@ from celery import Celery
 from sqlalchemy import select
 
 from .config import get_settings
-from .summary import generate_summary as build_summary
+from .modules.summaries.service import generate_summary as build_summary
 
 
 celery_app = Celery("classagent", broker=get_settings().redis_url, backend=get_settings().redis_url)

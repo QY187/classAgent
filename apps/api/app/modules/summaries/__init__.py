@@ -1,3 +1,1 @@
-from .router import router
-
-__all__ = ["router"]
+"""智能纪要业务模块。"""
