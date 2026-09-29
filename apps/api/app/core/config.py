@@ -13,12 +13,7 @@ class Settings(BaseSettings):
     s3_secure: bool = False
     storage_backend: str = "local"
     local_storage_path: str = "./data/local/uploads"
-    transcription_provider: str = "mock"
-    asr_model: str = "paraformer-v2"
-    asr_poll_interval_seconds: float = 3.0
-    asr_max_wait_seconds: int = 1800
     deepseek_api_key: str = ""
-    dashscope_api_key: str = ""
     summary_model: str = "deepseek-chat"
     summary_provider: str = "deepseek"
 

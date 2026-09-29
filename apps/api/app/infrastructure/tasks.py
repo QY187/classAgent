@@ -1,100 +1,12 @@
 from celery import Celery
 from sqlalchemy import select
-from sqlalchemy import delete
-from pathlib import Path
 
 from ..core.config import get_settings
-from .asr import transcribe_file
-from .storage import materialize_file
 from ..modules.summaries.service import generate_summary as build_summary
 
 
 celery_app = Celery("classagent", broker=get_settings().redis_url, backend=get_settings().redis_url)
 celery_app.conf.update(task_track_started=True, result_expires=3600)
-
-
-@celery_app.task(name="classagent.process_audio")
-def process_audio(job_id: str) -> None:
-    from ..core.db import SessionLocal
-    from ..shared.models import AudioFile, Lesson, LessonSummary, ProcessingJob, TranscriptSegment
-
-    db = SessionLocal()
-    try:
-        job = db.get(ProcessingJob, job_id)
-        if job is None:
-            return
-        lesson = db.get(Lesson, job.lesson_id)
-        if lesson is None:
-            job.stage = "failed"
-            job.error_message = "找不到对应课次"
-            db.commit()
-            return
-
-        job.stage = "transcribing"
-        job.progress = 30
-        lesson.status = "transcribing"
-        db.commit()
-
-        settings = get_settings()
-        audio = db.scalar(select(AudioFile).where(AudioFile.lesson_id == lesson.id).order_by(AudioFile.created_at.desc()).limit(1))
-        if audio is None:
-            raise RuntimeError("找不到已上传的音频文件")
-        job.progress = 40
-        db.commit()
-
-        if settings.transcription_provider == "paraformer":
-            audio_path, should_remove = materialize_file(audio.object_key)
-            try:
-                asr_segments = transcribe_file(audio_path)
-            finally:
-                if should_remove:
-                    Path(audio_path).unlink(missing_ok=True)
-            db.execute(delete(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson.id))
-            db.add_all([
-                TranscriptSegment(
-                    lesson_id=lesson.id,
-                    speaker=segment.speaker,
-                    start_ms=segment.start_ms,
-                    end_ms=segment.end_ms,
-                    text=segment.text,
-                    source="paraformer",
-                )
-                for segment in asr_segments
-            ])
-            job.progress = 70
-        elif settings.transcription_provider == "mock":
-            has_transcript = db.scalar(select(TranscriptSegment.id).where(TranscriptSegment.lesson_id == lesson.id).limit(1))
-            if has_transcript is None:
-                db.add(TranscriptSegment(
-                    lesson_id=lesson.id,
-                    speaker="说话人 1",
-                    start_ms=0,
-                    end_ms=1000,
-                    text="这是技术验证版的模拟转写结果。接入真实 ASR 服务后，这里会替换为课堂原文。",
-                    source="mock",
-                ))
-        else:
-            raise RuntimeError(f"不支持的 TRANSCRIPTION_PROVIDER: {settings.transcription_provider}")
-        if db.scalar(select(LessonSummary.id).where(LessonSummary.lesson_id == lesson.id).limit(1)) is None:
-            db.add(LessonSummary(lesson_id=lesson.id, provider=get_settings().summary_provider, status="queued"))
-        job.stage = "completed"
-        job.progress = 100
-        lesson.status = "completed"
-        db.commit()
-        generate_summary.delay(lesson.id)
-    except Exception as exc:
-        db.rollback()
-        job = db.get(ProcessingJob, job_id)
-        if job is not None:
-            job.stage = "failed"
-            job.error_message = str(exc)
-            lesson = db.get(Lesson, job.lesson_id)
-            if lesson is not None:
-                lesson.status = "failed"
-            db.commit()
-        raise
-    finally:
-        db.close()
 
 
 @celery_app.task(name="classagent.generate_summary")

@@ -38,12 +38,7 @@ services:
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: classagent-audio
       S3_SECURE: "false"
-      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-mock}
-      ASR_MODEL: ${ASR_MODEL:-paraformer-v2}
-      ASR_POLL_INTERVAL_SECONDS: ${ASR_POLL_INTERVAL_SECONDS:-3}
-      ASR_MAX_WAIT_SECONDS: ${ASR_MAX_WAIT_SECONDS:-1800}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       SUMMARY_MODEL: ${SUMMARY_MODEL:-deepseek-chat}
       SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-deepseek}
     volumes:
@@ -70,12 +65,7 @@ services:
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: classagent-audio
       S3_SECURE: "false"
-      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-mock}
-      ASR_MODEL: ${ASR_MODEL:-paraformer-v2}
-      ASR_POLL_INTERVAL_SECONDS: ${ASR_POLL_INTERVAL_SECONDS:-3}
-      ASR_MAX_WAIT_SECONDS: ${ASR_MAX_WAIT_SECONDS:-1800}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       SUMMARY_MODEL: ${SUMMARY_MODEL:-deepseek-chat}
       SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-deepseek}
     volumes:

@@ -7,7 +7,7 @@ import { errorMessage, request } from "../../../lib/api";
 
 type Course = { id: string; name: string; semester?: string | null };
 type Lesson = { id: string; title: string; lesson_date?: string | null; status: string; created_at: string };
-const statusLabel: Record<string, string> = { created: "待上传", queued: "排队中", transcribing: "转写中", completed: "已完成", failed: "处理失败" };
+const statusLabel: Record<string, string> = { created: "待录音", audio_only: "仅保存音频", queued: "排队中", transcribing: "转写中", completed: "已有文字记录", failed: "处理失败" };
 
 export default function CoursePage() {
   const { courseId } = useParams<{ courseId: string }>();

@@ -3,11 +3,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from ...shared.models import AudioFile, Lesson, ProcessingJob, TranscriptSegment
+from ...shared.models import AudioFile, Lesson, LessonSummary, ProcessingJob, TranscriptSegment
 from ...infrastructure.storage import upload_file
-from ...infrastructure.tasks import process_audio
 from . import mapper
 
 
@@ -30,10 +30,20 @@ def upload_audio(db: Session, lesson_id: str, file: UploadFile, browser_transcri
     upload_file(object_key, file.file, size_bytes, file.content_type)
     audio = AudioFile(lesson_id=lesson_id, filename=file.filename or "audio", content_type=file.content_type, object_key=object_key, size_bytes=size_bytes)
     mapper.clear_transcript(db, lesson_id)
-    for chunk in _parse_browser_transcript(browser_transcript):
+    db.execute(delete(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
+    chunks = _parse_browser_transcript(browser_transcript)
+    for chunk in chunks:
         db.add(TranscriptSegment(lesson_id=lesson_id, speaker="说话人 1", start_ms=chunk["start_ms"], end_ms=chunk["end_ms"], text=chunk["text"], source="browser"))
-    job = mapper.save_audio_job(db, audio, ProcessingJob(lesson_id=lesson_id, stage="queued", progress=0), lesson)
-    process_audio.delay(job.id)
+    lesson.status = "completed" if chunks else "audio_only"
+    if chunks:
+        from ...core.config import get_settings
+
+        db.add(LessonSummary(lesson_id=lesson_id, provider=get_settings().summary_provider, status="queued"))
+    job = mapper.save_audio_job(db, audio, ProcessingJob(lesson_id=lesson_id, stage="completed", progress=100), lesson)
+    if chunks:
+        from ...infrastructure.tasks import generate_summary
+
+        generate_summary.delay(lesson_id)
     return job
 
 

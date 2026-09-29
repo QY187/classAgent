@@ -75,7 +75,7 @@ class TranscriptSegment(Base):
     start_ms: Mapped[int] = mapped_column(Integer)
     end_ms: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
-    source: Mapped[str] = mapped_column(String(30), default="mock")
+    source: Mapped[str] = mapped_column(String(30), default="browser")
     lesson: Mapped[Lesson] = relationship(back_populates="transcript_segments")
 
 
@@ -87,7 +87,7 @@ class LessonSummary(Base):
     lesson_id: Mapped[str] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"))
     status: Mapped[str] = mapped_column(String(30), default="queued")
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    provider: Mapped[str] = mapped_column(String(50), default="dashscope")
+    provider: Mapped[str] = mapped_column(String(50), default="deepseek")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)

@@ -15,7 +15,6 @@ def clear_transcript(db: Session, lesson_id: str) -> None:
 
 
 def save_audio_job(db: Session, audio: AudioFile, job: ProcessingJob, lesson: Lesson) -> ProcessingJob:
-    lesson.status = "queued"
     db.add_all([audio, job])
     db.commit()
     db.refresh(job)
