@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { errorMessage, request } from "../../../lib/api";
+import { collectSpeechResults } from "../../../lib/speech-results";
 
 const stageLabel: Record<string, string> = { queued: "等待处理", transcribing: "正在转写", completed: "保存完成", failed: "处理失败" };
 type Lesson = { id: string; course_id: string; title: string; lesson_date?: string | null; status: string };
@@ -48,6 +49,7 @@ export default function LessonPage() {
   const recordingTimerRef = useRef<number | null>(null);
   const recognitionRef = useRef<Recognition | null>(null);
   const recognitionActiveRef = useRef(false);
+  const acceptedFinalIndicesRef = useRef<Set<number>>(new Set());
   const recognitionFinishedRef = useRef<Promise<void> | null>(null);
   const transcriptChunksRef = useRef<TranscriptChunk[]>([]);
   const pendingTranscriptRef = useRef("");
@@ -161,20 +163,16 @@ export default function LessonPage() {
       const RecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = RecognitionAPI ? new RecognitionAPI() : null;
       chunksRef.current = []; streamRef.current = stream; recorderRef.current = recorder;
-      transcriptChunksRef.current = []; pendingTranscriptRef.current = ""; segmentStartRef.current = 0; recordingStartedAtRef.current = Date.now(); setLiveTranscript("");
+      transcriptChunksRef.current = []; pendingTranscriptRef.current = ""; segmentStartRef.current = 0; recordingStartedAtRef.current = Date.now(); acceptedFinalIndicesRef.current.clear(); setLiveTranscript("");
       if (recognition) {
         recognition.lang = "zh-CN"; recognition.continuous = true; recognition.interimResults = true;
         recognition.onresult = (event) => {
-          let interim = "";
-          for (let index = event.resultIndex; index < event.results.length; index += 1) {
-            const result = event.results[index];
-            if (result.isFinal) consumeFinalTranscript(result[0].transcript, recordingElapsedMs());
-            else interim += result[0].transcript;
-          }
+          const { finalTexts, interim } = collectSpeechResults(event.results, acceptedFinalIndicesRef.current);
+          for (const text of finalTexts) consumeFinalTranscript(text, recordingElapsedMs());
           setLiveTranscript(`${transcriptChunksRef.current.map((chunk) => chunk.text).join("")}${pendingTranscriptRef.current}${interim}`);
         };
         recognition.onerror = () => setMessage("浏览器语音识别暂时中断，录音仍会继续保存。");
-        recognition.onend = () => { if (recognitionActiveRef.current) { try { recognition.start(); } catch { /* 浏览器正在重启识别 */ } } };
+        recognition.onend = () => { if (recognitionActiveRef.current) { acceptedFinalIndicesRef.current.clear(); try { recognition.start(); } catch { /* 浏览器正在重启识别 */ } } };
         recognitionRef.current = recognition; recognitionActiveRef.current = true;
         try { recognition.start(); } catch { setMessage("浏览器语音识别无法启动，录音仍会继续保存。"); }
       } else {
