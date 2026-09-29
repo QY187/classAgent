@@ -40,6 +40,7 @@ services:
       S3_SECURE: "false"
       TRANSCRIPTION_PROVIDER: mock
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       SUMMARY_MODEL: ${SUMMARY_MODEL:-deepseek-chat}
       SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-deepseek}
     volumes:
@@ -68,6 +69,7 @@ services:
       S3_SECURE: "false"
       TRANSCRIPTION_PROVIDER: mock
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       SUMMARY_MODEL: ${SUMMARY_MODEL:-deepseek-chat}
       SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-deepseek}
     volumes:
