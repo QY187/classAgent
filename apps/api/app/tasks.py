@@ -12,7 +12,7 @@ celery_app.conf.update(task_track_started=True, result_expires=3600)
 @celery_app.task(name="classagent.process_audio")
 def process_audio(job_id: str) -> None:
     from .db import SessionLocal
-    from .models import Lesson, ProcessingJob, TranscriptSegment
+    from .models import Lesson, LessonSummary, ProcessingJob, TranscriptSegment
 
     db = SessionLocal()
     try:
@@ -44,6 +44,8 @@ def process_audio(job_id: str) -> None:
                 text="这是技术验证版的模拟转写结果。接入真实 ASR 服务后，这里会替换为课堂原文。",
                 source="mock",
             ))
+        if db.scalar(select(LessonSummary.id).where(LessonSummary.lesson_id == lesson.id).limit(1)) is None:
+            db.add(LessonSummary(lesson_id=lesson.id, provider=get_settings().summary_provider, status="queued"))
         job.stage = "completed"
         job.progress = 100
         lesson.status = "completed"
