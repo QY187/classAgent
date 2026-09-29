@@ -96,6 +96,7 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .pill { border-radius: 99px; font-size: 11px; padding: 5px 9px; white-space: nowrap; font-weight: 600; }
 .pill-created { color: #697386; background: #f1f3f6; }
 .pill-queued, .pill-transcribing { color: var(--orange); background: #fff4df; }
+.pill-generating, .pill-stale { color: #6c55b7; background: #f0ebff; }
 .pill-completed { color: var(--green); background: #e6f7ef; }
 .pill-failed { color: #bd4545; background: #ffebeb; }
 .back-link { color: var(--muted); font-size: 13px; display: inline-flex; gap: 6px; margin-bottom: 18px; transition: color .18s; }
@@ -164,6 +165,45 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .summary-placeholder .empty-icon { margin-bottom: 6px; }
 .summary-placeholder strong { color: var(--ink); font-size: 14px; }
 .summary-placeholder p { margin: 7px 0 0; font-size: 12px; }
+.page-heading-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.document-toolbar { display: flex; align-items: center; justify-content: space-between; margin: 0 0 16px; }
+.document-toolbar .lesson-view-tabs { margin: 0; }
+.lesson-view-tabs a.active { background: white; color: var(--blue); box-shadow: 0 2px 8px rgba(44, 58, 101, .08); }
+.document-panel { max-width: 980px; margin: 0 auto; }
+.document-panel .panel-body { padding: 30px 42px 42px; }
+.progress-label { display: flex; justify-content: space-between; color: #6b7280; font-size: 12px; }
+.recording-hero { display: flex; align-items: center; gap: 20px; padding: 28px 30px; margin-bottom: 20px; border: 1px solid #e3e8f4; border-radius: 18px; background: linear-gradient(135deg, #ffffff, #f6f8ff); box-shadow: var(--shadow); }
+.recording-hero.is-recording { border-color: #c8d0ff; background: linear-gradient(135deg, #f8f9ff, #eef1ff); }
+.recording-hero-icon { width: 54px; height: 54px; flex: 0 0 54px; display: grid; place-items: center; border-radius: 16px; background: var(--blue-soft); color: var(--blue); font-size: 25px; }
+.recording-hero.is-recording .recording-hero-icon { color: #d14d65; background: #fff0f2; animation: pulse-recording 1.5s infinite; }
+.recording-hero-copy { flex: 1; min-width: 0; }
+.recording-hero-copy h2 { margin: 7px 0 5px; font-size: 21px; }
+.recording-hero-copy p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.recording-hero-action { flex: none; }
+.live-panel { margin-bottom: 20px; }
+.live-indicator { color: #c44c62; font-size: 12px; }
+.live-indicator i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: currentColor; }
+.live-transcript { min-height: 110px; padding: 17px 18px; border: 1px solid #e6eaf3; border-radius: 12px; background: #fbfcff; color: #42516b; font-size: 14px; line-height: 1.9; white-space: pre-wrap; }
+.live-empty { padding: 30px 18px; }
+.workspace-entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 20px; }
+.workspace-entry { display: flex; align-items: flex-start; gap: 16px; position: relative; min-height: 180px; padding: 24px; border: 1px solid #e1e7f2; border-radius: 16px; background: #fff; box-shadow: var(--shadow); transition: transform .18s, border-color .18s, box-shadow .18s; }
+.workspace-entry:hover { transform: translateY(-3px); border-color: #b9c5ff; box-shadow: 0 18px 38px rgba(44, 62, 120, .11); }
+.entry-icon { width: 42px; height: 42px; display: grid; place-items: center; flex: none; border-radius: 12px; background: var(--blue-soft); color: var(--blue); font-size: 20px; }
+.transcript-entry .entry-icon { background: #eaf7f3; color: var(--green); }
+.entry-copy { min-width: 0; }
+.entry-copy h2 { margin: 6px 0 7px; font-size: 18px; }
+.entry-copy p { margin: 0 0 19px; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.entry-link { color: var(--blue); font-size: 12px; font-weight: 700; }
+.entry-link b { margin-left: 4px; font-size: 16px; }
+.workspace-entry > .pill { position: absolute; top: 20px; right: 20px; }
+.empty-workspace { margin-top: 10px; padding: 74px 24px; text-align: center; border: 1px dashed #c8d2e5; border-radius: 18px; background: rgba(255,255,255,.62); }
+.empty-workspace strong { display: block; color: var(--ink); font-size: 16px; }
+.empty-workspace p { margin: 9px 0 21px; color: var(--muted); font-size: 13px; }
+.empty-workspace .button + .button { margin-left: 8px; }
+.audio-preview-panel, .processing-panel { margin-top: 20px; }
+.audio-preview { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: #58667e; font-size: 12px; }
+.audio-preview audio { flex: 1 1 260px; min-width: 230px; height: 34px; }
+@keyframes pulse-recording { 0%, 100% { box-shadow: 0 0 0 0 rgba(209,77,101,.18); } 50% { box-shadow: 0 0 0 8px rgba(209,77,101,0); } }
 @media (max-width: 900px) {
   .sidebar { flex-basis: 208px; }
   .topbar { padding: 0 28px; }
@@ -171,6 +211,8 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
   .course-grid { grid-template-columns: repeat(2, 1fr); }
   .detail-grid { grid-template-columns: 1fr; }
   .summary-concepts, .summary-columns { grid-template-columns: 1fr; }
+  .document-panel .panel-body { padding: 24px; }
+  .workspace-entry-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .sidebar { flex-basis: 66px; padding: 18px 8px; }
@@ -183,7 +225,14 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
   .content { padding: 28px 16px; }
   .page-heading { display: block; }
   .page-heading .button { margin-top: 18px; }
+  .page-heading-actions { margin-top: 18px; }
   h1 { font-size: 27px; }
+  .recording-hero { align-items: flex-start; flex-wrap: wrap; padding: 22px; }
+  .recording-hero-action { width: 100%; }
+  .recording-hero-action .button { width: 100%; }
+  .document-toolbar { align-items: flex-start; gap: 10px; flex-direction: column; }
+  .document-panel .panel-body { padding: 18px 15px; }
+  .transcript-segment { grid-template-columns: 54px 1fr; padding-left: 3px; padding-right: 3px; }
   .stats-grid, .course-grid { grid-template-columns: 1fr; }
   .lesson-row { align-items: flex-start; flex-direction: column; }
   .lesson-actions { width: 100%; justify-content: space-between; }
