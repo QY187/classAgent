@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     s3_secure: bool = False
     storage_backend: str = "local"
     local_storage_path: str = "./data/local/uploads"
+    asr_model: str = "paraformer-v2"
+    asr_poll_interval_seconds: float = 3.0
+    asr_max_wait_seconds: int = 1800
+    dashscope_api_key: str = ""
+    dashscope_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
     deepseek_api_key: str = ""
     summary_model: str = "deepseek-chat"
     summary_provider: str = "deepseek"

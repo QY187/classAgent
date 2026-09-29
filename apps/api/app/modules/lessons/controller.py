@@ -14,7 +14,7 @@ def get_lesson(lesson_id: str, db: Session = Depends(get_db)):
     return service.get_lesson(db, lesson_id)
 
 
-@router.post("/lessons/{lesson_id}/audio", response_model=JobRead, status_code=201)
+@router.post("/lessons/{lesson_id}/audio", response_model=JobRead, status_code=202)
 def upload_audio(lesson_id: str, file: UploadFile = File(...), browser_transcript: str | None = Form(None), db: Session = Depends(get_db)):
     return service.upload_audio(db, lesson_id, file, browser_transcript)
 

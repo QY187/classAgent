@@ -22,8 +22,18 @@ def upload_audio(db: Session, lesson_id: str, file: UploadFile, browser_transcri
     lesson = get_lesson(db, lesson_id)
     if not file.content_type or not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=400, detail="请上传音频文件")
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".aac", ".amr", ".flac", ".m4a", ".mp3", ".mpeg", ".ogg", ".opus", ".wav", ".webm", ".wma"}:
+        raise HTTPException(status_code=400, detail="不支持该音频格式，请上传 MP3、WAV、M4A、WebM 等常见格式")
 
-    object_key = f"lessons/{lesson_id}/{uuid4()}-{Path(file.filename or 'audio').name}"
+    chunks = _parse_browser_transcript(browser_transcript)
+    if not chunks:
+        from ...core.config import get_settings
+
+        if not get_settings().dashscope_api_key:
+            raise HTTPException(status_code=503, detail="未配置 DASHSCOPE_API_KEY，无法转写上传的音频")
+
+    object_key = f"lessons/{lesson_id}/{uuid4()}{suffix}"
     file.file.seek(0, 2)
     size_bytes = file.file.tell()
     file.file.seek(0)
@@ -31,19 +41,26 @@ def upload_audio(db: Session, lesson_id: str, file: UploadFile, browser_transcri
     audio = AudioFile(lesson_id=lesson_id, filename=file.filename or "audio", content_type=file.content_type, object_key=object_key, size_bytes=size_bytes)
     mapper.clear_transcript(db, lesson_id)
     db.execute(delete(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
-    chunks = _parse_browser_transcript(browser_transcript)
     for chunk in chunks:
         db.add(TranscriptSegment(lesson_id=lesson_id, speaker="说话人 1", start_ms=chunk["start_ms"], end_ms=chunk["end_ms"], text=chunk["text"], source="browser"))
-    lesson.status = "completed" if chunks else "audio_only"
+    lesson.status = "completed" if chunks else "queued"
     if chunks:
         from ...core.config import get_settings
 
         db.add(LessonSummary(lesson_id=lesson_id, provider=get_settings().summary_provider, status="queued"))
-    job = mapper.save_audio_job(db, audio, ProcessingJob(lesson_id=lesson_id, stage="completed", progress=100), lesson)
+    job = mapper.save_audio_job(
+        db, audio,
+        ProcessingJob(lesson_id=lesson_id, stage="completed" if chunks else "queued", progress=100 if chunks else 0),
+        lesson,
+    )
     if chunks:
         from ...infrastructure.tasks import generate_summary
 
         generate_summary.delay(lesson_id)
+    else:
+        from ...infrastructure.tasks import process_audio
+
+        process_audio.delay(job.id, object_key)
     return job
 
 
