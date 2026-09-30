@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ...core.db import get_db
+from ...core.deps import get_current_user
 from ...shared.schemas import SummaryRead
 from . import service
 
 
-router = APIRouter(tags=["summaries"])
+router = APIRouter(tags=["summaries"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/lessons/{lesson_id}/summary", response_model=SummaryRead)

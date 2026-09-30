@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ...core.db import get_db
+from ...core.deps import get_current_user
 from ...shared.models import Course, Lesson
 from ...shared.schemas import CourseCreate, CourseRead, LessonCreate, LessonRead
 from . import service
 
 
-router = APIRouter(tags=["courses"])
+router = APIRouter(tags=["courses"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/courses", response_model=CourseRead, status_code=201)

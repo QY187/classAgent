@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { request } from "../lib/api";
+import { clearSession, getStoredUser, isAuthenticated, redirectToLogin, type AuthUser } from "../lib/auth";
 
 type Course = { id: string; name: string };
 type Lesson = { id: string; course_id: string; title: string };
@@ -11,10 +12,27 @@ type Breadcrumb = { pathname: string; courseId?: string; courseName?: string; le
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const isLogin = pathname === "/login";
   const [breadcrumb, setBreadcrumb] = useState<Breadcrumb>({ pathname: "" });
+  const [user, setUser] = useState<AuthUser | null>(null);
   const libraryActive = pathname === "/" || pathname.startsWith("/courses") || pathname.startsWith("/lessons");
   const courseMatch = pathname.match(/^\/courses\/([^/]+)\/?$/);
   const lessonMatch = pathname.match(/^\/lessons\/([^/]+)\/?$/);
+
+  useEffect(() => {
+    if (isLogin) {
+      if (isAuthenticated()) window.location.href = "/";
+      return;
+    }
+    if (!isAuthenticated()) {
+      redirectToLogin();
+      return;
+    }
+    setUser(getStoredUser());
+    request<AuthUser>("/auth/me")
+      .then(setUser)
+      .catch(() => {});
+  }, [isLogin]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -38,7 +56,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, [pathname]);
 
+  function logout() {
+    clearSession();
+    window.location.href = "/login";
+  }
+
   const currentBreadcrumb: Breadcrumb = breadcrumb.pathname === pathname ? breadcrumb : { pathname };
+
+  if (isLogin) return <>{children}</>;
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -60,7 +86,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </nav>
           <div className="topbar-actions">
             <span className="status-text" style={{ color: "#7a8291", fontSize: 12 }}>本地预览版</span>
-            <span className="user-chip"><span className="avatar">我</span><span className="status-text">我的资料库</span></span>
+            {user && (
+              <span className="user-chip">
+                <span className="avatar">{user.username.slice(0, 1).toUpperCase()}</span>
+                <span className="status-text">{user.username}</span>
+                <button className="button button-quiet" style={{ fontSize: 12, padding: "4px 8px" }} type="button" onClick={logout}>退出</button>
+              </span>
+            )}
           </div>
         </header>
         {children}

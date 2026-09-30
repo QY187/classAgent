@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 
 from ...core.db import get_db
+from ...core.deps import get_current_user
 from ...shared.schemas import JobRead, LessonRead, TranscriptSegmentRead, TranscriptSegmentUpdate
 from . import service
 
 
-router = APIRouter(tags=["lessons"])
+router = APIRouter(tags=["lessons"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/lessons/{lesson_id}", response_model=LessonRead)

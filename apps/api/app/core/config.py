@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     summary_model: str = "deepseek-chat"
     summary_provider: str = "deepseek"
+    secret_key: str = "dev-secret-change-me"
+    admin_username: str = "root"
+    admin_password: str = "123456"
+    access_token_expire_minutes: int = 1440
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

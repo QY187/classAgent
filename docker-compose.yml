@@ -46,6 +46,10 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       SUMMARY_MODEL: ${SUMMARY_MODEL:-deepseek-chat}
       SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-deepseek}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-root}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-123456}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
     volumes:
       - ./apps/api/app:/app/app
       - audio_data:/data/uploads
@@ -78,6 +82,10 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       SUMMARY_MODEL: ${SUMMARY_MODEL:-deepseek-chat}
       SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-deepseek}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-root}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-123456}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
     volumes:
       - ./apps/api/app:/app/app
       - audio_data:/data/uploads
