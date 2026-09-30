@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { request } from "../lib/api";
 
@@ -29,6 +30,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 export default function SearchBox() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
   const [open, setOpen] = useState(false);
@@ -81,7 +83,16 @@ export default function SearchBox() {
         aria-label="站内搜索"
         onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+          if (event.key === "Enter") {
+            const term = query.trim();
+            if (term) {
+              setOpen(false);
+              router.push(`/search?q=${encodeURIComponent(term)}`);
+            }
+          }
+        }}
       />
       {showDropdown && (
         <div className="search-dropdown" role="listbox">

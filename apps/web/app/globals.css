@@ -183,6 +183,15 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 22px; border-bottom: 1px solid #edf0f5; }
 .panel-header > span { color: var(--muted); font-size: 12px; }
 .panel-body { padding: 22px; }
+.search-results { display: grid; gap: 18px; }
+.result-row { display: block; padding: 14px 16px; border: 1px solid #edf0f5; border-radius: 12px; text-decoration: none; color: inherit; transition: border-color .15s, background .15s; }
+.result-row:hover { border-color: #c9d4ec; background: #f7f9fd; }
+.result-row + .result-row { margin-top: 10px; }
+.result-title { font-size: 14px; color: var(--ink); font-weight: 600; }
+.result-title mark { background: #fff2c2; color: inherit; padding: 0 2px; border-radius: 3px; }
+.result-meta { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.result-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.page-search .empty-state { margin-top: 8px; }
 .lesson-list { display: grid; gap: 10px; }
 .lesson-row {
   display: flex; align-items: center; gap: 16px; padding: 15px 18px;
