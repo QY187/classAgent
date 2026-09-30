@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { request } from "../lib/api";
 import { clearSession, getStoredUser, isAuthenticated, redirectToLogin, type AuthUser } from "../lib/auth";
+import SearchBox from "./SearchBox";
 
 type Course = { id: string; name: string };
 type LessonInfo = { course_id: string; title: string };
@@ -94,6 +95,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             {lessonMatch && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">{lessonTitle || "我的课次"}</span></>}
           </nav>
           <div className="topbar-actions">
+            <SearchBox />
             <span className="status-text" style={{ color: "#7a8291", fontSize: 12 }}>本地预览版</span>
           </div>
         </header>
