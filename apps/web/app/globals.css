@@ -326,6 +326,12 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .entry-link { color: var(--blue); font-size: 12px; font-weight: 700; }
 .entry-link b { margin-left: 4px; font-size: 16px; }
 .workspace-entry > .pill { position: absolute; top: 20px; right: 20px; }
+.export-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; padding: 14px 18px; border: 1px solid #e6ebf5; border-radius: 14px; background: #fff; box-shadow: var(--shadow-sm); }
+.export-bar-label { color: var(--muted); font-size: 13px; }
+.export-menu { position: relative; flex: none; }
+.export-list { position: absolute; top: calc(100% + 8px); right: 0; min-width: 180px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 44px rgba(31, 49, 88, .16); padding: 6px; z-index: 20; animation: fade-in .15s ease; }
+.export-item { display: block; width: 100%; text-align: left; padding: 9px 12px; border: 0; background: transparent; border-radius: 8px; font-size: 13px; font-weight: 600; color: #3f4b62; transition: background .15s; }
+.export-item:hover { background: #f5f7ff; color: var(--blue); }
 .empty-workspace { margin-top: 10px; padding: 74px 24px; text-align: center; border: 1px dashed #c8d2e5; border-radius: var(--radius); background: rgba(255, 255, 255, .62); }
 .empty-workspace strong { display: block; color: var(--ink); font-size: 16px; }
 .empty-workspace p { margin: 9px 0 21px; color: var(--muted); font-size: 13px; }
