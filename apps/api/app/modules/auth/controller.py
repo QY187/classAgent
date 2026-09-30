@@ -26,11 +26,20 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh(payload: RefreshRequest) -> TokenResponse:
-    username = service.username_from_refresh(payload.refresh_token)
-    return TokenResponse(
-        access_token=service.issue_access_token(username),
-        refresh_token=service.issue_refresh_token(username),
-    )
+    access_token, refresh_token = service.rotate_refresh(payload.refresh_token)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/logout")
+def logout(payload: RefreshRequest) -> dict:
+    service.revoke_refresh_token(payload.refresh_token)
+    return {"status": "ok"}
+
+
+@router.post("/logout-all")
+def logout_all(username: str = Depends(get_current_user)) -> dict:
+    service.revoke_user_sessions(username)
+    return {"status": "ok"}
 
 
 @router.get("/me", response_model=UserInfo)

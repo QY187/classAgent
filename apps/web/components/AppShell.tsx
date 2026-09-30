@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { request } from "../lib/api";
-import { clearSession, getStoredUser, isAuthenticated, redirectToLogin, type AuthUser } from "../lib/auth";
+import { apiUrl, request } from "../lib/api";
+import { clearSession, getRefreshToken, getStoredUser, isAuthenticated, redirectToLogin, type AuthUser } from "../lib/auth";
 import SearchBox from "./SearchBox";
 
 type Course = { id: string; name: string };
@@ -48,7 +48,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, [pathname, isLogin]);
 
-  function logout() {
+  async function logout() {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      fetch(`${apiUrl}/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }).catch(() => {});
+    }
     clearSession();
     window.location.href = "/login";
   }

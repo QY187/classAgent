@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from .config import get_settings
 
@@ -16,10 +17,11 @@ def _b64decode(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + padding)
 
 
-def create_token(username: str, token_type: str, lifetime_minutes: int) -> str:
+def create_token(username: str, token_type: str, lifetime_minutes: int, jti: str | None = None) -> str:
     settings = get_settings()
     expire = datetime.now(timezone.utc) + timedelta(minutes=lifetime_minutes)
-    payload_json = json.dumps({"sub": username, "typ": token_type, "exp": expire.isoformat()}).encode("utf-8")
+    payload = {"sub": username, "typ": token_type, "exp": expire.isoformat(), "jti": jti or uuid4().hex}
+    payload_json = json.dumps(payload).encode("utf-8")
     payload_text = _b64encode(payload_json)
     payload_bytes = payload_text.encode("ascii")
     signature = hmac.new(settings.secret_key.encode("utf-8"), payload_bytes, hashlib.sha256).digest()
@@ -33,7 +35,10 @@ def create_access_token(username: str) -> str:
 
 def create_refresh_token(username: str) -> str:
     settings = get_settings()
-    return create_token(username, "refresh", settings.refresh_token_expire_minutes)
+    jti = uuid4().hex
+    token = create_token(username, "refresh", settings.refresh_token_expire_minutes, jti=jti)
+    _store_refresh(jti, username, settings.refresh_token_expire_minutes)
+    return token
 
 
 def verify_token(token: str, expected_type: str = "access") -> str | None:
@@ -61,3 +66,50 @@ def verify_token(token: str, expected_type: str = "access") -> str | None:
     if payload.get("typ", "access") != expected_type:
         return None
     return payload.get("sub")
+
+
+def verify_refresh_token(token: str) -> tuple[str | None, str | None]:
+    """返回 (username, jti)；校验签名 + Redis 中是否仍存在（未吊销/未过期）。"""
+    username = verify_token(token, expected_type="refresh")
+    if username is None:
+        return None, None
+    try:
+        jti = json.loads(_b64decode(token.split(".")[0])).get("jti")
+    except (ValueError, KeyError, base64.binascii.Error):
+        return None, None
+    if not jti:
+        return None, None
+    from .redis_client import get_redis
+
+    if not get_redis().exists(f"refresh:{jti}"):
+        return None, None
+    return username, jti
+
+
+def revoke_refresh(jti: str | None) -> None:
+    if not jti:
+        return
+    from .redis_client import get_redis
+
+    client = get_redis()
+    username = client.get(f"refresh:{jti}")
+    client.delete(f"refresh:{jti}")
+    if username:
+        client.srem(f"refresh_user:{username}", jti)
+
+
+def revoke_all_for_user(username: str) -> None:
+    from .redis_client import get_redis
+
+    client = get_redis()
+    for jti in client.smembers(f"refresh_user:{username}"):
+        client.delete(f"refresh:{jti}")
+    client.delete(f"refresh_user:{username}")
+
+
+def _store_refresh(jti: str, username: str, ttl: int) -> None:
+    from .redis_client import get_redis
+
+    client = get_redis()
+    client.set(f"refresh:{jti}", username, ex=ttl)
+    client.sadd(f"refresh_user:{username}", jti)
