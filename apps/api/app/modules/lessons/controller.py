@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from ...core.db import get_db
-from ...core.deps import get_current_user
-from ...shared.schemas import JobRead, LessonRead, SpeakerAliasRead, TranscriptMerge, TranscriptSegmentRead, TranscriptSegmentUpdate
+from ...core.deps import get_current_user, get_current_user_flexible
+from ...shared.schemas import AudioMeta, JobRead, LessonRead, SpeakerAliasRead, TranscriptMerge, TranscriptSegmentRead, TranscriptSegmentUpdate
 from . import service
 
 
 router = APIRouter(tags=["lessons"], dependencies=[Depends(get_current_user)])
+audio_router = APIRouter(tags=["lessons"], dependencies=[Depends(get_current_user_flexible)])
 
 
 @router.get("/lessons/{lesson_id}", response_model=LessonRead)
@@ -28,6 +31,23 @@ def latest_job(lesson_id: str, db: Session = Depends(get_db)):
 @router.get("/lessons/{lesson_id}/transcript", response_model=list[TranscriptSegmentRead])
 def get_transcript(lesson_id: str, db: Session = Depends(get_db)):
     return service.get_transcript(db, lesson_id)
+
+
+@audio_router.get("/lessons/{lesson_id}/audio/meta", response_model=AudioMeta)
+def get_audio_meta(lesson_id: str, db: Session = Depends(get_db)):
+    return service.get_audio_meta(db, lesson_id)
+
+
+@audio_router.get("/lessons/{lesson_id}/audio")
+def stream_audio(lesson_id: str, db: Session = Depends(get_db)):
+    audio, path, must_remove = service.get_audio_filepath(db, lesson_id)
+    return FileResponse(
+        path,
+        media_type=audio.content_type,
+        filename=audio.filename,
+        headers={"Accept-Ranges": "bytes"},
+        background=BackgroundTask(os.unlink, path) if must_remove else None,
+    )
 
 
 @router.get("/lessons/{lesson_id}/speakers", response_model=list[SpeakerAliasRead])

@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -7,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ...shared.models import AudioFile, Lesson, LessonSummary, ProcessingJob, SpeakerAlias, TranscriptRevision, TranscriptSegment
-from ...infrastructure.storage import upload_file
+from ...infrastructure.storage import materialize_file, upload_file
 from . import mapper
 
 
@@ -73,6 +74,19 @@ def latest_job(db: Session, lesson_id: str) -> ProcessingJob:
 
 def get_transcript(db: Session, lesson_id: str) -> list[TranscriptSegment]:
     return mapper.find_transcript(db, lesson_id)
+
+
+def get_audio_meta(db: Session, lesson_id: str) -> AudioFile:
+    audio = mapper.find_latest_audio(db, lesson_id)
+    if audio is None:
+        raise HTTPException(status_code=404, detail="该课次没有可播放的音频")
+    return audio
+
+
+def get_audio_filepath(db: Session, lesson_id: str) -> tuple[AudioFile, Path, bool]:
+    audio = get_audio_meta(db, lesson_id)
+    path, must_remove = materialize_file(audio.object_key)
+    return audio, path, must_remove
 
 
 def get_speakers(db: Session, lesson_id: str) -> list[dict[str, str]]:

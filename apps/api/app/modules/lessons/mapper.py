@@ -30,6 +30,10 @@ def find_transcript(db: Session, lesson_id: str) -> list[TranscriptSegment]:
     return list(db.scalars(select(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id).order_by(TranscriptSegment.start_ms)))
 
 
+def find_latest_audio(db: Session, lesson_id: str) -> AudioFile | None:
+    return db.scalar(select(AudioFile).where(AudioFile.lesson_id == lesson_id).order_by(AudioFile.created_at.desc()))
+
+
 def find_speaker_aliases(db: Session, lesson_id: str) -> list[SpeakerAlias]:
     return list(db.scalars(select(SpeakerAlias).where(SpeakerAlias.lesson_id == lesson_id)))
 

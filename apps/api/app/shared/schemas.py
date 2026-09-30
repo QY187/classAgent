@@ -60,6 +60,14 @@ class SpeakerAliasRead(BaseModel):
     display_name: str
 
 
+class AudioMeta(BaseModel):
+    id: str
+    filename: str
+    content_type: str
+    size_bytes: int
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SummaryRead(BaseModel):
     id: str
     lesson_id: str

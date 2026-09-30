@@ -6,6 +6,7 @@ from .core.deps import get_current_user
 from .modules.auth.controller import router as auth_router
 from .modules.courses.controller import router as courses_router
 from .modules.lessons.controller import router as lessons_router
+from .modules.lessons.controller import audio_router
 from .modules.search.controller import router as search_router
 from .modules.summaries.controller import router as summaries_router
 
@@ -33,5 +34,6 @@ def health() -> dict[str, str]:
 app.include_router(auth_router)
 app.include_router(courses_router)
 app.include_router(lessons_router)
+app.include_router(audio_router)
 app.include_router(search_router)
 app.include_router(summaries_router)

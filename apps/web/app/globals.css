@@ -244,7 +244,26 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .transcript-edit-actions { display: flex; align-items: center; gap: 9px; margin-top: 5px; }
 .transcript-edit-actions .button { padding: 6px 11px; font-size: 12px; }
 .transcript-edit-button { padding-left: 0 !important; }
-.speaker-bar { position: relative; margin-bottom: 16px; }
+.audio-player {
+  display: flex; align-items: center; gap: 14px; padding: 12px 18px; margin-bottom: 20px;
+  border: 1px solid #eef1f7; border-radius: 12px; background: #f8f9fc;
+}
+.audio-toggle {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--blue); color: #fff; font-size: 15px; line-height: 1; transition: transform .15s, box-shadow .15s;
+}
+.audio-toggle:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(91, 110, 240, .4); }
+.audio-time { flex: none; font-size: 12px; font-variant-numeric: tabular-nums; color: #7b879e; min-width: 42px; text-align: center; }
+.audio-progress { flex: 1; height: 8px; border-radius: 6px; background: #eef1f6; cursor: pointer; overflow: hidden; }
+.audio-progress-fill { display: block; height: 100%; background: linear-gradient(90deg, #687cf4, #8a6cff); border-radius: 6px; transition: width .12s linear; }
+.transcript-segment.is-active { background: #f5f8ff; box-shadow: inset 3px 0 0 var(--blue); border-radius: 10px; }
+.timecode {
+  border: 0; background: #f2f5fc; color: #6b7689; cursor: pointer; font-size: 11px; font-weight: 700;
+  padding: 3px 8px; border-radius: 7px; font-variant-numeric: tabular-nums; transition: background .15s, color .15s;
+}
+.timecode:hover { background: var(--blue-soft); color: var(--blue); }
+.speaker-bar { position: relative; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+.panel-header .speaker-bar { margin-bottom: 0; gap: 10px; }
 .speaker-panel {
   position: absolute; top: calc(100% + 8px); left: 0; width: min(440px, 92vw); z-index: 20;
   background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;
