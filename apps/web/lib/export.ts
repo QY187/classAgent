@@ -8,7 +8,7 @@ function formatTime(ms: number) {
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function summaryToMarkdown(content: SummaryContent): string {
+export function summaryToMarkdown(content: SummaryContent): string {
   const lines: string[] = [];
   const pushList = (title: string, items: string[] | undefined) => {
     if (items && items.length) {

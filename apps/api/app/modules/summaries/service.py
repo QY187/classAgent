@@ -113,3 +113,17 @@ def request_summary(db: Session, lesson_id: str) -> LessonSummary:
 
     generate_summary_task.delay(lesson_id)
     return summary
+
+
+def update_summary_content(db: Session, lesson_id: str, content: str) -> LessonSummary:
+    if db.get(Lesson, lesson_id) is None:
+        raise HTTPException(status_code=404, detail="课次不存在")
+    summary = mapper.find_summary(db, lesson_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail="该课次还没有智能纪要，请先生成")
+    summary.content = content
+    summary.status = "edited"
+    summary.error_message = None
+    db.commit()
+    db.refresh(summary)
+    return summary
