@@ -244,6 +244,21 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .transcript-edit-actions { display: flex; align-items: center; gap: 9px; margin-top: 5px; }
 .transcript-edit-actions .button { padding: 6px 11px; font-size: 12px; }
 .transcript-edit-button { padding-left: 0 !important; }
+.speaker-bar { position: relative; margin-bottom: 16px; }
+.speaker-panel {
+  position: absolute; top: calc(100% + 8px); left: 0; width: min(440px, 92vw); z-index: 20;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;
+  box-shadow: 0 18px 44px rgba(31, 49, 88, .16); animation: fade-in .15s ease;
+}
+.speaker-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.speaker-panel-head strong { font-size: 14px; color: var(--ink); }
+.speaker-list { display: grid; gap: 10px; }
+.speaker-field { display: flex; align-items: center; gap: 10px; }
+.speaker-field-from { flex: none; width: 86px; font-size: 12px; color: var(--muted); }
+.speaker-arrow { color: #b1bbcc; flex: none; }
+.speaker-field .field { flex: 1; }
+.speaker-panel-actions { margin-top: 14px; display: flex; justify-content: flex-end; }
+.speaker-empty { color: var(--muted); font-size: 13px; margin: 0; }
 .transcript-edited { color: var(--green); font-size: 11px; }
 .transcript-edit-error { color: #b53232; font-size: 12px; }
 .timecode { color: #a1aabb; font-size: 11px; margin-top: 4px; }

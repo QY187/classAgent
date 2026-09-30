@@ -11,7 +11,14 @@ export default function TranscriptPage() {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [job, setJob] = useState<Job | null>(null);
+  const [speakers, setSpeakers] = useState<{ raw_label: string; display_name: string }[]>([]);
+  const [speakerOpen, setSpeakerOpen] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [merging, setMerging] = useState(false);
   const [message, setMessage] = useState("");
+
+  const aliasMap = Object.fromEntries(speakers.map((item) => [item.raw_label, item.display_name]));
+  const displayName = (raw: string) => aliasMap[raw] || raw;
 
   async function load() {
     try {
@@ -19,6 +26,7 @@ export default function TranscriptPage() {
       setLesson(nextLesson);
       try { setSegments(await request<Segment[]>(`/lessons/${lessonId}/transcript`)); } catch { setSegments([]); }
       try { setJob(await request<Job>(`/lessons/${lessonId}/jobs/latest`)); } catch { setJob(null); }
+      try { setSpeakers(await request<{ raw_label: string; display_name: string }[]>(`/lessons/${lessonId}/speakers`)); } catch { setSpeakers([]); }
     } catch (error) { setMessage(errorMessage(error)); }
   }
   useEffect(() => { if (lessonId) load(); }, [lessonId]);
@@ -31,9 +39,37 @@ export default function TranscriptPage() {
   }
   function download() {
     if (!segments.length) { setMessage("当前还没有可下载的文字记录。"); return; }
-    const text = segments.map((segment) => `[${formatTime(segment.start_ms)}] ${segment.speaker}\n${segment.text}`).join("\n\n");
+    const text = segments.map((segment) => `[${formatTime(segment.start_ms)}] ${displayName(segment.speaker)}\n${segment.text}`).join("\n\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = `${lesson?.title || "课堂"}-文字记录.txt`; link.click(); URL.revokeObjectURL(url);
+  }
+  function toggleSpeakerManager() {
+    if (!speakerOpen) setDrafts(Object.fromEntries(speakers.map((item) => [item.raw_label, item.display_name])));
+    setSpeakerOpen((value) => !value);
+  }
+  async function saveSpeakers() {
+    try {
+      const next = await request<{ raw_label: string; display_name: string }[]>(`/lessons/${lessonId}/speakers`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(drafts),
+      });
+      setSpeakers(next);
+      setMessage("说话人名称已保存。");
+      setSpeakerOpen(false);
+    } catch (error) { setMessage(errorMessage(error)); }
+  }
+  async function mergeNext(segment: Segment) {
+    const index = segments.findIndex((item) => item.id === segment.id);
+    const nextSegment = segments[index + 1];
+    if (!nextSegment || merging) return;
+    setMerging(true);
+    try {
+      await request(`/lessons/${lessonId}/transcript/merge`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first_id: segment.id, second_id: nextSegment.id }),
+      });
+      setMessage("已合并相邻片段。");
+      await load();
+    } catch (error) { setMessage(errorMessage(error)); }
+    finally { setMerging(false); }
   }
 
   if (!lesson) return <main className="content"><div className="empty-state"><p role="status">{message || "正在加载文字记录…"}</p>{message && <Link href="/">返回课程库</Link>}</div></main>;
@@ -49,7 +85,15 @@ export default function TranscriptPage() {
       <div className="page-hero-actions"><Link className="button button-secondary" href={`/lessons/${lesson.id}/summary`}>查看智能纪要</Link>{segments.length > 0 && <button className="button button-primary" onClick={download}>下载文字</button>}</div>
     </section>
     <div className="document-toolbar"><div className="lesson-view-tabs"><Link className="active" href={`/lessons/${lesson.id}/transcript`}>文字记录</Link><Link href={`/lessons/${lesson.id}/summary`}>智能纪要</Link></div>{job && <span className={`pill pill-${job.stage}`}>{stageLabel[job.stage] || job.stage}</span>}</div>
+    {segments.length > 0 && <div className="speaker-bar">
+      <button className="button button-secondary" type="button" onClick={toggleSpeakerManager}>说话人管理（{speakers.length}）</button>
+      {speakerOpen && <div className="speaker-panel">
+        <div className="speaker-panel-head"><strong>重命名说话人</strong><button className="button button-quiet" type="button" onClick={() => setSpeakerOpen(false)}>收起</button></div>
+        {speakers.length === 0 ? <p className="speaker-empty">本课次还没有可命名的说话人。</p> : <div className="speaker-list">{speakers.map((item) => <label key={item.raw_label} className="speaker-field"><span className="speaker-field-from">{item.raw_label}</span><span className="speaker-arrow" aria-hidden="true">→</span><input className="field" value={drafts[item.raw_label] ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [item.raw_label]: event.target.value }))} placeholder="如：老师 / 同学" /></label>)}</div>}
+        <div className="speaker-panel-actions"><button className="button button-primary" type="button" onClick={saveSpeakers}>保存名称</button></div>
+      </div>}
+    </div>}
     {message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}
-    <section className="panel document-panel"><div className="panel-header"><div><h2>{lesson.title}</h2><span className="summary-caption">原始录音的文字记录 · 时间戳和说话人均保留</span></div><span>{segments.length} 段</span></div><div className="panel-body">{job && job.stage !== "completed" && <div style={{ marginBottom: 18 }}><div className="progress-label"><span>{stageLabel[job.stage] || job.stage}</span><span>{progress}%</span></div><div className="job-progress"><span style={{ width: `${progress}%` }} /></div>{job.error_message && <div className="notice" style={{ marginTop: 10 }}>{job.error_message}</div>}</div>}{segments.length ? <div className="transcript">{segments.map((segment) => <TranscriptSegmentItem key={segment.id} segment={segment} onSave={saveText} />)}</div> : <div className="empty-state"><div className="empty-icon">◌</div><strong>{job?.stage === "completed" ? "暂无文字记录" : "文字记录还在准备中"}</strong><p>完成浏览器录音或音频转写后，课堂原文会显示在这里。</p><Link className="button button-secondary" href={`/lessons/${lesson.id}`}>返回课次工作台</Link></div>}</div></section>
+    <section className="panel document-panel"><div className="panel-header"><div><h2>{lesson.title}</h2><span className="summary-caption">原始录音的文字记录 · 时间戳和说话人均保留</span></div><span>{segments.length} 段</span></div><div className="panel-body">{job && job.stage !== "completed" && <div style={{ marginBottom: 18 }}><div className="progress-label"><span>{stageLabel[job.stage] || job.stage}</span><span>{progress}%</span></div><div className="job-progress"><span style={{ width: `${progress}%` }} /></div>{job.error_message && <div className="notice" style={{ marginTop: 10 }}>{job.error_message}</div>}</div>}{segments.length ? <div className="transcript">{segments.map((segment, index) => <TranscriptSegmentItem key={segment.id} segment={segment} onSave={saveText} displayName={displayName(segment.speaker)} onMerge={index < segments.length - 1 ? () => mergeNext(segment) : undefined} />)}</div> : <div className="empty-state"><div className="empty-icon">◌</div><strong>{job?.stage === "completed" ? "暂无文字记录" : "文字记录还在准备中"}</strong><p>完成浏览器录音或音频转写后，课堂原文会显示在这里。</p><Link className="button button-secondary" href={`/lessons/${lesson.id}`}>返回课次工作台</Link></div>}</div></section>
   </main>;
 }

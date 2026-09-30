@@ -105,3 +105,13 @@ class LessonSummary(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
     lesson: Mapped[Lesson] = relationship()
+
+
+class SpeakerAlias(Base):
+    __tablename__ = "speaker_aliases"
+    __table_args__ = (UniqueConstraint("lesson_id", "raw_label", name="uq_speaker_aliases_lesson_raw"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    lesson_id: Mapped[str] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"))
+    raw_label: Mapped[str] = mapped_column(String(100))
+    display_name: Mapped[str] = mapped_column(String(100))

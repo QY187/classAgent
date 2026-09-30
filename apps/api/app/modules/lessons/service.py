@@ -6,7 +6,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ...shared.models import AudioFile, Lesson, LessonSummary, ProcessingJob, TranscriptRevision, TranscriptSegment
+from ...shared.models import AudioFile, Lesson, LessonSummary, ProcessingJob, SpeakerAlias, TranscriptRevision, TranscriptSegment
 from ...infrastructure.storage import upload_file
 from . import mapper
 
@@ -73,6 +73,31 @@ def latest_job(db: Session, lesson_id: str) -> ProcessingJob:
 
 def get_transcript(db: Session, lesson_id: str) -> list[TranscriptSegment]:
     return mapper.find_transcript(db, lesson_id)
+
+
+def get_speakers(db: Session, lesson_id: str) -> list[dict[str, str]]:
+    get_lesson(db, lesson_id)
+    aliases = mapper.find_speaker_aliases(db, lesson_id)
+    alias_map = {alias.raw_label: alias.display_name for alias in aliases}
+    raw_labels = db.scalars(
+        select(TranscriptSegment.speaker).where(TranscriptSegment.lesson_id == lesson_id).distinct()
+    ).all()
+    return [{"raw_label": label, "display_name": alias_map.get(label, label)} for label in raw_labels]
+
+
+def save_speakers(db: Session, lesson_id: str, aliases: dict[str, str]) -> list[dict[str, str]]:
+    get_lesson(db, lesson_id)
+    cleaned = {raw: name.strip() or raw for raw, name in aliases.items() if raw}
+    mapper.replace_speaker_aliases(db, lesson_id, cleaned)
+    return get_speakers(db, lesson_id)
+
+
+def merge_segments(db: Session, lesson_id: str, first_id: str, second_id: str) -> TranscriptSegment:
+    get_lesson(db, lesson_id)
+    try:
+        return mapper.merge_transcript_segments(db, lesson_id, first_id, second_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 def update_transcript_segment(db: Session, lesson_id: str, segment_id: str, text: str) -> TranscriptSegment:

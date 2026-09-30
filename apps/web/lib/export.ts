@@ -149,32 +149,36 @@ function summaryToText(content: SummaryContent): string {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-export function buildLessonMarkdown(opts: { lesson: LessonLike; summary: SummaryContent | null; segments: SegmentLike[] }): string {
-  const { lesson, summary, segments } = opts;
+type ExportOptions = { lesson: LessonLike; summary: SummaryContent | null; segments: SegmentLike[]; speakerAliases?: Record<string, string> };
+
+export function buildLessonMarkdown(opts: ExportOptions): string {
+  const { lesson, summary, segments, speakerAliases } = opts;
+  const nameOf = (raw: string) => speakerAliases?.[raw] ?? raw;
   const head = [`# ${lesson.title}`, lesson.lesson_date ? `> ${lesson.lesson_date}` : "", ""];
   const summaryBlock = summary ? ["## 智能纪要", "", summaryToMarkdown(summary), ""] : ["## 智能纪要", "", "_暂无智能纪要_", ""];
   const transcriptLines = segments.length
-    ? segments.map((segment) => `[${formatTime(segment.start_ms)}] ${segment.speaker}\n${segment.text}`)
+    ? segments.map((segment) => `[${formatTime(segment.start_ms)}] ${nameOf(segment.speaker)}\n${segment.text}`)
     : ["_暂无文字记录_"];
   const transcriptBlock = ["## 文字记录", "", ...transcriptLines];
   return [...head, ...summaryBlock, ...transcriptBlock].join("\n").trim() + "\n";
 }
 
-export function buildLessonText(opts: { lesson: LessonLike; summary: SummaryContent | null; segments: SegmentLike[] }): string {
-  const { lesson, summary, segments } = opts;
+export function buildLessonText(opts: ExportOptions): string {
+  const { lesson, summary, segments, speakerAliases } = opts;
+  const nameOf = (raw: string) => speakerAliases?.[raw] ?? raw;
   const head = [`${lesson.title}`, lesson.lesson_date ? lesson.lesson_date : "", "====================", ""];
   const summaryBlock = summary ? ["【智能纪要】", summaryToText(summary), ""] : ["【智能纪要】", "（暂无）", ""];
   const transcriptLines = segments.length
-    ? segments.map((segment) => `[${formatTime(segment.start_ms)}] ${segment.speaker}\n${segment.text}`)
+    ? segments.map((segment) => `[${formatTime(segment.start_ms)}] ${nameOf(segment.speaker)}\n${segment.text}`)
     : ["（暂无文字记录）"];
   const transcriptBlock = ["【文字记录】", ...transcriptLines];
   return [...head, ...summaryBlock, ...transcriptBlock].join("\n").trim() + "\n";
 }
 
-export function buildLessonHtml(opts: { lesson: LessonLike; summary: SummaryContent | null; segments: SegmentLike[] }): string {
-  const { lesson, summary, segments } = opts;
+export function buildLessonHtml(opts: ExportOptions): string {
+  const { lesson, summary, segments, speakerAliases } = opts;
   const escape = (value: string) => value.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[char] as string));
-  const md = buildLessonMarkdown({ lesson, summary, segments });
+  const md = buildLessonMarkdown({ lesson, summary, segments, speakerAliases });
   const body = escape(md).replace(/\n/g, "<br/>");
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>${escape(lesson.title)}</title></head><body style="font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#1f2937;line-height:1.8">${body}</body></html>`;
 }

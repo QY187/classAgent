@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from ...core.db import get_db
 from ...core.deps import get_current_user
-from ...shared.schemas import JobRead, LessonRead, TranscriptSegmentRead, TranscriptSegmentUpdate
+from ...shared.schemas import JobRead, LessonRead, SpeakerAliasRead, TranscriptMerge, TranscriptSegmentRead, TranscriptSegmentUpdate
 from . import service
 
 
@@ -28,6 +28,21 @@ def latest_job(lesson_id: str, db: Session = Depends(get_db)):
 @router.get("/lessons/{lesson_id}/transcript", response_model=list[TranscriptSegmentRead])
 def get_transcript(lesson_id: str, db: Session = Depends(get_db)):
     return service.get_transcript(db, lesson_id)
+
+
+@router.get("/lessons/{lesson_id}/speakers", response_model=list[SpeakerAliasRead])
+def get_speakers(lesson_id: str, db: Session = Depends(get_db)):
+    return service.get_speakers(db, lesson_id)
+
+
+@router.put("/lessons/{lesson_id}/speakers", response_model=list[SpeakerAliasRead])
+def put_speakers(lesson_id: str, payload: dict[str, str], db: Session = Depends(get_db)):
+    return service.save_speakers(db, lesson_id, payload)
+
+
+@router.post("/lessons/{lesson_id}/transcript/merge", response_model=TranscriptSegmentRead)
+def merge_segments(lesson_id: str, payload: TranscriptMerge, db: Session = Depends(get_db)):
+    return service.merge_segments(db, lesson_id, payload.first_id, payload.second_id)
 
 
 @router.patch("/lessons/{lesson_id}/transcript/{segment_id}", response_model=TranscriptSegmentRead)

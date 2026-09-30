@@ -6,10 +6,12 @@ import { buildLessonHtml, buildLessonMarkdown, buildLessonText, downloadText, pr
 
 type SegmentLike = { speaker: string; start_ms: number; end_ms: number; text: string };
 type LessonLike = { title: string; lesson_date?: string | null };
+type SpeakerLike = { raw_label: string; display_name: string };
 
-export default function ExportMenu({ lesson, summary, segments }: { lesson: LessonLike; summary: SummaryContent | null; segments: SegmentLike[] }) {
+export default function ExportMenu({ lesson, summary, segments, speakers }: { lesson: LessonLike; summary: SummaryContent | null; segments: SegmentLike[]; speakers?: SpeakerLike[] }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const speakerAliases = Object.fromEntries((speakers ?? []).map((item) => [item.raw_label, item.display_name]));
 
   useEffect(() => {
     if (!open) return;
@@ -21,15 +23,15 @@ export default function ExportMenu({ lesson, summary, segments }: { lesson: Less
   }, [open]);
 
   function exportMarkdown() {
-    downloadText(`${lesson.title}-课堂资料.md`, buildLessonMarkdown({ lesson, summary, segments }), "text/markdown");
+    downloadText(`${lesson.title}-课堂资料.md`, buildLessonMarkdown({ lesson, summary, segments, speakerAliases }), "text/markdown");
     setOpen(false);
   }
   function exportText() {
-    downloadText(`${lesson.title}-课堂资料.txt`, buildLessonText({ lesson, summary, segments }), "text/plain");
+    downloadText(`${lesson.title}-课堂资料.txt`, buildLessonText({ lesson, summary, segments, speakerAliases }), "text/plain");
     setOpen(false);
   }
   function exportPdf() {
-    printLesson(`${lesson.title}-课堂资料`, buildLessonHtml({ lesson, summary, segments }));
+    printLesson(`${lesson.title}-课堂资料`, buildLessonHtml({ lesson, summary, segments, speakerAliases }));
     setOpen(false);
   }
 

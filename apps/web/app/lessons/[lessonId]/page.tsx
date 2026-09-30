@@ -94,6 +94,7 @@ export default function LessonPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [speakers, setSpeakers] = useState<{ raw_label: string; display_name: string }[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -121,6 +122,7 @@ export default function LessonPage() {
       try { setJob(await request<Job>(`/lessons/${lessonId}/jobs/latest`)); } catch { setJob(null); }
       try { setSegments(await request<Segment[]>(`/lessons/${lessonId}/transcript`)); } catch { setSegments([]); }
       try { setSummary(await request<Summary>(`/lessons/${lessonId}/summary`)); } catch { setSummary(null); }
+      try { setSpeakers(await request<{ raw_label: string; display_name: string }[]>(`/lessons/${lessonId}/speakers`)); } catch { setSpeakers([]); }
     } catch (error) { setMessage(errorMessage(error)); }
   }
 
@@ -310,7 +312,7 @@ export default function LessonPage() {
     {message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}
     <section className={`recording-hero ${recording ? "is-recording" : ""}`}><div className="recording-hero-icon">{recording ? "●" : "♫"}</div><div className="recording-hero-copy"><div className="eyebrow">{recording ? "正在记录课堂" : "课次工作台"}</div><h2>{lesson.title}</h2><p>{recording ? `录音中 ${recordingTime} · 结束后自动保存音频并转写` : `${lesson.lesson_date || "未设置日期"} · 边说边记录，或上传已有音频`}</p></div><div className="recording-hero-action">{recording ? <button className="button button-primary" onClick={stopRecording} disabled={uploading}>结束录音</button> : <><button className="button button-primary" onClick={startRecording} disabled={uploading}>开始录音</button><label className="button button-secondary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading || recording} />{uploading ? "上传中…" : "上传音频"}</label></>}</div></section>
     {recording && <section className="panel live-panel"><div className="panel-header"><div><h2>实时文字记录</h2><span className="summary-caption">浏览器识别到的内容会即时显示</span></div><span className="live-indicator"><i /> 实时</span></div><div className="panel-body">{liveTranscript ? <div className="live-transcript">{liveTranscript}</div> : <div className="empty-state live-empty"><div className="empty-icon">◌</div><strong>等待你开始说话</strong><p>请保持页面打开，浏览器会尝试识别中文。</p></div>}</div></section>}
-    {hasContent && !recording && <div className="export-bar"><span className="export-bar-label">这节课的资料已就绪</span><ExportMenu lesson={lesson} summary={parseSummaryContent(summary?.content)} segments={segments} /></div>}
+    {hasContent && !recording && <div className="export-bar"><span className="export-bar-label">这节课的资料已就绪</span><ExportMenu lesson={lesson} summary={parseSummaryContent(summary?.content)} segments={segments} speakers={speakers} /></div>}
     {hasContent && !recording && <section className="workspace-entry-grid"><Link className="workspace-entry summary-entry" href={`/lessons/${lesson.id}/summary`}><div className="entry-icon">✦</div><div className="entry-copy"><div className="eyebrow">智能整理</div><h2>智能纪要</h2><p>查看课程概览、章节脉络、核心概念、老师强调和复习自测。</p><span className="entry-link">查看智能纪要 <b>→</b></span></div>{summary && <span className={`pill pill-${summary.status}`}>{summary.status === "completed" ? "已完成" : summary.status === "stale" ? "需更新" : summary.status === "generating" || summary.status === "queued" ? "生成中" : "待生成"}</span>}</Link><Link className="workspace-entry transcript-entry" href={`/lessons/${lesson.id}/transcript`}><div className="entry-icon">▤</div><div className="entry-copy"><div className="eyebrow">原始内容</div><h2>文字记录</h2><p>按时间和说话人阅读课堂原文，支持人工校正和下载。</p><span className="entry-link">查看文字记录 <b>→</b></span></div>{job && <span className={`pill pill-${job.stage}`}>{stageLabel[job.stage] || job.stage}</span>}</Link></section>}
     {recordingUrl && <section className="panel audio-preview-panel"><div className="panel-header"><div><h2>本地录音</h2><span className="summary-caption">录音文件已保存在浏览器中</span></div></div><div className="panel-body"><div className="audio-preview"><span>{recordingName}</span><audio controls src={recordingUrl} /><a className="button button-secondary" href={recordingUrl} download={recordingName}>下载录音</a></div></div></section>}
     {!recording && !hasContent && <section className="empty-workspace"><div className="empty-icon">◌</div><strong>还没有课堂内容</strong><p>点击“开始录音”边说边记录，或上传已有音频。</p><div><button className="button button-primary" onClick={startRecording} disabled={uploading}>开始录音</button><label className="button button-secondary upload-label"><input className="upload-input" type="file" accept="audio/*" onChange={uploadAudio} disabled={uploading} />选择音频文件</label></div></section>}

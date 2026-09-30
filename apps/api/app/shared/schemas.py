@@ -50,6 +50,16 @@ class TranscriptSegmentUpdate(BaseModel):
     text: str = Field(min_length=1, max_length=10000)
 
 
+class TranscriptMerge(BaseModel):
+    first_id: str
+    second_id: str
+
+
+class SpeakerAliasRead(BaseModel):
+    raw_label: str
+    display_name: str
+
+
 class SummaryRead(BaseModel):
     id: str
     lesson_id: str
