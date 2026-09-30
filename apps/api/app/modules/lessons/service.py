@@ -12,15 +12,15 @@ from ...infrastructure.storage import materialize_file, upload_file
 from . import mapper
 
 
-def get_lesson(db: Session, lesson_id: str) -> Lesson:
+def get_lesson(db: Session, lesson_id: str, owner_username: str | None = None) -> Lesson:
     lesson = mapper.find_lesson(db, lesson_id)
-    if lesson is None:
+    if lesson is None or (owner_username is not None and lesson.course.owner_username != owner_username):
         raise HTTPException(status_code=404, detail="课次不存在")
     return lesson
 
 
-def upload_audio(db: Session, lesson_id: str, file: UploadFile, browser_transcript: str | None) -> ProcessingJob:
-    lesson = get_lesson(db, lesson_id)
+def upload_audio(db: Session, lesson_id: str, file: UploadFile, browser_transcript: str | None, owner_username: str) -> ProcessingJob:
+    lesson = get_lesson(db, lesson_id, owner_username)
     if not file.content_type or not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=400, detail="请上传音频文件")
     suffix = Path(file.filename or "").suffix.lower()
@@ -65,32 +65,35 @@ def upload_audio(db: Session, lesson_id: str, file: UploadFile, browser_transcri
     return job
 
 
-def latest_job(db: Session, lesson_id: str) -> ProcessingJob:
+def latest_job(db: Session, lesson_id: str, owner_username: str) -> ProcessingJob:
+    get_lesson(db, lesson_id, owner_username)
     job = mapper.find_latest_job(db, lesson_id)
     if job is None:
         raise HTTPException(status_code=404, detail="该课次暂无处理任务")
     return job
 
 
-def get_transcript(db: Session, lesson_id: str) -> list[TranscriptSegment]:
+def get_transcript(db: Session, lesson_id: str, owner_username: str) -> list[TranscriptSegment]:
+    get_lesson(db, lesson_id, owner_username)
     return mapper.find_transcript(db, lesson_id)
 
 
-def get_audio_meta(db: Session, lesson_id: str) -> AudioFile:
+def get_audio_meta(db: Session, lesson_id: str, owner_username: str) -> AudioFile:
+    get_lesson(db, lesson_id, owner_username)
     audio = mapper.find_latest_audio(db, lesson_id)
     if audio is None:
         raise HTTPException(status_code=404, detail="该课次没有可播放的音频")
     return audio
 
 
-def get_audio_filepath(db: Session, lesson_id: str) -> tuple[AudioFile, Path, bool]:
-    audio = get_audio_meta(db, lesson_id)
+def get_audio_filepath(db: Session, lesson_id: str, owner_username: str) -> tuple[AudioFile, Path, bool]:
+    audio = get_audio_meta(db, lesson_id, owner_username)
     path, must_remove = materialize_file(audio.object_key)
     return audio, path, must_remove
 
 
-def get_speakers(db: Session, lesson_id: str) -> list[dict[str, str]]:
-    get_lesson(db, lesson_id)
+def get_speakers(db: Session, lesson_id: str, owner_username: str) -> list[dict[str, str]]:
+    get_lesson(db, lesson_id, owner_username)
     aliases = mapper.find_speaker_aliases(db, lesson_id)
     alias_map = {alias.raw_label: alias.display_name for alias in aliases}
     raw_labels = db.scalars(
@@ -99,23 +102,23 @@ def get_speakers(db: Session, lesson_id: str) -> list[dict[str, str]]:
     return [{"raw_label": label, "display_name": alias_map.get(label, label)} for label in raw_labels]
 
 
-def save_speakers(db: Session, lesson_id: str, aliases: dict[str, str]) -> list[dict[str, str]]:
-    get_lesson(db, lesson_id)
+def save_speakers(db: Session, lesson_id: str, aliases: dict[str, str], owner_username: str) -> list[dict[str, str]]:
+    get_lesson(db, lesson_id, owner_username)
     cleaned = {raw: name.strip() or raw for raw, name in aliases.items() if raw}
     mapper.replace_speaker_aliases(db, lesson_id, cleaned)
     return get_speakers(db, lesson_id)
 
 
-def merge_segments(db: Session, lesson_id: str, first_id: str, second_id: str) -> TranscriptSegment:
-    get_lesson(db, lesson_id)
+def merge_segments(db: Session, lesson_id: str, first_id: str, second_id: str, owner_username: str) -> TranscriptSegment:
+    get_lesson(db, lesson_id, owner_username)
     try:
         return mapper.merge_transcript_segments(db, lesson_id, first_id, second_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-def update_transcript_segment(db: Session, lesson_id: str, segment_id: str, text: str) -> TranscriptSegment:
-    get_lesson(db, lesson_id)
+def update_transcript_segment(db: Session, lesson_id: str, segment_id: str, text: str, owner_username: str) -> TranscriptSegment:
+    get_lesson(db, lesson_id, owner_username)
     segment = db.get(TranscriptSegment, segment_id)
     if segment is None or segment.lesson_id != lesson_id:
         raise HTTPException(status_code=404, detail="文字片段不存在")

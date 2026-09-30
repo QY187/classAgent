@@ -15,8 +15,10 @@ def find_course(db: Session, course_id: str) -> Course | None:
     return db.get(Course, course_id)
 
 
-def find_courses(db: Session) -> list[Course]:
-    return list(db.scalars(select(Course).order_by(Course.created_at.desc())))
+def find_courses(db: Session, owner_username: str) -> list[Course]:
+    return list(db.scalars(
+        select(Course).where(Course.owner_username == owner_username).order_by(Course.created_at.desc())
+    ))
 
 
 def save_lesson(db: Session, lesson: Lesson) -> Lesson:

@@ -16,20 +16,22 @@ def _snippet(text: str, query: str, width: int = 36) -> str:
     return f"{prefix}{text[start:end]}{suffix}"
 
 
-def search_all(db: Session, query: str) -> dict:
+def search_all(db: Session, query: str, owner_username: str) -> dict:
     pattern = f"%{query}%"
+    owned = Course.owner_username == owner_username
     courses = db.scalars(
-        select(Course).where(Course.name.ilike(pattern)).order_by(Course.created_at.desc()).limit(20)
+        select(Course).where(owned, Course.name.ilike(pattern)).order_by(Course.created_at.desc()).limit(20)
     ).all()
     lessons = db.scalars(
-        select(Lesson).where(Lesson.title.ilike(pattern)).order_by(Lesson.created_at.desc()).limit(20)
+        select(Lesson).join(Course, Lesson.course_id == Course.id)
+        .where(owned, Lesson.title.ilike(pattern)).order_by(Lesson.created_at.desc()).limit(20)
     ).all()
 
     transcript_rows = db.execute(
         select(TranscriptSegment, Lesson, Course)
         .join(Lesson, TranscriptSegment.lesson_id == Lesson.id)
         .join(Course, Lesson.course_id == Course.id)
-        .where(TranscriptSegment.text.ilike(pattern))
+        .where(owned, TranscriptSegment.text.ilike(pattern))
         .order_by(Lesson.created_at.desc(), TranscriptSegment.start_ms)
         .limit(30)
     ).all()
@@ -38,7 +40,7 @@ def search_all(db: Session, query: str) -> dict:
         select(LessonSummary, Lesson, Course)
         .join(Lesson, LessonSummary.lesson_id == Lesson.id)
         .join(Course, Lesson.course_id == Course.id)
-        .where(LessonSummary.content.ilike(pattern))
+        .where(owned, LessonSummary.content.ilike(pattern))
         .limit(15)
     ).all()
 

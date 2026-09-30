@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     admin_username: str = "root"
     admin_password: str = "123456"
     access_token_expire_minutes: int = 1440
+    refresh_token_expire_minutes: int = 43200
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

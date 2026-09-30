@@ -443,6 +443,11 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .login-card h1 { margin: 0 0 8px; font-size: 24px; letter-spacing: -.03em; }
 .login-sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
 .login-notice { margin-bottom: 18px; color: #b53232; background: #fff3f3; border-color: #f6dcdc; }
+.login-switch {
+  width: 100%; margin-top: 16px; padding: 8px; border: none; background: none;
+  color: var(--muted); font-size: 13px; cursor: pointer;
+}
+.login-switch:hover { color: var(--primary); }
 .login-card .form-grid { gap: 16px; }
 .login-card .button { width: 100%; margin-top: 6px; padding: 13px 16px; }
 @media (max-width: 900px) {

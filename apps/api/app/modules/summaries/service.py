@@ -87,18 +87,23 @@ def generate_summary(segments: list[dict[str, Any]]) -> str:
     return json.dumps(_parse_json(text), ensure_ascii=False)
 
 
-def get_summary(db: Session, lesson_id: str) -> LessonSummary:
-    if db.get(Lesson, lesson_id) is None:
+def _owned_lesson(db: Session, lesson_id: str, owner_username: str) -> Lesson:
+    lesson = db.get(Lesson, lesson_id)
+    if lesson is None or lesson.course.owner_username != owner_username:
         raise HTTPException(status_code=404, detail="课次不存在")
+    return lesson
+
+
+def get_summary(db: Session, lesson_id: str, owner_username: str) -> LessonSummary:
+    _owned_lesson(db, lesson_id, owner_username)
     summary = mapper.find_summary(db, lesson_id)
     if summary is None:
         raise HTTPException(status_code=404, detail="该课次暂无智能纪要")
     return summary
 
 
-def request_summary(db: Session, lesson_id: str) -> LessonSummary:
-    if db.get(Lesson, lesson_id) is None:
-        raise HTTPException(status_code=404, detail="课次不存在")
+def request_summary(db: Session, lesson_id: str, owner_username: str) -> LessonSummary:
+    _owned_lesson(db, lesson_id, owner_username)
     if not mapper.has_transcript(db, lesson_id):
         raise HTTPException(status_code=400, detail="请先完成文字记录，再生成智能纪要")
     summary = mapper.find_summary(db, lesson_id)
@@ -115,9 +120,8 @@ def request_summary(db: Session, lesson_id: str) -> LessonSummary:
     return summary
 
 
-def update_summary_content(db: Session, lesson_id: str, content: str) -> LessonSummary:
-    if db.get(Lesson, lesson_id) is None:
-        raise HTTPException(status_code=404, detail="课次不存在")
+def update_summary_content(db: Session, lesson_id: str, content: str, owner_username: str) -> LessonSummary:
+    _owned_lesson(db, lesson_id, owner_username)
     summary = mapper.find_summary(db, lesson_id)
     if summary is None:
         raise HTTPException(status_code=404, detail="该课次还没有智能纪要，请先生成")
