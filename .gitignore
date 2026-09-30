@@ -34,3 +34,8 @@ venv/
 Thumbs.db
 .idea/
 .vscode/
+
+# 调试产物（本地排查生成，不入库）
+*.err
+dev.log
+login_body.html
