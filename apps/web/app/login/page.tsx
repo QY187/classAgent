@@ -48,10 +48,10 @@ export default function LoginPage() {
         {error && <div className="notice login-notice">{error}</div>}
         <form className="form-grid" onSubmit={onSubmit}>
           <label className="field-label">用户名
-            <input className="field" autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="root" autoComplete="username" />
+            <input className="field" required autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="root" autoComplete="username" />
           </label>
           <label className="field-label">密码
-            <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入密码" autoComplete="current-password" />
+            <input className="field" required type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入密码" autoComplete="current-password" />
           </label>
           <button className="button button-primary" type="submit" disabled={loading}>{loading ? "登录中…" : "登录"}</button>
         </form>

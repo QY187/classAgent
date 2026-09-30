@@ -13,7 +13,8 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
     signal: options?.signal ?? AbortSignal.timeout(15000),
   });
 
-  if (response.status === 401) {
+  // 登录接口的 401 是“账号或密码错误”，不属于会话过期
+  if (response.status === 401 && !path.startsWith("/auth/login")) {
     clearSession();
     redirectToLogin();
     throw new Error("登录已过期，请重新登录");
@@ -21,7 +22,10 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
 
   if (!response.ok) {
     const data = await response.json().catch(() => null);
-    throw new Error(typeof data?.detail === "string" ? data.detail : "请求失败，请稍后重试。");
+    const detail = data?.detail;
+    if (typeof detail === "string" && detail) throw new Error(detail);
+    if (Array.isArray(detail) && detail.length > 0) throw new Error("请输入用户名和密码后再登录。");
+    throw new Error("请求失败，请稍后重试。");
   }
   return response.json();
 }
