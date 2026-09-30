@@ -318,6 +318,52 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .markdown-body ul, .markdown-body ol { margin: 10px 0; padding-left: 22px; }
 .markdown-body li { margin: 6px 0; }
 .markdown-body strong { color: #1c2740; font-weight: 700; }
+
+/* ===== 文档编辑器（Tiptap，飞书风格） ===== */
+.doc-editor { border: 1px solid var(--line); border-radius: 14px; background: #fff; overflow: hidden; }
+.doc-editor-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px;
+  padding: 8px 10px; border-bottom: 1px solid #eef1f6; background: #f8f9fc;
+}
+.doc-toolbar-btn {
+  border: 0; background: transparent; border-radius: 8px; padding: 6px 11px; cursor: pointer;
+  font-size: 12.5px; font-weight: 600; color: #5a6577; font-family: inherit;
+  transition: background .15s, color .15s;
+}
+.doc-toolbar-btn:hover { background: #e9edf5; color: var(--ink); }
+.doc-toolbar-btn.active { background: var(--blue-soft); color: var(--blue); }
+.doc-toolbar-btn:focus-visible { outline: 2px solid var(--blue-soft); outline-offset: 1px; }
+.doc-toolbar-sep { width: 1px; height: 18px; background: #dfe3ec; margin: 0 5px; flex: none; }
+
+.doc-prose, .doc-body { font-size: 14.5px; line-height: 1.95; color: #2c3a52; }
+.doc-prose { padding: 20px 24px 26px; min-height: 380px; outline: none; caret-color: var(--blue); }
+.doc-prose > :first-child, .doc-body > :first-child { margin-top: 0; }
+.doc-prose h1, .doc-body h1 { font-size: 22px; line-height: 1.45; margin: 22px 0 10px; }
+.doc-prose h2, .doc-body h2 { font-size: 18px; line-height: 1.5; margin: 22px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #edf0f6; }
+.doc-prose h3, .doc-body h3 { font-size: 15.5px; margin: 16px 0 6px; color: #2f3a4f; }
+.doc-prose p, .doc-body p { margin: 9px 0; }
+.doc-prose ul, .doc-body ul { list-style: disc; margin: 8px 0; padding-left: 26px; }
+.doc-prose ol, .doc-body ol { list-style: decimal; margin: 8px 0; padding-left: 26px; }
+.doc-prose li, .doc-body li { margin: 5px 0; }
+.doc-prose li::marker, .doc-body li::marker { color: #9aa5b8; }
+.doc-prose blockquote, .doc-body blockquote {
+  margin: 12px 0; padding: 9px 16px; border-left: 3px solid var(--blue);
+  background: #f6f8ff; border-radius: 0 10px 10px 0; color: #4c5871;
+}
+.doc-prose blockquote p, .doc-body blockquote p { margin: 4px 0; }
+.doc-prose hr, .doc-body hr { border: 0; border-top: 1px solid #e5e9f2; margin: 20px 0; }
+.doc-prose strong, .doc-body strong { color: #1c2740; font-weight: 700; }
+.doc-prose code, .doc-body code { background: #f2f4f9; border-radius: 5px; padding: 1px 6px; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.doc-prose a, .doc-body a { color: var(--blue); }
+
+/* 待办清单 */
+.doc-prose ul[data-type="taskList"], .doc-body ul[data-type="taskList"] { list-style: none; padding-left: 4px; margin: 8px 0; }
+.doc-prose ul[data-type="taskList"] li, .doc-body ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 9px; }
+.doc-prose ul[data-type="taskList"] li > label, .doc-body ul[data-type="taskList"] li > label { flex: none; margin-top: 6px; }
+.doc-prose ul[data-type="taskList"] li > div, .doc-body ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
+.doc-prose input[type="checkbox"], .doc-body input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--blue); cursor: pointer; margin: 0; }
+.doc-prose ul[data-type="taskList"] li[data-checked="true"] > div, .doc-body ul[data-type="taskList"] li[data-checked="true"] > div { color: #9aa5b8; text-decoration: line-through; }
+
 .page-heading-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .document-toolbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;

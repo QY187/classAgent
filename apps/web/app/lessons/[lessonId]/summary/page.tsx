@@ -4,9 +4,17 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { errorMessage, request } from "../../../../lib/api";
-import { Lesson, Segment, Summary, SummaryContentView, parseSummaryContent } from "../lesson-view";
+import { Lesson, Segment, Summary, parseSummaryContent } from "../lesson-view";
+import FeishuEditor from "../../../../components/FeishuEditor";
+import Html from "../../../../components/Html";
 import { summaryToMarkdown } from "../../../../lib/export";
-import MarkdownView from "../../../../components/MarkdownView";
+import { markdownToHtml } from "../../../../lib/markdown";
+
+function toDocHtml(status: string | undefined, content: string | null | undefined): string {
+  if (status === "edited" && content) return content;
+  const parsed = parseSummaryContent(content);
+  return parsed ? markdownToHtml(summaryToMarkdown(parsed)) : "";
+}
 
 export default function SummaryPage() {
   const { lessonId } = useParams<{ lessonId: string }>();
@@ -36,10 +44,7 @@ export default function SummaryPage() {
   }
 
   function startEdit() {
-    const parsed = parseSummaryContent(summary?.content);
-    if (summary?.status === "edited" && summary.content) setDraft(summary.content);
-    else if (parsed) setDraft(summaryToMarkdown(parsed));
-    else setDraft("");
+    setDraft(toDocHtml(summary?.status, summary?.content));
     setEditing(true);
   }
 
@@ -55,8 +60,8 @@ export default function SummaryPage() {
   }
 
   if (!lesson) return <main className="content"><div className="empty-state"><p role="status">{message || "正在加载智能纪要…"}</p>{message && <Link href="/">返回课程库</Link>}</div></main>;
-  const parsed = parseSummaryContent(summary?.content);
   const isEdited = summary?.status === "edited";
+  const docHtml = toDocHtml(summary?.status, summary?.content);
   const statusLabel = summary?.status === "completed" ? "已完成" : summary?.status === "edited" ? "已手动编辑" : summary?.status === "generating" ? "生成中" : summary?.status === "failed" ? "生成失败" : summary?.status === "stale" ? "需要更新" : "等待生成";
   const canEdit = Boolean(summary && (summary.status === "completed" || summary.status === "edited" || summary.status === "stale"));
   return <main className="content summary-page">
@@ -75,6 +80,6 @@ export default function SummaryPage() {
     </section>
     <div className="document-toolbar"><div className="lesson-view-tabs"><Link href={`/lessons/${lesson.id}/transcript`}>文字记录</Link><Link className="active" href={`/lessons/${lesson.id}/summary`}>智能纪要</Link></div><span className={`pill pill-${summary?.status || "created"}`}>{statusLabel}</span></div>
     {message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}
-    <section className="panel document-panel"><div className="panel-header"><div><h2>课堂重点</h2><span className="summary-caption">由课堂文字记录整理，可随时重新生成</span></div><span>{parsed ? "结构化报告" : isEdited ? "手动编辑版" : "等待内容"}</span></div><div className="panel-body">{editing ? <div className="summary-editor-wrap"><textarea className="field summary-editor" value={draft} onChange={(event) => setDraft(event.target.value)} rows={22} placeholder="用 Markdown 编辑纪要，例如：## 重点\n- 第一点" />{message && <div className="notice" style={{ marginTop: 10 }}>{message}</div>}<div className="summary-editor-actions"><button className="button button-secondary" onClick={() => setEditing(false)} disabled={saving}>取消</button><button className="button button-primary" onClick={saveEdit} disabled={saving || !draft.trim()}>{saving ? "保存中…" : "保存修改"}</button></div></div> : summary?.status === "completed" && parsed ? <SummaryContentView content={parsed} /> : isEdited && summary?.content ? <><MarkdownView source={summary.content} /><div className="summary-edited-note">你已手动编辑此纪要。重新生成将覆盖这些修改。</div></> : summary?.status === "stale" ? <div className="summary-placeholder"><div className="empty-icon">↻</div><strong>文字记录有更新</strong><p>重新生成智能纪要，才能同步最新课堂内容。</p><button className="button button-primary" onClick={generate} disabled={!segments.length || loading}>重新生成</button></div> : summary?.status === "failed" ? <div className="summary-placeholder"><div className="empty-icon">!</div><strong>纪要生成失败</strong><p>{summary.error_message || "请稍后重试。"}</p><button className="button button-primary" onClick={generate} disabled={!segments.length || loading}>再次生成</button></div> : summary?.status === "queued" || summary?.status === "generating" ? <div className="summary-placeholder"><div className="empty-icon">✦</div><strong>正在整理这节课的重点</strong><p>纪要生成完成后会自动出现在这里。</p></div> : <div className="summary-placeholder"><div className="empty-icon">✦</div><strong>{segments.length ? "生成一份可复习的课堂纪要" : "先完成文字记录"}</strong><p>{segments.length ? "提取课程主题、关键概念、例题、作业和待核对内容。" : "浏览器录音识别或上传音频转写完成后，即可生成纪要。"}</p>{segments.length && <button className="button button-primary" onClick={generate}>生成智能纪要</button>}</div>}</div></section>
+    <section className="panel document-panel"><div className="panel-header"><div><h2>课堂重点</h2><span className="summary-caption">由课堂文字记录整理，可随时重新生成</span></div><span>{docHtml ? "文档" : "等待内容"}</span></div><div className="panel-body">{editing ? <div className="summary-editor-wrap"><FeishuEditor value={draft} onChange={setDraft} /><div className="summary-editor-actions"><button className="button button-secondary" onClick={() => setEditing(false)} disabled={saving}>取消</button><button className="button button-primary" onClick={saveEdit} disabled={saving || !draft.trim()}>{saving ? "保存中…" : "保存修改"}</button></div></div> : docHtml ? <><Html source={docHtml} />{isEdited && <div className="summary-edited-note">你已手动编辑此纪要。重新生成将覆盖这些修改。</div>}</> : summary?.status === "stale" ? <div className="summary-placeholder"><div className="empty-icon">↻</div><strong>文字记录有更新</strong><p>重新生成智能纪要，才能同步最新课堂内容。</p><button className="button button-primary" onClick={generate} disabled={!segments.length || loading}>重新生成</button></div> : summary?.status === "failed" ? <div className="summary-placeholder"><div className="empty-icon">!</div><strong>纪要生成失败</strong><p>{summary.error_message || "请稍后重试。"}</p><button className="button button-primary" onClick={generate} disabled={!segments.length || loading}>再次生成</button></div> : summary?.status === "queued" || summary?.status === "generating" ? <div className="summary-placeholder"><div className="empty-icon">✦</div><strong>正在整理这节课的重点</strong><p>纪要生成完成后会自动出现在这里。</p></div> : <div className="summary-placeholder"><div className="empty-icon">✦</div><strong>{segments.length ? "生成一份可复习的课堂纪要" : "先完成文字记录"}</strong><p>{segments.length ? "提取课程主题、关键概念、例题、作业和待核对内容。" : "浏览器录音识别或上传音频转写完成后，即可生成纪要。"}</p>{segments.length && <button className="button button-primary" onClick={generate}>生成智能纪要</button>}</div>}</div></section>
   </main>;
 }
