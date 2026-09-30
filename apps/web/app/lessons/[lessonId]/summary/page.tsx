@@ -34,8 +34,15 @@ export default function SummaryPage() {
   const content = parseSummaryContent(summary?.content);
   const statusLabel = summary?.status === "completed" ? "已完成" : summary?.status === "generating" ? "生成中" : summary?.status === "failed" ? "生成失败" : summary?.status === "stale" ? "需要更新" : "等待生成";
   return <main className="content summary-page">
-    <Link className="back-link" href={`/lessons/${lesson.id}`}>← 返回课次工作台</Link>
-    <div className="page-heading"><div><div className="eyebrow">课堂资料</div><h1>智能纪要</h1><p>{lesson.title} · 提炼课程重点，帮助课后复习</p></div><div className="page-heading-actions"><Link className="button button-secondary" href={`/lessons/${lesson.id}/transcript`}>查看文字记录</Link><button className="button button-primary" onClick={generate} disabled={!segments.length || loading || summary?.status === "generating" || summary?.status === "queued"}>{loading || summary?.status === "generating" || summary?.status === "queued" ? "生成中…" : summary ? "重新生成" : "生成智能纪要"}</button></div></div>
+    <section className="page-hero page-hero-compact">
+      <span className="page-hero-icon">✦</span>
+      <div className="page-hero-copy">
+        <div className="eyebrow">课堂资料</div>
+        <h1>智能纪要</h1>
+        <p>{lesson.title} · 提炼课程重点，帮助课后复习</p>
+      </div>
+      <div className="page-hero-actions"><Link className="button button-secondary" href={`/lessons/${lesson.id}/transcript`}>查看文字记录</Link><button className="button button-primary" onClick={generate} disabled={!segments.length || loading || summary?.status === "generating" || summary?.status === "queued"}>{loading || summary?.status === "generating" || summary?.status === "queued" ? "生成中…" : summary ? "重新生成" : "生成智能纪要"}</button></div>
+    </section>
     <div className="document-toolbar"><div className="lesson-view-tabs"><Link href={`/lessons/${lesson.id}/transcript`}>文字记录</Link><Link className="active" href={`/lessons/${lesson.id}/summary`}>智能纪要</Link></div><span className={`pill pill-${summary?.status || "created"}`}>{statusLabel}</span></div>
     {message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}
     <section className="panel document-panel"><div className="panel-header"><div><h2>课堂重点</h2><span className="summary-caption">由课堂文字记录整理，可随时重新生成</span></div><span>{content ? "结构化报告" : "等待内容"}</span></div><div className="panel-body">{summary?.status === "completed" && content ? <SummaryContentView content={content} /> : summary?.status === "stale" ? <div className="summary-placeholder"><div className="empty-icon">↻</div><strong>文字记录有更新</strong><p>重新生成智能纪要，才能同步最新课堂内容。</p><button className="button button-primary" onClick={generate} disabled={!segments.length || loading}>重新生成</button></div> : summary?.status === "failed" ? <div className="summary-placeholder"><div className="empty-icon">!</div><strong>纪要生成失败</strong><p>{summary.error_message || "请稍后重试。"}</p><button className="button button-primary" onClick={generate} disabled={!segments.length || loading}>再次生成</button></div> : summary?.status === "queued" || summary?.status === "generating" ? <div className="summary-placeholder"><div className="empty-icon">✦</div><strong>正在整理这节课的重点</strong><p>纪要生成完成后会自动出现在这里。</p></div> : <div className="summary-placeholder"><div className="empty-icon">✦</div><strong>{segments.length ? "生成一份可复习的课堂纪要" : "先完成文字记录"}</strong><p>{segments.length ? "提取课程主题、关键概念、例题、作业和待核对内容。" : "浏览器录音识别或上传音频转写完成后，即可生成纪要。"}</p>{segments.length && <button className="button button-primary" onClick={generate}>生成智能纪要</button>}</div>}</div></section>

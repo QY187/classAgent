@@ -39,8 +39,15 @@ export default function TranscriptPage() {
   if (!lesson) return <main className="content"><div className="empty-state"><p role="status">{message || "正在加载文字记录…"}</p>{message && <Link href="/">返回课程库</Link>}</div></main>;
   const progress = job?.progress ?? 0;
   return <main className="content transcript-page">
-    <Link className="back-link" href={`/lessons/${lesson.id}`}>← 返回课次工作台</Link>
-    <div className="page-heading"><div><div className="eyebrow">课堂资料</div><h1>文字记录</h1><p>{lesson.title} · 按时间和说话人阅读课堂原文</p></div><div className="page-heading-actions"><Link className="button button-secondary" href={`/lessons/${lesson.id}/summary`}>查看智能纪要</Link>{segments.length > 0 && <button className="button button-primary" onClick={download}>下载文字</button>}</div></div>
+    <section className="page-hero page-hero-compact">
+      <span className="page-hero-icon">▤</span>
+      <div className="page-hero-copy">
+        <div className="eyebrow">课堂资料</div>
+        <h1>文字记录</h1>
+        <p>{lesson.title} · 按时间和说话人阅读课堂原文</p>
+      </div>
+      <div className="page-hero-actions"><Link className="button button-secondary" href={`/lessons/${lesson.id}/summary`}>查看智能纪要</Link>{segments.length > 0 && <button className="button button-primary" onClick={download}>下载文字</button>}</div>
+    </section>
     <div className="document-toolbar"><div className="lesson-view-tabs"><Link className="active" href={`/lessons/${lesson.id}/transcript`}>文字记录</Link><Link href={`/lessons/${lesson.id}/summary`}>智能纪要</Link></div>{job && <span className={`pill pill-${job.stage}`}>{stageLabel[job.stage] || job.stage}</span>}</div>
     {message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}
     <section className="panel document-panel"><div className="panel-header"><div><h2>{lesson.title}</h2><span className="summary-caption">原始录音的文字记录 · 时间戳和说话人均保留</span></div><span>{segments.length} 段</span></div><div className="panel-body">{job && job.stage !== "completed" && <div style={{ marginBottom: 18 }}><div className="progress-label"><span>{stageLabel[job.stage] || job.stage}</span><span>{progress}%</span></div><div className="job-progress"><span style={{ width: `${progress}%` }} /></div>{job.error_message && <div className="notice" style={{ marginTop: 10 }}>{job.error_message}</div>}</div>}{segments.length ? <div className="transcript">{segments.map((segment) => <TranscriptSegmentItem key={segment.id} segment={segment} onSave={saveText} />)}</div> : <div className="empty-state"><div className="empty-icon">◌</div><strong>{job?.stage === "completed" ? "暂无文字记录" : "文字记录还在准备中"}</strong><p>完成浏览器录音或音频转写后，课堂原文会显示在这里。</p><Link className="button button-secondary" href={`/lessons/${lesson.id}`}>返回课次工作台</Link></div>}</div></section>
