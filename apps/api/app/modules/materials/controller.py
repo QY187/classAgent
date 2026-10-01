@@ -25,6 +25,12 @@ def upload_material(course_id: str, file: UploadFile = File(...), lesson_id: str
     return service.upload_material(db, course_id, lesson_id, file, username)
 
 
+@router.delete("/courses/{course_id}/materials/{material_id}", status_code=204)
+def delete_material(course_id: str, material_id: str,
+                    username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    service.delete_material(db, course_id, material_id, username)
+
+
 @router.get("/courses/{course_id}/materials/{material_id}/file")
 def material_file(course_id: str, material_id: str, download: bool = False,
                   username: str = Depends(get_current_user), db: Session = Depends(get_db)):

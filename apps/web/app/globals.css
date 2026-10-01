@@ -199,6 +199,11 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .material-name:hover { color: var(--blue); text-decoration: underline; }
 .material-actions { display: flex; gap: 8px; flex: none; }
 .material-actions .button { padding: 8px 12px; font-size: 12px; }
+.material-delete-button { color: #b44747; background: #fff7f7; border: 1px solid #f1dada; }
+.material-delete-button:hover { background: #ffeded; border-color: #e8b7b7; }
+.button-danger { color: white; background: #c94b4b; }
+.button-danger:hover { background: #b83c3c; }
+.material-delete-filename { overflow-wrap: anywhere; }
 .modal.material-preview-modal { width: min(920px, calc(100vw - 32px)); max-width: none; max-height: min(88vh, 900px); display: flex; flex-direction: column; overflow: hidden; }
 .material-preview-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .material-preview-modal .material-preview-header h2 { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; }

@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
-from ...infrastructure.storage import materialize_file, upload_file
+from ...infrastructure.storage import delete_file, materialize_file, upload_file
 from ...shared.models import Course, CourseMaterial, Lesson
 
 
@@ -84,6 +84,16 @@ def get_material_file(db: Session, course_id: str, material_id: str, username: s
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="资料文件不存在") from None
     return material, path, must_remove
+
+
+def delete_material(db: Session, course_id: str, material_id: str, username: str) -> None:
+    _owned_course(db, course_id, username)
+    material = db.scalar(select(CourseMaterial).where(CourseMaterial.id == material_id, CourseMaterial.course_id == course_id))
+    if material is None:
+        raise HTTPException(status_code=404, detail="资料不存在")
+    delete_file(material.object_key)
+    db.delete(material)
+    db.commit()
 
 
 def convert_office_to_pdf(path: Path, filename: str) -> tuple[Path, Path]:

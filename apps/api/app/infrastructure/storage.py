@@ -34,6 +34,19 @@ def upload_file(object_key: str, stream: BinaryIO, size: int, content_type: str)
     get_client().put_object(settings.s3_bucket, object_key, stream, size, content_type=content_type)
 
 
+def delete_file(object_key: str) -> None:
+    settings = get_settings()
+    if settings.storage_backend == "local":
+        root = Path(settings.local_storage_path).resolve()
+        target = (root / object_key).resolve()
+        if not target.is_relative_to(root):
+            raise ValueError("文件路径超出存储目录")
+        target.unlink(missing_ok=True)
+        return
+
+    get_client().remove_object(settings.s3_bucket, object_key)
+
+
 def materialize_file(object_key: str) -> tuple[Path, bool]:
     """Return a local path for an uploaded object and whether it must be removed."""
     settings = get_settings()

@@ -17,6 +17,9 @@ export default function CourseMaterials({ courseId, lessonId, refreshKey }: { co
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [downloadError, setDownloadError] = useState("");
+  const [deleting, setDeleting] = useState<Material | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const previewRequest = useRef(0);
   const previewUrl = useRef<string | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -35,6 +38,12 @@ export default function CourseMaterials({ courseId, lessonId, refreshKey }: { co
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [Boolean(preview)]);
+  useEffect(() => {
+    if (!deleting || deleteBusy) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setDeleting(null); };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [Boolean(deleting), deleteBusy]);
 
   function closePreview() {
     previewRequest.current += 1;
@@ -84,6 +93,26 @@ export default function CourseMaterials({ courseId, lessonId, refreshKey }: { co
     } catch (error) { setDownloadError(errorMessage(error)); }
   }
 
+  function askDelete(material: Material) {
+    setDeleteError("");
+    setDeleting(material);
+  }
+
+  async function confirmDelete() {
+    if (!deleting || deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      await request<void>(`/courses/${courseId}/materials/${deleting.id}`, { method: "DELETE" });
+      setMaterials((current) => current.filter((material) => material.id !== deleting.id));
+      setDeleting(null);
+    } catch (error) {
+      setDeleteError(errorMessage(error));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   return <div className="lesson-materials" id={`lesson-materials-${lessonId}`}>
     <div className="lesson-materials-heading"><strong>本节资料</strong><span>{lessonMaterials.length} 份</span></div>
       {error && <p className="notice" role="alert">{error}</p>}
@@ -91,8 +120,14 @@ export default function CourseMaterials({ courseId, lessonId, refreshKey }: { co
       {loading ? <p role="status" className="material-muted">正在加载资料…</p> : lessonMaterials.length === 0 ? <div className="material-empty">这节课还没有资料，点击上方“上传资料”即可添加。</div> : <div className="material-list">{lessonMaterials.map((material) => <div className="material-row" key={material.id}>
         <span className="material-icon" aria-hidden="true">▤</span>
         <div className="material-info"><button type="button" className="material-name" title={material.filename} onClick={() => openPreview(material)}>{material.filename}</button><span>{sizeLabel(material.size_bytes)} · {new Date(material.created_at).toLocaleDateString("zh-CN")} · {material.status === "stored" ? "已保存" : material.status}</span></div>
-        <div className="material-actions"><button type="button" className="button button-secondary" onClick={() => openPreview(material)}>查看</button><button type="button" className="button button-secondary" onClick={() => download(material)}>下载</button></div>
+        <div className="material-actions"><button type="button" className="button button-secondary" onClick={() => openPreview(material)}>查看</button><button type="button" className="button button-secondary" onClick={() => download(material)}>下载</button><button type="button" className="button material-delete-button" onClick={() => askDelete(material)}>删除</button></div>
       </div>)}</div>}
+    {deleting && createPortal(<div className="modal-backdrop" onMouseDown={(event) => { if (!deleteBusy && event.target === event.currentTarget) setDeleting(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="material-delete-title">
+      <h2 id="material-delete-title">删除资料</h2>
+      <p>确定删除「<strong className="material-delete-filename">{deleting.filename}</strong>」吗？删除后无法恢复。</p>
+      {deleteError && <p className="notice" role="alert">删除失败：{deleteError}</p>}
+      <div className="modal-actions"><button type="button" className="button button-secondary" autoFocus disabled={deleteBusy} onClick={() => setDeleting(null)}>取消</button><button type="button" className="button button-danger" disabled={deleteBusy} onClick={confirmDelete}>{deleteBusy ? "正在删除…" : "确认删除"}</button></div>
+    </div></div>, document.body)}
     {preview && createPortal(<div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closePreview(); }}><div className="modal material-preview-modal" role="dialog" aria-modal="true" aria-label={`查看${preview.filename}`}>
       <div className="material-preview-header"><h2 title={preview.filename}>{preview.filename}</h2><button ref={closeButton} type="button" className="button button-secondary" onClick={closePreview}>关闭</button></div>
       {/[.](doc|docx|ppt|pptx)$/i.test(preview.filename) && <p className="material-preview-hint">已转换为 PDF 预览；字体或排版可能与原文件略有差异，原文件可在列表中下载。</p>}
