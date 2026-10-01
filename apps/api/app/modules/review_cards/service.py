@@ -1,6 +1,5 @@
 import hashlib
 import json
-from datetime import timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -38,8 +37,6 @@ def serialize(card: ReviewCard) -> dict:
         "source_segment_id": card.source_segment_id,
         "source_start_ms": card.source_start_ms,
         "source_excerpt": card.source_excerpt,
-        "next_review_at": card.next_review_at,
-        "last_reviewed_at": card.last_reviewed_at,
         "created_at": card.created_at,
     }
 
@@ -57,18 +54,6 @@ def list_cards(db: Session, username: str) -> list[dict]:
         .where(Course.owner_username == username)
         .options(joinedload(ReviewCard.lesson).joinedload(Lesson.course))
         .order_by(ReviewCard.created_at.desc())
-    ).all()
-    return [serialize(card) for card in cards]
-
-
-def list_due_cards(db: Session, username: str) -> list[dict]:
-    cards = db.scalars(
-        select(ReviewCard)
-        .join(ReviewCard.lesson).join(Lesson.course)
-        .where(Course.owner_username == username, ReviewCard.next_review_at <= now_utc())
-        .options(joinedload(ReviewCard.lesson).joinedload(Lesson.course))
-        .order_by(ReviewCard.next_review_at, ReviewCard.created_at)
-        .limit(100)
     ).all()
     return [serialize(card) for card in cards]
 
@@ -150,10 +135,8 @@ def update_card(db: Session, card_id: str, payload: CardUpdate, username: str) -
 
 def review_card(db: Session, card_id: str, payload: CardReview, username: str) -> dict:
     card = _owned_card(db, card_id, username)
-    reviewed_at = now_utc()
     card.status = payload.status
-    card.last_reviewed_at = reviewed_at
-    card.next_review_at = reviewed_at + {"new": timedelta(0), "review": timedelta(days=1), "mastered": timedelta(days=7)}[payload.status]
+    card.last_reviewed_at = now_utc()
     db.commit()
     db.refresh(card)
     return serialize(card)

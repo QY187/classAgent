@@ -232,7 +232,12 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .review-course-option:hover { border-color: #aab7f5; color: #5265da; }
 .review-course-option.active { border-color: #6575ed; background: #eef0ff; color: #4d60d5; }
 .review-course-option span { color: #8a95aa; font-size: 11px; }
-.review-course-empty { margin: 28px 0 12px; color: #78869d; text-align: center; }
+.review-status-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 4px; }
+.review-status-filter > span { margin-right: 4px; color: #64718a; font-size: 12px; }
+.review-status-filter button { padding: 6px 11px; border: 1px solid #dfe6f3; border-radius: 8px; background: #fff; color: #64718a; font-size: 12px; }
+.review-status-filter button.active { border-color: #aebaff; background: #eef1ff; color: #4f62d5; font-weight: 700; }
+.review-course-empty { padding: 34px 0 20px; color: #78869d; text-align: center; }
+.review-course-empty p { margin: 8px 0 0; font-size: 12px; }
 .review-course-list { display: grid; gap: 30px; }
 .review-course-group + .review-course-group { padding-top: 24px; border-top: 1px solid #e9edf5; }
 .review-course-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 15px; }

@@ -15,11 +15,6 @@ def list_lesson_cards(lesson_id: str, username: str = Depends(get_current_user),
     return service.list_lesson_cards(db, lesson_id, username)
 
 
-@router.get("/review-cards/due", response_model=list[CardRead])
-def list_due_cards(username: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    return service.list_due_cards(db, username)
-
-
 @router.get("/review-cards", response_model=list[CardRead])
 def list_cards(username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return service.list_cards(db, username)

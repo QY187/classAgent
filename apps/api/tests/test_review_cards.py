@@ -33,15 +33,14 @@ class ReviewCardTest(unittest.TestCase):
     def test_create_review_update_delete_and_source(self):
         card = service.create_card(self.db, self.lesson.id, CardCreate(title="叶子节点", body="没有孩子的节点", source_segment_id=self.segment.id), "alice")
         self.assertEqual((card["source_start_ms"], card["source_excerpt"], card["status"]), (56000, "叶子节点没有孩子", "new"))
-        self.assertEqual(len(service.list_due_cards(self.db, "alice")), 1)
-        self.assertEqual(service.list_due_cards(self.db, "bob"), [])
+        self.assertEqual(len(service.list_cards(self.db, "alice")), 1)
+        self.assertEqual(service.list_cards(self.db, "bob"), [])
 
         updated = service.update_card(self.db, card["id"], CardUpdate(body="孩子数为零"), "alice")
         self.assertEqual(updated["body"], "孩子数为零")
         mastered = service.review_card(self.db, card["id"], CardReview(status="mastered"), "alice")
         self.assertEqual(mastered["status"], "mastered")
-        self.assertGreater((mastered["next_review_at"] - mastered["last_reviewed_at"]).days, 6)
-        self.assertEqual(service.list_due_cards(self.db, "alice"), [])
+        self.assertNotIn("next_review_at", mastered)
         self.assertEqual([item["id"] for item in service.list_cards(self.db, "alice")], [card["id"]])
         self.assertEqual(service.list_cards(self.db, "bob"), [])
 

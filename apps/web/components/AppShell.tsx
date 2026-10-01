@@ -77,7 +77,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <div className="nav-label">我的空间</div>
         <nav className="nav" aria-label="主导航">
           <Link className={`nav-item ${libraryActive && !activeCourseId ? "active" : ""}`} href="/"><span className="nav-icon">▦</span><span>课程库</span></Link>
-          <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review"><span className="nav-icon">◷</span><span>今日复习</span></Link>
+          <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review"><span className="nav-icon">◷</span><span>知识点清单</span></Link>
         </nav>
         <div className="side-section">
           <div className="nav-label">我的课程</div>
@@ -101,7 +101,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <nav className="breadcrumb" aria-label="当前位置">
             {courseMatch || lessonMatch || reviewActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
-            {reviewActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">今日复习</span></>}
+            {reviewActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">知识点清单</span></>}
             {(courseMatch || (lessonMatch && lessonInfo)) && <><span className="breadcrumb-separator" aria-hidden="true">/</span>{lessonMatch && lessonInfo ? <Link className="breadcrumb-link" href={`/courses/${lessonInfo.course_id}`}>{activeCourseName || "我的课程"}</Link> : <span className="breadcrumb-current" aria-current="page">{activeCourseName || "我的课程"}</span>}</>}
             {lessonMatch && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">{lessonTitle || "我的课次"}</span></>}
             {lessonMatch && pathname.endsWith("/summary") && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">智能纪要</span></>}

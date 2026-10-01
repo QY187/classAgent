@@ -14,8 +14,6 @@ export type ReviewCard = {
   source_segment_id: string | null;
   source_start_ms: number | null;
   source_excerpt: string | null;
-  next_review_at: string;
-  last_reviewed_at: string | null;
   created_at: string;
 };
 

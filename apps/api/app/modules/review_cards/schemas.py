@@ -52,6 +52,4 @@ class CardRead(BaseModel):
     source_segment_id: str | None
     source_start_ms: int | None
     source_excerpt: str | None
-    next_review_at: datetime
-    last_reviewed_at: datetime | None
     created_at: datetime

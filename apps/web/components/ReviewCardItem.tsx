@@ -42,12 +42,12 @@ export default function ReviewCardItem({ card, onReview, onSave, onDelete, showL
       <div className="review-card-actions"><button className="button button-primary" disabled={busy} type="submit">保存</button><button className="button button-secondary" type="button" onClick={() => setEditing(false)} disabled={busy}>取消</button></div>
     </form> : <><h3>{card.title}</h3><p className="review-card-body">{card.body}</p></>}
     {card.source_start_ms !== null && <div className="review-card-source"><Link href={`/lessons/${card.lesson_id}/transcript?t=${card.source_start_ms}`}>查看原文 · {showLesson ? "" : `${card.lesson_title} `}{reviewTime(card.source_start_ms)} ↗</Link>{card.source_excerpt && <span>{card.source_excerpt}</span>}</div>}
-    <div className="review-card-footer"><span>下次复习：{new Date(card.next_review_at).toLocaleDateString("zh-CN")}</span><div className="review-card-actions">
+    {(onSave || onDelete) && <div className="review-card-footer"><div className="review-card-actions">
       {!editing && onSave && <button type="button" className="review-card-link" onClick={() => { setTitle(card.title); setBody(card.body); setCardType(card.card_type); setEditing(true); }}>编辑</button>}
       {!editing && onDelete && <button type="button" className="review-card-link danger" onClick={() => setConfirmDelete(true)}>删除</button>}
-    </div></div>
+    </div></div>}
     {confirmDelete && <div className="review-card-confirm"><span>确定删除这张卡片？</span><button className="button button-secondary" type="button" onClick={() => setConfirmDelete(false)} disabled={busy}>取消</button><button className="button button-primary" type="button" onClick={() => run(async () => { await onDelete?.(card); setConfirmDelete(false); })} disabled={busy}>删除</button></div>}
-    <div className="review-card-review"><span>这次复习后：</span>{(["new", "review", "mastered"] as CardStatus[]).map((status) => <button type="button" key={status} className={`review-choice ${card.status === status ? "active" : ""}`} disabled={busy} onClick={() => run(() => onReview(card, status))}>{cardStatusLabel[status]}</button>)}</div>
+    <div className="review-card-review"><span>看过后标记：</span>{(["new", "review", "mastered"] as CardStatus[]).map((status) => <button type="button" key={status} className={`review-choice ${card.status === status ? "active" : ""}`} disabled={busy} onClick={() => run(() => onReview(card, status))}>{cardStatusLabel[status]}</button>)}</div>
     {error && <p className="review-card-error" role="alert">{error}</p>}
   </article>;
 }
