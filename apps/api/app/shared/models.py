@@ -49,6 +49,7 @@ class Lesson(Base):
     audio_files: Mapped[list["AudioFile"]] = relationship(back_populates="lesson", cascade="all, delete-orphan")
     jobs: Mapped[list["ProcessingJob"]] = relationship(back_populates="lesson", cascade="all, delete-orphan")
     transcript_segments: Mapped[list["TranscriptSegment"]] = relationship(back_populates="lesson", cascade="all, delete-orphan")
+    review_cards: Mapped[list["ReviewCard"]] = relationship(back_populates="lesson", cascade="all, delete-orphan")
 
 
 class AudioFile(Base):
@@ -140,3 +141,25 @@ class DocumentChunk(Base):
     end_ms: Mapped[int] = mapped_column(Integer)
     source_segment_ids: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float]] = mapped_column(VECTOR(1536))
+
+
+class ReviewCard(Base):
+    __tablename__ = "review_cards"
+    __table_args__ = (UniqueConstraint("lesson_id", "origin_key", name="uq_review_cards_lesson_origin"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
+    lesson_id: Mapped[str] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), index=True)
+    card_type: Mapped[str] = mapped_column(String(30), default="concept")
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30), default="new")
+    origin_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_segment_id: Mapped[str | None] = mapped_column(ForeignKey("transcript_segments.id", ondelete="SET NULL"), nullable=True)
+    source_start_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_review_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+    lesson: Mapped[Lesson] = relationship(back_populates="review_cards")

@@ -13,6 +13,7 @@ from .modules.search.controller import router as search_router
 from .modules.summaries.controller import router as summaries_router
 from .shared.models import User
 from .modules.rag.controller import router as rag_router
+from .modules.review_cards.controller import router as review_cards_router
 
 
 app = FastAPI(title="ClassAgent API", version="0.1.0")
@@ -70,3 +71,4 @@ app.include_router(audio_router)
 app.include_router(search_router)
 app.include_router(summaries_router)
 app.include_router(rag_router)
+app.include_router(review_cards_router)
