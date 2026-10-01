@@ -30,31 +30,52 @@ app.add_middleware(
 def prepare_database() -> None:
     with engine.begin() as connection:
         connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    _prepare_course_owner_columns()
+    _prepare_user_avatar_column()
     Base.metadata.create_all(bind=engine)
-    _backfill_course_owners()
     _seed_root_user()
+    _backfill_course_owner_ids()
 
 
-def _backfill_course_owners() -> None:
-    """无 Alembic 的轻量迁移：为存量 courses 表补 owner_username 列并划给管理员。"""
+def _prepare_course_owner_columns() -> None:
+    """在 ORM 检查现有表之前补齐存量课程的归属列。"""
     inspector = inspect(engine)
     if not inspector.has_table("courses"):
         return
     columns = {column["name"] for column in inspector.get_columns("courses")}
-    if "owner_username" in columns:
-        return
     with engine.begin() as connection:
-        connection.execute(text("ALTER TABLE courses ADD COLUMN owner_username VARCHAR(100)"))
-        connection.execute(
-            text("UPDATE courses SET owner_username = :owner"),
-            {"owner": get_settings().admin_username},
-        )
+        if "owner_username" not in columns:
+            connection.execute(text("ALTER TABLE courses ADD COLUMN owner_username VARCHAR(100)"))
+            connection.execute(text("UPDATE courses SET owner_username = :owner"), {"owner": get_settings().admin_username})
+        if "owner_id" not in columns:
+            connection.execute(text("ALTER TABLE courses ADD COLUMN owner_id VARCHAR(36)"))
+
+
+def _prepare_user_avatar_column() -> None:
+    inspector = inspect(engine)
+    if inspector.has_table("users") and "avatar_content_type" not in {column["name"] for column in inspector.get_columns("users")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN avatar_content_type VARCHAR(32)"))
+
+
+def _backfill_course_owner_ids() -> None:
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE courses SET owner_username = :owner WHERE owner_username IS NULL AND owner_id IS NULL"), {"owner": get_settings().admin_username})
+        connection.execute(text("UPDATE courses SET owner_id = users.id FROM users WHERE courses.owner_id IS NULL AND courses.owner_username = users.username"))
+        missing = connection.scalar(text("SELECT COUNT(*) FROM courses WHERE owner_id IS NULL"))
+        if missing:
+            raise RuntimeError(f"有 {missing} 门课程无法关联到现有用户，请先核对归属数据")
+        connection.execute(text("ALTER TABLE courses ALTER COLUMN owner_id SET NOT NULL"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_courses_owner_id ON courses (owner_id)"))
+    if not any("owner_id" in fk.get("constrained_columns", []) for fk in inspect(engine).get_foreign_keys("courses")):
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE courses ADD CONSTRAINT courses_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES users(id)"))
 
 
 def _seed_root_user() -> None:
     settings = get_settings()
     with SessionLocal() as db:
-        if db.scalar(select(User).where(User.username == settings.admin_username)) is None:
+        if db.scalar(select(User.id).limit(1)) is None:
             db.add(User(username=settings.admin_username, password_hash=hash_password(settings.admin_password)))
             db.commit()
 

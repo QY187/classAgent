@@ -34,7 +34,7 @@ async function fetchWithToken(path: string, options: RequestInit | undefined, to
   });
 }
 
-export async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function authorizedResponse(path: string, options?: RequestInit): Promise<Response> {
   let response = await fetchWithToken(path, options, getToken());
 
   // 登录/刷新接口的 401 是“凭证无效”，不属于会话过期
@@ -59,7 +59,16 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
     if (Array.isArray(detail) && detail.length > 0) throw new Error("请检查输入内容后重试。");
     throw new Error("请求失败，请稍后重试。");
   }
+  return response;
+}
+
+export async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await authorizedResponse(path, options);
   return response.status === 204 ? undefined as T : response.json();
+}
+
+export async function requestBlob(path: string, options?: RequestInit): Promise<Blob> {
+  return (await authorizedResponse(path, options)).blob();
 }
 
 export function errorMessage(error: unknown): string {

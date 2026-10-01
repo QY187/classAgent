@@ -17,7 +17,7 @@ from app.core.db import Base  # noqa: E402
 from app.modules.lessons.service import update_transcript_segment, upload_audio  # noqa: E402
 from app.infrastructure.asr import TranscriptResult  # noqa: E402
 from app.infrastructure.tasks import process_audio  # noqa: E402
-from app.shared.models import Course, Lesson, LessonSummary, TranscriptRevision, TranscriptSegment  # noqa: E402
+from app.shared.models import Course, Lesson, LessonSummary, TranscriptRevision, TranscriptSegment, User  # noqa: E402
 
 
 class BrowserTranscriptUploadTest(unittest.TestCase):
@@ -27,7 +27,8 @@ class BrowserTranscriptUploadTest(unittest.TestCase):
         self.engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
-        course = Course(name="测试课程", owner_username="test")
+        self.db.add(User(id="test-id", username="test", password_hash="test"))
+        course = Course(name="测试课程", owner_id="test-id", owner_username="test")
         self.lesson = Lesson(course=course, title="测试课次")
         self.db.add(self.lesson)
         self.db.commit()

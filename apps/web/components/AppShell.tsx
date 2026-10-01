@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { apiUrl, request } from "../lib/api";
 import { clearSession, getRefreshToken, getStoredUser, isAuthenticated, redirectToLogin, type AuthUser } from "../lib/auth";
 import SearchBox from "./SearchBox";
+import UserAvatar from "./UserAvatar";
 
 type Course = { id: string; name: string };
 type LessonInfo = { course_id: string; title: string };
@@ -21,6 +22,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const activeCourseId = lessonMatch && lessonInfo ? lessonInfo.course_id : courseMatch?.[1];
   const libraryActive = pathname === "/" || pathname.startsWith("/courses") || pathname.startsWith("/lessons");
   const reviewActive = pathname === "/review";
+  const settingsActive = pathname === "/settings";
 
   useEffect(() => {
     if (isLogin) {
@@ -78,6 +80,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <nav className="nav" aria-label="主导航">
           <Link className={`nav-item ${libraryActive && !activeCourseId ? "active" : ""}`} href="/"><span className="nav-icon">▦</span><span>课程库</span></Link>
           <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review"><span className="nav-icon">◷</span><span>知识点清单</span></Link>
+          <Link className={`nav-item ${settingsActive ? "active" : ""}`} href="/settings"><span className="nav-icon">⚙</span><span>个人设置</span></Link>
         </nav>
         <div className="side-section">
           <div className="nav-label">我的课程</div>
@@ -93,15 +96,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <div className="side-footer">
-          {user && <div className="side-user"><span className="avatar">{user.username.slice(0, 1).toUpperCase()}</span><span className="side-user-name">{user.username}</span></div>}
+          {user && <div className="side-user"><UserAvatar username={user.username} hasAvatar={user.has_avatar} /><span className="side-user-name">{user.username}</span></div>}
           <button className="button button-secondary side-logout" type="button" onClick={logout}>退出登录</button>
         </div>
       </aside>
       <div className="main-area">
         <header className="topbar">
           <nav className="breadcrumb" aria-label="当前位置">
-            {courseMatch || lessonMatch || reviewActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
+            {courseMatch || lessonMatch || reviewActive || settingsActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
             {reviewActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">知识点清单</span></>}
+            {settingsActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">个人设置</span></>}
             {(courseMatch || (lessonMatch && lessonInfo)) && <><span className="breadcrumb-separator" aria-hidden="true">/</span>{lessonMatch && lessonInfo ? <Link className="breadcrumb-link" href={`/courses/${lessonInfo.course_id}`}>{activeCourseName || "我的课程"}</Link> : <span className="breadcrumb-current" aria-current="page">{activeCourseName || "我的课程"}</span>}</>}
             {lessonMatch && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">{lessonTitle || "我的课次"}</span></>}
             {lessonMatch && pathname.endsWith("/summary") && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">智能纪要</span></>}

@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
+from ...core.ownership import user_id_for_username
 from ...shared.models import Lesson, LessonSummary
 from . import mapper
 
@@ -89,7 +90,7 @@ def generate_summary(segments: list[dict[str, Any]]) -> str:
 
 def _owned_lesson(db: Session, lesson_id: str, owner_username: str) -> Lesson:
     lesson = db.get(Lesson, lesson_id)
-    if lesson is None or lesson.course.owner_username != owner_username:
+    if lesson is None or lesson.course.owner_id != user_id_for_username(db, owner_username):
         raise HTTPException(status_code=404, detail="课次不存在")
     return lesson
 

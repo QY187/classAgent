@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ...core.ownership import user_id_for_username
 from ...shared.models import Course, Lesson, LessonSummary, TranscriptSegment
 
 
@@ -18,7 +19,7 @@ def _snippet(text: str, query: str, width: int = 36) -> str:
 
 def search_all(db: Session, query: str, owner_username: str) -> dict:
     pattern = f"%{query}%"
-    owned = Course.owner_username == owner_username
+    owned = Course.owner_id == user_id_for_username(db, owner_username)
     courses = db.scalars(
         select(Course).where(owned, Course.name.ilike(pattern)).order_by(Course.created_at.desc()).limit(20)
     ).all()

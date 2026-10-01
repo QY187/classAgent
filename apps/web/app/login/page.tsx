@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { errorMessage, request } from "../../lib/api";
 import { setSession } from "../../lib/auth";
 
@@ -14,6 +14,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
+  const [usernameChanged, setUsernameChanged] = useState(false);
+
+  useEffect(() => {
+    setPasswordChanged(new URLSearchParams(window.location.search).get("password_changed") === "1");
+    setUsernameChanged(new URLSearchParams(window.location.search).get("username_changed") === "1");
+  }, []);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -54,6 +61,8 @@ export default function LoginPage() {
         </div>
         <h1>{mode === "login" ? "登录到你的资料库" : "创建新账号"}</h1>
         <p className="login-sub">{mode === "login" ? "使用你的账号继续。" : "注册后即可建立自己的课程资料库。"}</p>
+        {passwordChanged && <div className="notice login-success" role="status">密码已更新，请使用新密码登录。</div>}
+        {usernameChanged && <div className="notice login-success" role="status">用户名已更新，请使用新用户名登录。</div>}
         {error && <div className="notice login-notice">{error}</div>}
         <form className="form-grid" onSubmit={onSubmit}>
           <label className="field-label">用户名

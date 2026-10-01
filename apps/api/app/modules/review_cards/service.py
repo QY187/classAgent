@@ -5,20 +5,21 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from ...core.ownership import user_id_for_username
 from ...shared.models import Course, Lesson, LessonSummary, ReviewCard, TranscriptSegment, now_utc
 from .schemas import CardCreate, CardReview, CardUpdate
 
 
 def _owned_lesson(db: Session, lesson_id: str, username: str) -> Lesson:
     lesson = db.get(Lesson, lesson_id)
-    if lesson is None or lesson.course.owner_username != username:
+    if lesson is None or lesson.course.owner_id != user_id_for_username(db, username):
         raise HTTPException(status_code=404, detail="课次不存在")
     return lesson
 
 
 def _owned_card(db: Session, card_id: str, username: str) -> ReviewCard:
     card = db.get(ReviewCard, card_id)
-    if card is None or card.lesson.course.owner_username != username:
+    if card is None or card.lesson.course.owner_id != user_id_for_username(db, username):
         raise HTTPException(status_code=404, detail="复习卡片不存在")
     return card
 
@@ -51,7 +52,7 @@ def list_cards(db: Session, username: str) -> list[dict]:
     cards = db.scalars(
         select(ReviewCard)
         .join(ReviewCard.lesson).join(Lesson.course)
-        .where(Course.owner_username == username)
+        .where(Course.owner_id == user_id_for_username(db, username))
         .options(joinedload(ReviewCard.lesson).joinedload(Lesson.course))
         .order_by(ReviewCard.created_at.desc())
     ).all()

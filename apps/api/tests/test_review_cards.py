@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session  # noqa: E402
 from app.core.db import Base  # noqa: E402
 from app.modules.review_cards import service  # noqa: E402
 from app.modules.review_cards.schemas import CardCreate, CardReview, CardUpdate  # noqa: E402
-from app.shared.models import Course, Lesson, LessonSummary, TranscriptSegment  # noqa: E402
+from app.shared.models import Course, Lesson, LessonSummary, TranscriptSegment, User  # noqa: E402
 
 
 class ReviewCardTest(unittest.TestCase):
@@ -19,8 +19,9 @@ class ReviewCardTest(unittest.TestCase):
         self.engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
-        self.lesson = Lesson(course=Course(name="数据结构", owner_username="alice"), title="二叉树")
-        other = Lesson(course=Course(name="其他课程", owner_username="bob"), title="别人的课")
+        self.db.add_all([User(id="alice-id", username="alice", password_hash="test"), User(id="bob-id", username="bob", password_hash="test")])
+        self.lesson = Lesson(course=Course(name="数据结构", owner_id="alice-id", owner_username="alice"), title="二叉树")
+        other = Lesson(course=Course(name="其他课程", owner_id="bob-id", owner_username="bob"), title="别人的课")
         self.segment = TranscriptSegment(lesson=self.lesson, speaker="说话人 1", start_ms=56000, end_ms=61000, text="叶子节点没有孩子")
         self.other_segment = TranscriptSegment(lesson=other, speaker="说话人 1", start_ms=0, end_ms=1000, text="其他内容")
         self.db.add_all([self.segment, self.other_segment])

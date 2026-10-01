@@ -2,7 +2,7 @@ const TOKEN_KEY = "classagent_token";
 const REFRESH_KEY = "classagent_refresh";
 const USER_KEY = "classagent_user";
 
-export type AuthUser = { username: string; role: string };
+export type AuthUser = { username: string; role: string; has_avatar?: boolean };
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

@@ -15,9 +15,9 @@ def find_course(db: Session, course_id: str) -> Course | None:
     return db.get(Course, course_id)
 
 
-def find_courses(db: Session, owner_username: str) -> list[Course]:
+def find_courses(db: Session, owner_id: str) -> list[Course]:
     return list(db.scalars(
-        select(Course).where(Course.owner_username == owner_username).order_by(Course.created_at.desc())
+        select(Course).where(Course.owner_id == owner_id).order_by(Course.created_at.desc())
     ))
 
 

@@ -7,6 +7,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from ...core.ownership import user_id_for_username
 from ...shared.models import AudioFile, DocumentChunk, Lesson, LessonSummary, ProcessingJob, SpeakerAlias, TranscriptRevision, TranscriptSegment
 from ...infrastructure.storage import materialize_file, upload_file
 from . import mapper
@@ -14,7 +15,7 @@ from . import mapper
 
 def get_lesson(db: Session, lesson_id: str, owner_username: str | None = None) -> Lesson:
     lesson = mapper.find_lesson(db, lesson_id)
-    if lesson is None or (owner_username is not None and lesson.course.owner_username != owner_username):
+    if lesson is None or (owner_username is not None and lesson.course.owner_id != user_id_for_username(db, owner_username)):
         raise HTTPException(status_code=404, detail="课次不存在")
     return lesson
 
