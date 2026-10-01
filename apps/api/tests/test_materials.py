@@ -1,12 +1,16 @@
 import unittest
 from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.modules.materials.service import list_materials, upload_material
+from app.modules.materials.service import cleanup_converted_preview, convert_office_to_pdf, get_material_file, list_materials, preview_text, upload_material
 from app.shared.models import Course, CourseMaterial, Lesson, User
 
 
@@ -46,6 +50,41 @@ class CourseMaterialsTest(unittest.TestCase):
             self.assertEqual(wrong_type.exception.status_code, 400)
             self.assertEqual(db.scalar(select(CourseMaterial)), None)
             storage.assert_not_called()
+
+    def test_download_checks_course_owner_before_reading_storage(self):
+        with Session(self.engine) as db, patch("app.modules.materials.service.upload_file"):
+            material = upload_material(db, "c1", None, UploadFile(filename="讲义.pdf", file=BytesIO(b"%PDF-example")), "owner")
+            with patch("app.modules.materials.service.materialize_file") as storage:
+                with self.assertRaises(HTTPException) as denied:
+                    get_material_file(db, "c1", material.id, "other")
+                self.assertEqual(denied.exception.status_code, 404)
+                storage.assert_not_called()
+
+    def test_docx_text_preview(self):
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "sample.docx"
+            with ZipFile(path, "w") as archive:
+                archive.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>第一段</w:t></w:r></w:p><w:p><w:r><w:t>第二段</w:t></w:r></w:p></w:body></w:document>')
+            text, truncated = preview_text(path, "sample.docx")
+            self.assertEqual(text, "第一段\n第二段")
+            self.assertFalse(truncated)
+
+    def test_office_preview_conversion_and_cleanup(self):
+        with TemporaryDirectory() as temporary:
+            source = Path(temporary) / "presentation.pptx"
+            source.write_bytes(b"example")
+
+            def write_pdf(command, **_kwargs):
+                output = Path(command[command.index("--outdir") + 1]) / "presentation.pdf"
+                output.write_bytes(b"%PDF-1.7")
+                return SimpleNamespace(returncode=0)
+
+            with patch("app.modules.materials.service.shutil.which", return_value="/usr/bin/soffice"), \
+                 patch("app.modules.materials.service.subprocess.run", side_effect=write_pdf):
+                converted, directory = convert_office_to_pdf(source, source.name)
+            self.assertEqual(converted.read_bytes(), b"%PDF-1.7")
+            cleanup_converted_preview(directory, None)
+            self.assertFalse(directory.exists())
 
 
 if __name__ == "__main__":

@@ -195,6 +195,19 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .material-info { min-width: 0; display: grid; gap: 4px; }
 .material-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 13px; }
 .material-info span { color: var(--muted); font-size: 12px; }
+.material-info { flex: 1; }
+.material-name { display: block; width: 100%; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.material-name:hover { color: var(--blue); text-decoration: underline; }
+.material-actions { display: flex; gap: 8px; flex: none; }
+.material-actions .button { padding: 8px 12px; font-size: 12px; }
+.modal.material-preview-modal { width: min(920px, calc(100vw - 32px)); max-width: none; max-height: min(88vh, 900px); display: flex; flex-direction: column; overflow: hidden; }
+.material-preview-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.material-preview-modal .material-preview-header h2 { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; }
+.material-preview-hint { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.material-preview-frame { width: 100%; height: min(72vh, 720px); border: 1px solid #e4e9f2; border-radius: 10px; }
+.material-preview-image { display: block; max-width: 100%; max-height: 72vh; margin: auto; object-fit: contain; }
+.material-preview-text { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; color: var(--ink); font-size: 14px; }
+.material-preview-truncated { margin-top: 16px; color: var(--muted); font-size: 12px; }
 .course-qa { margin-bottom: 20px; }
 .qa-header { padding: 24px 28px 20px; background: linear-gradient(110deg, #fff 42%, #f5f7ff); }
 .qa-eyebrow { display: block; margin-bottom: 5px; color: var(--blue); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
@@ -648,4 +661,6 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
   .lesson-row-link { flex: 1 0 100%; }
   .lesson-row-actions { flex-basis: 100%; justify-content: flex-start; padding-left: 50px; }
   .lesson-upload-status { padding-left: 50px; }
+  .material-row { flex-wrap: wrap; }
+  .material-actions { width: 100%; padding-left: 48px; }
 }
