@@ -42,6 +42,8 @@ class ReviewCardTest(unittest.TestCase):
         self.assertEqual(mastered["status"], "mastered")
         self.assertGreater((mastered["next_review_at"] - mastered["last_reviewed_at"]).days, 6)
         self.assertEqual(service.list_due_cards(self.db, "alice"), [])
+        self.assertEqual([item["id"] for item in service.list_cards(self.db, "alice")], [card["id"]])
+        self.assertEqual(service.list_cards(self.db, "bob"), [])
 
         service.delete_card(self.db, card["id"], "alice")
         self.assertEqual(service.list_lesson_cards(self.db, self.lesson.id, "alice"), [])

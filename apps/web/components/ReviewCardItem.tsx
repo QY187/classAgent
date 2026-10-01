@@ -9,9 +9,10 @@ type Props = {
   onReview: (card: ReviewCard, status: CardStatus) => Promise<void>;
   onSave?: (card: ReviewCard, changes: { title: string; body: string; card_type: CardType }) => Promise<void>;
   onDelete?: (card: ReviewCard) => Promise<void>;
+  showLesson?: boolean;
 };
 
-export default function ReviewCardItem({ card, onReview, onSave, onDelete }: Props) {
+export default function ReviewCardItem({ card, onReview, onSave, onDelete, showLesson = false }: Props) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [title, setTitle] = useState(card.title);
@@ -29,6 +30,7 @@ export default function ReviewCardItem({ card, onReview, onSave, onDelete }: Pro
 
   return <article className="review-card">
     <div className="review-card-top"><span className="review-card-kind">{cardTypeLabel[card.card_type]}</span><span className={`review-card-status review-card-status-${card.status}`}>{cardStatusLabel[card.status]}</span></div>
+    {showLesson && <Link className="review-card-lesson" href={`/lessons/${card.lesson_id}`}>{card.lesson_title} ↗</Link>}
     {editing ? <form className="review-card-edit" onSubmit={(event) => {
       event.preventDefault();
       if (!title.trim() || !body.trim() || !onSave) return;
@@ -39,7 +41,7 @@ export default function ReviewCardItem({ card, onReview, onSave, onDelete }: Pro
       <textarea className="field" value={body} onChange={(event) => setBody(event.target.value)} rows={4} maxLength={10000} aria-label="卡片内容" required />
       <div className="review-card-actions"><button className="button button-primary" disabled={busy} type="submit">保存</button><button className="button button-secondary" type="button" onClick={() => setEditing(false)} disabled={busy}>取消</button></div>
     </form> : <><h3>{card.title}</h3><p className="review-card-body">{card.body}</p></>}
-    {card.source_start_ms !== null && <div className="review-card-source"><Link href={`/lessons/${card.lesson_id}/transcript?t=${card.source_start_ms}`}>查看原文 · {card.lesson_title} {reviewTime(card.source_start_ms)} ↗</Link>{card.source_excerpt && <span>{card.source_excerpt}</span>}</div>}
+    {card.source_start_ms !== null && <div className="review-card-source"><Link href={`/lessons/${card.lesson_id}/transcript?t=${card.source_start_ms}`}>查看原文 · {showLesson ? "" : `${card.lesson_title} `}{reviewTime(card.source_start_ms)} ↗</Link>{card.source_excerpt && <span>{card.source_excerpt}</span>}</div>}
     <div className="review-card-footer"><span>下次复习：{new Date(card.next_review_at).toLocaleDateString("zh-CN")}</span><div className="review-card-actions">
       {!editing && onSave && <button type="button" className="review-card-link" onClick={() => { setTitle(card.title); setBody(card.body); setCardType(card.card_type); setEditing(true); }}>编辑</button>}
       {!editing && onDelete && <button type="button" className="review-card-link danger" onClick={() => setConfirmDelete(true)}>删除</button>}

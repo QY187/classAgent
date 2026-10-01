@@ -20,6 +20,11 @@ def list_due_cards(username: str = Depends(get_current_user), db: Session = Depe
     return service.list_due_cards(db, username)
 
 
+@router.get("/review-cards", response_model=list[CardRead])
+def list_cards(username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.list_cards(db, username)
+
+
 @router.post("/lessons/{lesson_id}/review-cards", response_model=CardRead, status_code=201)
 def create_card(lesson_id: str, payload: CardCreate, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return service.create_card(db, lesson_id, payload, username)

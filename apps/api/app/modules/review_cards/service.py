@@ -50,6 +50,17 @@ def list_lesson_cards(db: Session, lesson_id: str, username: str) -> list[dict]:
     return [serialize(card) for card in cards]
 
 
+def list_cards(db: Session, username: str) -> list[dict]:
+    cards = db.scalars(
+        select(ReviewCard)
+        .join(ReviewCard.lesson).join(Lesson.course)
+        .where(Course.owner_username == username)
+        .options(joinedload(ReviewCard.lesson).joinedload(Lesson.course))
+        .order_by(ReviewCard.created_at.desc())
+    ).all()
+    return [serialize(card) for card in cards]
+
+
 def list_due_cards(db: Session, username: str) -> list[dict]:
     cards = db.scalars(
         select(ReviewCard)

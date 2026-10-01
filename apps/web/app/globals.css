@@ -224,8 +224,25 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .review-create { margin-bottom: 20px; }
 .review-create-fields { display: grid; gap: 16px; }
 .review-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.review-course-filter { display: grid; gap: 11px; margin-bottom: 27px; padding: 18px; border: 1px solid #e8edf7; border-radius: 15px; background: #f8faff; }
+.review-course-filter label { color: #40506e; font-size: 13px; font-weight: 700; }
+.review-course-filter .field { width: 100%; max-width: 420px; background: #fff; }
+.review-course-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.review-course-option { display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px; border: 1px solid #dfe6f3; border-radius: 99px; background: #fff; color: #52617b; font-size: 12px; font-weight: 650; }
+.review-course-option:hover { border-color: #aab7f5; color: #5265da; }
+.review-course-option.active { border-color: #6575ed; background: #eef0ff; color: #4d60d5; }
+.review-course-option span { color: #8a95aa; font-size: 11px; }
+.review-course-empty { margin: 28px 0 12px; color: #78869d; text-align: center; }
+.review-course-list { display: grid; gap: 30px; }
+.review-course-group + .review-course-group { padding-top: 24px; border-top: 1px solid #e9edf5; }
+.review-course-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 15px; }
+.review-course-heading h3 { margin: 5px 0 0; font-size: 18px; }
+.review-course-heading h3 a:hover { color: var(--blue); }
+.review-course-heading > span { color: #8490a3; font-size: 12px; white-space: nowrap; }
 .review-card { display: flex; flex-direction: column; min-width: 0; padding: 21px; border: 1px solid #e3e9f4; border-radius: 16px; background: linear-gradient(160deg, #fff, #fafbff); }
 .review-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 13px; }
+.review-card-lesson { align-self: flex-start; margin-bottom: 8px; color: #72819b; font-size: 11px; }
+.review-card-lesson:hover { color: var(--blue); }
 .review-card-kind { color: #5b6ef0; font-size: 11px; font-weight: 750; letter-spacing: .04em; }
 .review-card-status { padding: 5px 9px; border-radius: 100px; background: #eef1ff; color: #596bc5; font-size: 11px; font-weight: 700; }
 .review-card-status-review { background: #fff4e6; color: #b77422; }
