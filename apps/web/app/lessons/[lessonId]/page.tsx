@@ -135,7 +135,11 @@ export default function LessonPage() {
     try {
       const body = new FormData(); body.append("file", file);
       if (browserTranscript?.trim()) body.append("browser_transcript", browserTranscript.trim());
-      const nextJob = await request<Job>(`/lessons/${lessonId}/audio`, { method: "POST", body });
+      const nextJob = await request<Job>(`/lessons/${lessonId}/audio`, {
+        method: "POST",
+        body,
+        signal: AbortSignal.timeout(20 * 60 * 1000),
+      });
       setJob(nextJob);
       setSegments(await request<Segment[]>(`/lessons/${lessonId}/transcript`));
       setLesson(await request<Lesson>(`/lessons/${lessonId}`));
@@ -144,7 +148,11 @@ export default function LessonPage() {
       setMessage(nextJob.stage === "queued"
         ? "音频已保存，正在等待阿里云录音文件转写。"
         : "录音和浏览器识别的文字已保存。");
-    } catch (error) { setMessage(errorMessage(error)); }
+    } catch (error) {
+      setMessage(error instanceof DOMException && error.name === "TimeoutError"
+        ? "音频上传超时，请检查网络后重试。"
+        : errorMessage(error));
+    }
     finally { setUploading(false); }
   }
 
