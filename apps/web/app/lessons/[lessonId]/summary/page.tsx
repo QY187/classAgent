@@ -73,6 +73,7 @@ export default function SummaryPage() {
       </div>
       <div className="page-hero-actions">
         <Link className="button button-secondary" href={`/lessons/${lesson.id}/transcript`}>查看文字记录</Link>
+        <Link className="button button-secondary" href={`/lessons/${lesson.id}/review`}>复习卡片</Link>
         {canEdit && !editing && <button className="button button-secondary" onClick={startEdit}>编辑纪要</button>}
         <button className="button button-primary" onClick={generate} disabled={!segments.length || loading || summary?.status === "generating" || summary?.status === "queued"}>{loading || summary?.status === "generating" || summary?.status === "queued" ? "生成中…" : summary ? "重新生成" : "生成智能纪要"}</button>
       </div>

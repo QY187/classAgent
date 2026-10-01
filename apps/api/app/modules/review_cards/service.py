@@ -1,10 +1,12 @@
+import hashlib
+import json
 from datetime import timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from ...shared.models import Course, Lesson, ReviewCard, TranscriptSegment, now_utc
+from ...shared.models import Course, Lesson, LessonSummary, ReviewCard, TranscriptSegment, now_utc
 from .schemas import CardCreate, CardReview, CardUpdate
 
 
@@ -78,6 +80,50 @@ def create_card(db: Session, lesson_id: str, payload: CardCreate, username: str)
     db.commit()
     db.refresh(card)
     return serialize(card)
+
+
+def create_from_summary(db: Session, lesson_id: str, username: str) -> dict[str, int]:
+    lesson = _owned_lesson(db, lesson_id, username)
+    summary = db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
+    if summary is None or not summary.content:
+        raise HTTPException(status_code=400, detail="请先生成智能纪要")
+    try:
+        content = json.loads(summary.content)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="当前纪要已编辑为文档，请手动创建复习卡片") from exc
+    if not isinstance(content, dict):
+        raise HTTPException(status_code=400, detail="纪要内容格式不正确")
+    concepts = content.get("key_concepts") or []
+    if not isinstance(concepts, list) or not concepts:
+        raise HTTPException(status_code=400, detail="纪要中没有可生成的核心概念")
+
+    segments = db.scalars(select(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id).order_by(TranscriptSegment.start_ms)).all()
+    existing = set(db.scalars(select(ReviewCard.origin_key).where(ReviewCard.lesson_id == lesson_id)).all())
+    created = 0
+    for concept in concepts:
+        if not isinstance(concept, dict):
+            continue
+        term = str(concept.get("term") or "").strip()
+        definition = str(concept.get("definition") or "").strip()
+        indexes = concept.get("source_indexes") or []
+        source_index = next((index for index in indexes if isinstance(index, int) and not isinstance(index, bool) and 1 <= index <= len(segments)), None) if isinstance(indexes, list) else None
+        if not term or not definition or source_index is None:
+            continue
+        origin_key = "concept:" + hashlib.sha256(term.encode("utf-8")).hexdigest()[:24]
+        if origin_key in existing:
+            continue
+        source = segments[source_index - 1]
+        importance = str(concept.get("importance") or "").strip()
+        db.add(ReviewCard(
+            course_id=lesson.course_id, lesson_id=lesson_id, card_type="concept",
+            title=term[:200], body=(definition + (f"\n重要性：{importance}" if importance else ""))[:10000],
+            origin_key=origin_key, source_segment_id=source.id,
+            source_start_ms=source.start_ms, source_excerpt=source.text,
+        ))
+        existing.add(origin_key)
+        created += 1
+    db.commit()
+    return {"created": created, "skipped": len(concepts) - created}
 
 
 def update_card(db: Session, card_id: str, payload: CardUpdate, username: str) -> dict:

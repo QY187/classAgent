@@ -59,7 +59,7 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
     if (Array.isArray(detail) && detail.length > 0) throw new Error("请检查输入内容后重试。");
     throw new Error("请求失败，请稍后重试。");
   }
-  return response.json();
+  return response.status === 204 ? undefined as T : response.json();
 }
 
 export function errorMessage(error: unknown): string {

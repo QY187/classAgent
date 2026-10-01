@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session  # noqa: E402
 from app.core.db import Base  # noqa: E402
 from app.modules.review_cards import service  # noqa: E402
 from app.modules.review_cards.schemas import CardCreate, CardReview, CardUpdate  # noqa: E402
-from app.shared.models import Course, Lesson, TranscriptSegment  # noqa: E402
+from app.shared.models import Course, Lesson, LessonSummary, TranscriptSegment  # noqa: E402
 
 
 class ReviewCardTest(unittest.TestCase):
@@ -53,3 +54,19 @@ class ReviewCardTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as wrong_source:
             service.create_card(self.db, self.lesson.id, CardCreate(title="错误来源", body="正文", source_segment_id=self.other_segment.id), "alice")
         self.assertEqual(wrong_source.exception.status_code, 400)
+
+    def test_generate_from_summary_is_cited_and_idempotent(self):
+        summary = LessonSummary(lesson_id=self.lesson.id, status="completed", content=json.dumps({
+            "key_concepts": [
+                {"term": "叶子节点", "definition": "没有孩子的节点", "importance": "用于计数", "source_indexes": [1]},
+                {"term": "无来源", "definition": "不能建卡", "source_indexes": [99]},
+            ]
+        }))
+        self.db.add(summary)
+        self.db.commit()
+
+        result = service.create_from_summary(self.db, self.lesson.id, "alice")
+        self.assertEqual(result, {"created": 1, "skipped": 1})
+        card = service.list_lesson_cards(self.db, self.lesson.id, "alice")[0]
+        self.assertEqual((card["title"], card["source_segment_id"], card["source_start_ms"]), ("叶子节点", self.segment.id, 56000))
+        self.assertEqual(service.create_from_summary(self.db, self.lesson.id, "alice"), {"created": 0, "skipped": 2})

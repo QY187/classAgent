@@ -25,6 +25,11 @@ def create_card(lesson_id: str, payload: CardCreate, username: str = Depends(get
     return service.create_card(db, lesson_id, payload, username)
 
 
+@router.post("/lessons/{lesson_id}/review-cards/from-summary")
+def create_from_summary(lesson_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.create_from_summary(db, lesson_id, username)
+
+
 @router.patch("/review-cards/{card_id}", response_model=CardRead)
 def update_card(card_id: str, payload: CardUpdate, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return service.update_card(db, card_id, payload, username)
