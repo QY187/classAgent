@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ...core.db import get_db
+from ...core.config import get_settings
 from ...core.deps import get_current_user
 from . import service
 from .schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserInfo
@@ -11,6 +12,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserInfo, status_code=201)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserInfo:
+    if not get_settings().allow_registration:
+        raise HTTPException(status_code=403, detail="当前站点未开放注册")
     user = service.register_user(db, payload.username, payload.password)
     return UserInfo(username=user.username)
 

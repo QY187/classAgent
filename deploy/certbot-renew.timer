@@ -1,0 +1,11 @@
+[Unit]
+Description=Check ClassAgent HTTPS certificate renewal twice a day
+
+[Timer]
+OnCalendar=*-*-* 03,15:00:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=certbot-renew.service
+
+[Install]
+WantedBy=timers.target

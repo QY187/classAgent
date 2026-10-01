@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-change-me"
     admin_username: str = "root"
     admin_password: str = "123456"
+    allow_registration: bool = True
     access_token_expire_minutes: int = 1440
     refresh_token_expire_minutes: int = 43200
 

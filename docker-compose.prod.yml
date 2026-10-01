@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: classagent
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: classagent
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U classagent -d classagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./apps/api
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql+psycopg://classagent:${DB_PASSWORD}@postgres:5432/classagent
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /data/uploads
+    volumes:
+      - audio_data:/data/uploads
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: ./apps/api
+    restart: unless-stopped
+    command: celery -A app.infrastructure.tasks.celery_app worker --loglevel=INFO --concurrency=1
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql+psycopg://classagent:${DB_PASSWORD}@postgres:5432/classagent
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /data/uploads
+    volumes:
+      - audio_data:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_ALLOW_REGISTRATION: "false"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+  audio_data:

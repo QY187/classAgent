@@ -8,6 +8,7 @@ type LoginResult = { access_token: string; refresh_token: string; token_type: st
 type MeResult = { username: string; role: string };
 
 export default function LoginPage() {
+  const registrationEnabled = process.env.NEXT_PUBLIC_ALLOW_REGISTRATION !== "false";
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -63,9 +64,9 @@ export default function LoginPage() {
           </label>
           <button className="button button-primary" type="submit" disabled={loading}>{loading ? (mode === "login" ? "登录中…" : "注册中…") : (mode === "login" ? "登录" : "注册并登录")}</button>
         </form>
-        <button className="login-switch" type="button" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>
+        {registrationEnabled && <button className="login-switch" type="button" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>
           {mode === "login" ? "没有账号？注册一个" : "已有账号？返回登录"}
-        </button>
+        </button>}
       </div>
     </div>
   );

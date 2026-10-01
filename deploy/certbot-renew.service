@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew ClassAgent HTTPS certificate
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/certbot-venv/bin/certbot renew --quiet --no-random-sleep-on-renew --deploy-hook "systemctl reload nginx"
