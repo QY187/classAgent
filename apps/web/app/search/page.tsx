@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { errorMessage, request } from "../../lib/api";
 
@@ -36,7 +36,7 @@ function formatTime(ms: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-export default function SearchPage() {
+function SearchResultsPage() {
   const params = useSearchParams();
   const query = params.get("q")?.trim() ?? "";
   const [results, setResults] = useState<SearchResults | null>(null);
@@ -121,7 +121,7 @@ export default function SearchPage() {
             <div className="panel-header"><div><h2>文字记录片段</h2><span className="summary-caption">{results.transcript.length} 处命中</span></div></div>
             <div className="panel-body">
               {results.transcript.map((segment) => (
-                <Link key={segment.segment_id} className="result-row" href={`/lessons/${segment.lesson_id}/transcript`}>
+                <Link key={segment.segment_id} className="result-row" href={`/lessons/${segment.lesson_id}/transcript?t=${segment.start_ms}`}>
                   <div className="result-meta">{segment.course_name} · {segment.lesson_title} · {segment.speaker} · {formatTime(segment.start_ms)}</div>
                   <div className="result-title"><Highlight text={segment.snippet} query={query} /></div>
                 </Link>
@@ -144,4 +144,8 @@ export default function SearchPage() {
       )}
     </div>
   );
+}
+
+export default function SearchPage() {
+  return <Suspense fallback={<div className="page page-search"><p role="status">正在加载搜索…</p></div>}><SearchResultsPage /></Suspense>;
 }
