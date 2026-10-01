@@ -74,7 +74,7 @@ export default function CourseQa({ courseId }: { courseId: string }) {
         <div className="qa-answer-text">{answer.answer.split("\n\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
         {answer.citations.length > 0 && <details className="qa-evidence">
           <summary><span>查看回答依据</span><span className="qa-evidence-count">{evidence.length} 处来源</span><span className="qa-chevron" aria-hidden="true">⌄</span></summary>
-          <div className="qa-evidence-list">{evidence.map((item) => <Link className="qa-evidence-item" key={item.id} href={`/lessons/${item.lesson_id}/transcript?t=${item.start_ms}`}><span className="qa-evidence-index">{item.ids.join("·")}</span><span className="qa-evidence-main"><strong>{item.lesson_title}<span> · {time(item.start_ms)}</span></strong><span className="qa-evidence-snippet">{item.snippet}</span></span><span className="qa-evidence-arrow" aria-hidden="true">↗</span></Link>)}</div>
+          <div className="qa-evidence-list">{evidence.map((item) => <Link className="qa-evidence-item" key={item.id} href={`/lessons/${item.lesson_id}/transcript?t=${item.start_ms}`}><span className="qa-evidence-main"><strong>{item.lesson_title}<span> · {time(item.start_ms)}</span></strong><span className="qa-evidence-snippet">{item.snippet}</span><span className="qa-evidence-refs">对应回答引用：{item.ids.map((id) => `[${id}]`).join(" ")}</span></span><span className="qa-evidence-arrow" aria-hidden="true">↗</span></Link>)}</div>
         </details>}
       </div>}
     </div>
