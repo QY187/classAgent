@@ -7,13 +7,12 @@ import { errorMessage, request } from "../../../../lib/api";
 import { Lesson, Segment, Summary, parseSummaryContent } from "../lesson-view";
 import FeishuEditor from "../../../../components/FeishuEditor";
 import Html from "../../../../components/Html";
-import { summaryToMarkdown } from "../../../../lib/export";
-import { markdownToHtml } from "../../../../lib/markdown";
+import { summaryToHtml } from "../../../../lib/summary-html";
 
 function toDocHtml(status: string | undefined, content: string | null | undefined): string {
   if (status === "edited" && content) return content;
   const parsed = parseSummaryContent(content);
-  return parsed ? markdownToHtml(summaryToMarkdown(parsed)) : "";
+  return parsed ? summaryToHtml(parsed) : "";
 }
 
 export default function SummaryPage() {
