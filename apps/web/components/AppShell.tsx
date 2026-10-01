@@ -40,6 +40,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isLogin) return;
+    const refreshCourses = () => { request<Course[]>("/courses").then(setCourses).catch(() => {}); };
+    window.addEventListener("classagent:courses-updated", refreshCourses);
+    return () => window.removeEventListener("classagent:courses-updated", refreshCourses);
+  }, [isLogin]);
+
+  useEffect(() => {
+    if (isLogin) return;
     const controller = new AbortController();
     if (lessonMatch) {
       request<{ course_id: string; title: string }>(`/lessons/${lessonMatch[1]}`, { signal: controller.signal })

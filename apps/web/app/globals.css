@@ -204,6 +204,7 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .button-danger { color: white; background: #c94b4b; }
 .button-danger:hover { background: #b83c3c; }
 .material-delete-filename { overflow-wrap: anywhere; }
+.delete-impact { margin-top: 10px; color: var(--muted); line-height: 1.7; }
 .modal.material-preview-modal { width: min(920px, calc(100vw - 32px)); max-width: none; max-height: min(88vh, 900px); display: flex; flex-direction: column; overflow: hidden; }
 .material-preview-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .material-preview-modal .material-preview-header h2 { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; }
@@ -317,7 +318,8 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 }
 .lesson-row:hover { border-color: #c3ceff; box-shadow: var(--shadow-sm); transform: translateY(-2px); }
 .lesson-row-link { display: flex; align-items: center; gap: 16px; flex: 0 1 38%; min-width: 0; }
-.lesson-row-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: 1; min-width: 0; }
+.lesson-row-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; flex: 1; min-width: 0; }
+.lesson-row-actions > .button { padding: 8px 12px; font-size: 12px; white-space: nowrap; }
 .lesson-upload { padding: 8px 12px; font-size: 12px; white-space: nowrap; cursor: pointer; }
 .lesson-view-materials { padding: 8px 12px; font-size: 12px; white-space: nowrap; }
 .lesson-view-materials[aria-expanded="true"] { border-color: #c3ceff; color: var(--blue); background: #f6f7ff; }
@@ -357,6 +359,9 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .page-hero-copy h1 { margin: 6px 0; font-size: clamp(22px, 2.4vw, 30px); }
 .page-hero-copy p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .page-hero-actions { display: flex; align-items: center; gap: 10px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.course-management-hero { flex-wrap: wrap; }
+.course-management-hero .page-hero-copy { flex: 1 1 calc(100% - 74px); }
+.course-management-hero .page-hero-actions { width: 100%; justify-content: flex-end; }
 .page-hero-compact { padding: 20px 24px; }
 .page-hero-compact .page-hero-avatar, .page-hero-compact .page-hero-icon { width: 48px; height: 48px; border-radius: 14px; font-size: 20px; }
 .page-hero-compact h1 { font-size: 24px; }

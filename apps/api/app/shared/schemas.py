@@ -14,6 +14,10 @@ class CourseRead(CourseCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CourseUpdate(CourseCreate):
+    semester: str | None = Field(default=None, max_length=100)
+
+
 class LessonCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     lesson_date: str | None = None
@@ -25,6 +29,10 @@ class LessonRead(LessonCreate):
     status: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class LessonUpdate(LessonCreate):
+    lesson_date: str | None = Field(default=None, max_length=30)
 
 
 class JobRead(BaseModel):
