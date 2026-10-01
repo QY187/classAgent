@@ -50,22 +50,32 @@ export default function CourseQa({ courseId }: { courseId: string }) {
     finally { setRebuilding(false); }
   }
 
-  return <section className="panel" style={{ marginBottom: 20 }}>
-    <div className="panel-header"><h2>问一问这门课</h2><span>{chunkCount === null ? "加载中" : `${chunkCount} 段可检索内容`}</span></div>
-    <div className="panel-body">
-      <p style={{ marginTop: 0 }}>综合这门课的文字记录提问，回答会标明对应课次与录音时间。</p>
-      <form onSubmit={ask} style={{ display: "flex", gap: 10 }}>
-        <input className="field" style={{ flex: 1 }} value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={1000} placeholder="例如：老师在哪几节课讲过二叉树遍历？" aria-label="向这门课提问" />
-        <button className="button button-primary" disabled={busy || question.trim().length < 2}>{busy ? "查找中…" : "提问"}</button>
+  const evidence = answer?.citations.reduce<(Citation & { ids: number[] })[]>((groups, item) => {
+    const existing = groups.find((group) => group.lesson_id === item.lesson_id && group.start_ms === item.start_ms && group.snippet === item.snippet);
+    if (existing) existing.ids.push(item.id);
+    else groups.push({ ...item, ids: [item.id] });
+    return groups;
+  }, []) ?? [];
+
+  return <section className="panel course-qa">
+    <div className="panel-header qa-header"><div><span className="qa-eyebrow">课程问答</span><h2>问一问这门课</h2></div><span className="qa-index-count">{chunkCount === null ? "正在读取资料" : `${chunkCount} 段可检索内容`}</span></div>
+    <div className="panel-body qa-body">
+      <p className="qa-intro">输入想了解的问题，回答会标明对应课次与录音时间。</p>
+      <form className="qa-form" onSubmit={ask}>
+        <input className="field qa-input" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={1000} placeholder="例如：二叉树有哪些性质？" aria-label="向这门课提问" />
+        <button className="button button-primary qa-submit" disabled={busy || question.trim().length < 2}>{busy ? "查找中…" : "提问"}</button>
       </form>
-      {chunkCount === 0 && <p>这门课还没有问答索引。已有文字记录可以点击下方按钮整理。</p>}
+      {chunkCount === 0 && <p className="qa-hint">这门课还没有问答索引。已有文字记录可以点击下方按钮整理。</p>}
       {!configured && <p className="notice">课程问答需要在后端配置 DASHSCOPE_API_KEY 和 DEEPSEEK_API_KEY。</p>}
-      <button type="button" className="button button-quiet" disabled={rebuilding} onClick={rebuild} style={{ marginTop: 8 }}>{rebuilding ? "提交中…" : "整理或更新课程资料"}</button>
-      {message && <div className="notice" role="status">{message}</div>}
-      {answer && <div style={{ marginTop: 20 }} aria-live="polite">
-        <h3>回答</h3>
-        {answer.answer.split("\n\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)}
-        {answer.citations.length > 0 && <div><h3>依据</h3><div className="lesson-list">{answer.citations.map((item) => <Link className="lesson-row" key={item.id} href={`/lessons/${item.lesson_id}/transcript?t=${item.start_ms}`}><span className="lesson-index">{item.id}</span><span className="lesson-main"><strong>{item.lesson_title} · {time(item.start_ms)}</strong><span className="lesson-date">{item.snippet}</span></span><span className="lesson-go">→</span></Link>)}</div></div>}
+      <button type="button" className="button button-quiet qa-rebuild" disabled={rebuilding} onClick={rebuild}>{rebuilding ? "提交中…" : "整理或更新课程资料"}</button>
+      {message && <div className="notice qa-notice" role="status">{message}</div>}
+      {answer && <div className="qa-result" aria-live="polite">
+        <div className="qa-answer-heading"><span className="qa-answer-mark" aria-hidden="true">✦</span><h3>回答</h3></div>
+        <div className="qa-answer-text">{answer.answer.split("\n\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
+        {answer.citations.length > 0 && <details className="qa-evidence">
+          <summary><span>查看回答依据</span><span className="qa-evidence-count">{evidence.length} 处来源</span><span className="qa-chevron" aria-hidden="true">⌄</span></summary>
+          <div className="qa-evidence-list">{evidence.map((item) => <Link className="qa-evidence-item" key={item.id} href={`/lessons/${item.lesson_id}/transcript?t=${item.start_ms}`}><span className="qa-evidence-index">{item.ids.join("·")}</span><span className="qa-evidence-main"><strong>{item.lesson_title}<span> · {time(item.start_ms)}</span></strong><span className="qa-evidence-snippet">{item.snippet}</span></span><span className="qa-evidence-arrow" aria-hidden="true">↗</span></Link>)}</div>
+        </details>}
       </div>}
     </div>
   </section>;
