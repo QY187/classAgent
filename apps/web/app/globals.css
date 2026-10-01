@@ -310,7 +310,7 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .speaker-bar { position: relative; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
 .panel-header .speaker-bar { margin-bottom: 0; gap: 10px; }
 .speaker-panel {
-  position: absolute; top: calc(100% + 8px); left: 0; width: min(440px, 92vw); z-index: 20;
+  position: absolute; top: calc(100% + 8px); right: 0; width: min(440px, 92vw); z-index: 20;
   background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;
   box-shadow: 0 18px 44px rgba(31, 49, 88, .16); animation: fade-in .15s ease;
 }
