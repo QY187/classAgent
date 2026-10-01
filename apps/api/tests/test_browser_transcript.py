@@ -22,15 +22,18 @@ from app.shared.models import Course, Lesson, LessonSummary, TranscriptRevision,
 
 class BrowserTranscriptUploadTest(unittest.TestCase):
     def setUp(self):
+        self.reindex_patcher = patch("app.infrastructure.tasks.reindex_lesson.delay")
+        self.reindex_patcher.start()
         self.engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
-        course = Course(name="测试课程")
+        course = Course(name="测试课程", owner_username="test")
         self.lesson = Lesson(course=course, title="测试课次")
         self.db.add(self.lesson)
         self.db.commit()
 
     def tearDown(self):
+        self.reindex_patcher.stop()
         self.db.close()
         self.engine.dispose()
 
@@ -43,7 +46,7 @@ class BrowserTranscriptUploadTest(unittest.TestCase):
         with patch("app.modules.lessons.service.upload_file"), patch(
             "app.infrastructure.tasks.generate_summary.delay"
         ) as summary_task, patch("app.infrastructure.tasks.process_audio.delay") as asr_task:
-            job = upload_audio(self.db, self.lesson.id, audio, transcript)
+            job = upload_audio(self.db, self.lesson.id, audio, transcript, "test")
         return job, summary_task, asr_task
 
     def test_browser_text_is_saved_without_audio_transcription_task(self):
@@ -90,14 +93,14 @@ class BrowserTranscriptUploadTest(unittest.TestCase):
         self.db.add_all([segment, summary])
         self.db.commit()
 
-        updated = update_transcript_segment(self.db, self.lesson.id, segment.id, "  正确词  ")
+        updated = update_transcript_segment(self.db, self.lesson.id, segment.id, "  正确词  ", "test")
 
         self.assertEqual((updated.text, updated.source), ("正确词", "manual"))
         revision = self.db.scalar(select(TranscriptRevision))
         self.assertEqual((revision.previous_text, revision.updated_text, revision.previous_source), ("错误词", "正确词", "paraformer"))
         self.assertEqual((summary.status, summary.content), ("stale", None))
 
-        update_transcript_segment(self.db, self.lesson.id, segment.id, "正确词")
+        update_transcript_segment(self.db, self.lesson.id, segment.id, "正确词", "test")
         self.assertEqual(len(self.db.scalars(select(TranscriptRevision)).all()), 1)
 
     def test_correct_transcript_rejects_blank_and_other_lesson(self):
@@ -106,10 +109,10 @@ class BrowserTranscriptUploadTest(unittest.TestCase):
         self.db.commit()
 
         with self.assertRaises(HTTPException) as blank:
-            update_transcript_segment(self.db, self.lesson.id, segment.id, "   ")
+            update_transcript_segment(self.db, self.lesson.id, segment.id, "   ", "test")
         self.assertEqual(blank.exception.status_code, 400)
         with self.assertRaises(HTTPException) as wrong_lesson:
-            update_transcript_segment(self.db, "another-lesson", segment.id, "新文字")
+            update_transcript_segment(self.db, "another-lesson", segment.id, "新文字", "test")
         self.assertEqual(wrong_lesson.exception.status_code, 404)
         self.assertEqual(segment.text, "原文")
 
@@ -117,7 +120,7 @@ class BrowserTranscriptUploadTest(unittest.TestCase):
         segment = TranscriptSegment(lesson_id=self.lesson.id, speaker="说话人 1", start_ms=0, end_ms=1000, text="原文")
         self.db.add(segment)
         self.db.commit()
-        update_transcript_segment(self.db, self.lesson.id, segment.id, "修正")
+        update_transcript_segment(self.db, self.lesson.id, segment.id, "修正", "test")
 
         self.upload(json.dumps([{"start_ms": 0, "end_ms": 1000, "text": "新录音"}]))
 

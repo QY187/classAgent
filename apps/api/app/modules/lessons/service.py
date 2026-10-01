@@ -7,7 +7,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ...shared.models import AudioFile, Lesson, LessonSummary, ProcessingJob, SpeakerAlias, TranscriptRevision, TranscriptSegment
+from ...shared.models import AudioFile, DocumentChunk, Lesson, LessonSummary, ProcessingJob, SpeakerAlias, TranscriptRevision, TranscriptSegment
 from ...infrastructure.storage import materialize_file, upload_file
 from . import mapper
 
@@ -42,6 +42,7 @@ def upload_audio(db: Session, lesson_id: str, file: UploadFile, browser_transcri
     audio = AudioFile(lesson_id=lesson_id, filename=file.filename or "audio", content_type=file.content_type, object_key=object_key, size_bytes=size_bytes)
     mapper.clear_transcript(db, lesson_id)
     db.execute(delete(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
+    db.execute(delete(DocumentChunk).where(DocumentChunk.lesson_id == lesson_id))
     for chunk in chunks:
         db.add(TranscriptSegment(lesson_id=lesson_id, speaker="说话人 1", start_ms=chunk["start_ms"], end_ms=chunk["end_ms"], text=chunk["text"], source="browser"))
     lesson.status = "completed" if chunks else "queued"
@@ -55,9 +56,10 @@ def upload_audio(db: Session, lesson_id: str, file: UploadFile, browser_transcri
         lesson,
     )
     if chunks:
-        from ...infrastructure.tasks import generate_summary
+        from ...infrastructure.tasks import generate_summary, reindex_lesson
 
         generate_summary.delay(lesson_id)
+        reindex_lesson.delay(lesson_id)
     else:
         from ...infrastructure.tasks import process_audio
 
@@ -112,7 +114,17 @@ def save_speakers(db: Session, lesson_id: str, aliases: dict[str, str], owner_us
 def merge_segments(db: Session, lesson_id: str, first_id: str, second_id: str, owner_username: str) -> TranscriptSegment:
     get_lesson(db, lesson_id, owner_username)
     try:
-        return mapper.merge_transcript_segments(db, lesson_id, first_id, second_id)
+        merged = mapper.merge_transcript_segments(db, lesson_id, first_id, second_id)
+        summary = db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
+        if summary is not None:
+            summary.status = "stale"
+            summary.content = None
+            summary.error_message = None
+        db.execute(delete(DocumentChunk).where(DocumentChunk.lesson_id == lesson_id))
+        db.commit()
+        from ...infrastructure.tasks import reindex_lesson
+        reindex_lesson.delay(lesson_id)
+        return merged
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -142,8 +154,11 @@ def update_transcript_segment(db: Session, lesson_id: str, segment_id: str, text
         summary.status = "stale"
         summary.content = None
         summary.error_message = None
+    db.execute(delete(DocumentChunk).where(DocumentChunk.lesson_id == lesson_id))
     db.commit()
     db.refresh(segment)
+    from ...infrastructure.tasks import reindex_lesson
+    reindex_lesson.delay(lesson_id)
     return segment
 
 

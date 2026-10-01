@@ -26,6 +26,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 def prepare_database() -> None:
+    with engine.begin() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(bind=engine)
     _backfill_course_owners()
     _seed_root_user()

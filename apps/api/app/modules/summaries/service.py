@@ -130,4 +130,6 @@ def update_summary_content(db: Session, lesson_id: str, content: str, owner_user
     summary.error_message = None
     db.commit()
     db.refresh(summary)
+    from ...infrastructure.tasks import reindex_lesson
+    reindex_lesson.delay(lesson_id)
     return summary

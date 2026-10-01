@@ -55,6 +55,7 @@ def process_audio(job_id: str, object_key: str) -> None:
         lesson.status = "completed"
         db.commit()
         generate_summary.delay(lesson.id)
+        reindex_lesson.delay(lesson.id)
     except Exception as exc:
         db.rollback()
         job = db.get(ProcessingJob, job_id)
@@ -112,6 +113,7 @@ def generate_summary(lesson_id: str) -> None:
             summary.content = None
             summary.status = "stale"
         db.commit()
+        reindex_lesson.delay(lesson_id)
     except Exception as exc:
         db.rollback()
         if summary is None:
@@ -128,3 +130,28 @@ def generate_summary(lesson_id: str) -> None:
 def _format_time(milliseconds: int) -> str:
     seconds = max(0, milliseconds) // 1000
     return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
+@celery_app.task(name="classagent.reindex_lesson")
+def reindex_lesson(lesson_id: str) -> int:
+    from ..core.db import SessionLocal
+    from ..modules.rag.indexing import reindex_lesson as rebuild
+
+    with SessionLocal() as db:
+        try:
+            return rebuild(db, lesson_id)
+        except Exception:
+            db.rollback()
+            raise
+
+
+@celery_app.task(name="classagent.reindex_course")
+def reindex_course(course_id: str) -> int:
+    from ..core.db import SessionLocal
+    from ..shared.models import Lesson
+
+    with SessionLocal() as db:
+        lesson_ids = list(db.scalars(select(Lesson.id).where(Lesson.course_id == course_id)))
+    for lesson_id in lesson_ids:
+        reindex_lesson.delay(lesson_id)
+    return len(lesson_ids)

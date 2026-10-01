@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     asr_max_wait_seconds: int = 1800
     dashscope_api_key: str = ""
     dashscope_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
+    embedding_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    embedding_model: str = "text-embedding-v2"
+    embedding_dim: int = 1536
     deepseek_api_key: str = ""
     summary_model: str = "deepseek-chat"
     summary_provider: str = "deepseek"

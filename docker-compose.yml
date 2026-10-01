@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: classagent
       POSTGRES_PASSWORD: classagent
@@ -39,6 +39,8 @@ services:
       ASR_POLL_INTERVAL_SECONDS: ${ASR_POLL_INTERVAL_SECONDS:-3}
       ASR_MAX_WAIT_SECONDS: ${ASR_MAX_WAIT_SECONDS:-1800}
       DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/api/v1}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v2}
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: classagent-audio
@@ -75,6 +77,8 @@ services:
       ASR_POLL_INTERVAL_SECONDS: ${ASR_POLL_INTERVAL_SECONDS:-3}
       ASR_MAX_WAIT_SECONDS: ${ASR_MAX_WAIT_SECONDS:-1800}
       DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/api/v1}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v2}
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: classagent-audio
