@@ -101,6 +101,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
             {courseMatch || lessonMatch ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
             {(courseMatch || (lessonMatch && lessonInfo)) && <><span className="breadcrumb-separator" aria-hidden="true">/</span>{lessonMatch && lessonInfo ? <Link className="breadcrumb-link" href={`/courses/${lessonInfo.course_id}`}>{activeCourseName || "我的课程"}</Link> : <span className="breadcrumb-current" aria-current="page">{activeCourseName || "我的课程"}</span>}</>}
             {lessonMatch && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">{lessonTitle || "我的课次"}</span></>}
+            {lessonMatch && pathname.endsWith("/summary") && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">智能纪要</span></>}
+            {lessonMatch && pathname.endsWith("/transcript") && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">文字记录</span></>}
           </nav>
           <div className="topbar-actions">
             <SearchBox />
