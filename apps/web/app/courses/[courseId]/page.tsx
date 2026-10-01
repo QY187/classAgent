@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { errorMessage, request } from "../../../lib/api";
 import CourseQa from "../../../components/CourseQa";
+import CourseMaterials from "../../../components/CourseMaterials";
 
 type Course = { id: string; name: string; semester?: string | null };
 type Lesson = { id: string; title: string; lesson_date?: string | null; status: string; created_at: string };
@@ -20,6 +21,9 @@ export default function CoursePage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingLessonId, setUploadingLessonId] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<{ lessonId: string; text: string; failed: boolean } | null>(null);
+  const [materialsRefreshKey, setMaterialsRefreshKey] = useState(0);
 
   async function load() {
     try {
@@ -44,6 +48,36 @@ export default function CoursePage() {
     finally { setSaving(false); }
   }
 
+  async function uploadMaterials(event: ChangeEvent<HTMLInputElement>, lesson: Lesson) {
+    const input = event.target;
+    const files = Array.from(input.files || []);
+    if (!files.length || uploadingLessonId) return;
+    setUploadingLessonId(lesson.id);
+    const failures: string[] = [];
+    let uploaded = 0;
+    try {
+      for (const [index, file] of files.entries()) {
+        setUploadStatus({ lessonId: lesson.id, text: `正在上传 ${index + 1}/${files.length}：${file.name}`, failed: false });
+        if (file.size === 0 || file.size > 25 * 1024 * 1024) {
+          failures.push(`${file.name}：文件须为非空且不超过 25 MB`);
+          continue;
+        }
+        try {
+          const body = new FormData();
+          body.append("file", file);
+          body.append("lesson_id", lesson.id);
+          await request(`/courses/${courseId}/materials`, { method: "POST", body, signal: AbortSignal.timeout(120000) });
+          uploaded += 1;
+        } catch (error) { failures.push(`${file.name}：${errorMessage(error)}`); }
+      }
+      if (uploaded) setMaterialsRefreshKey((key) => key + 1);
+      setUploadStatus({ lessonId: lesson.id, text: `已上传 ${uploaded} 份资料${failures.length ? `，失败 ${failures.length} 份：${failures.join("；")}` : ""}`, failed: failures.length > 0 });
+    } finally {
+      input.value = "";
+      setUploadingLessonId(null);
+    }
+  }
+
   if (loading) return <main className="content"><p role="status">正在加载课程…</p></main>;
   if (!course) return <main className="content"><div className="empty-state"><div className="empty-icon">▱</div><strong>{message || "课程不存在"}</strong><p>这门课程可能已被删除，回到课程库看看其他课程。</p><Link className="button button-secondary" href="/">返回课程库</Link></div></main>;
 
@@ -59,10 +93,19 @@ export default function CoursePage() {
     </section>
     {message && <div className="notice" style={{ marginBottom: 16 }}>{message}</div>}
     <CourseQa courseId={courseId} />
+    <CourseMaterials courseId={courseId} lessons={lessons} refreshKey={materialsRefreshKey} />
     <section className="panel">
       <div className="panel-header"><h2>课次记录</h2><span>{lessons.length} 节课</span></div>
       <div className="panel-body">
-        {lessons.length === 0 ? <div className="empty-state"><div className="empty-icon">◷</div><strong>还没有课次</strong><p>创建课次后上传录音，开始建立这门课的资料库。</p><button className="button button-primary" onClick={() => setShowModal(true)}>创建第一节课</button></div> : <div className="lesson-list">{lessons.map((lesson, index) => <Link className="lesson-row" href={`/lessons/${lesson.id}`} key={lesson.id}><span className="lesson-index">{String(index + 1).padStart(2, "0")}</span><span className="lesson-main"><span className="lesson-title">{lesson.title}</span><span className="lesson-date">{lesson.lesson_date || "未设置日期"}</span></span><span className={`pill pill-${lesson.status}`}>{statusLabel[lesson.status] || lesson.status}</span><span className="lesson-go" aria-hidden="true">→</span></Link>)}</div>}
+        {lessons.length === 0 ? <div className="empty-state"><div className="empty-icon">◷</div><strong>还没有课次</strong><p>创建课次后上传录音，开始建立这门课的资料库。</p><button className="button button-primary" onClick={() => setShowModal(true)}>创建第一节课</button></div> : <div className="lesson-list">{lessons.map((lesson, index) => <div className="lesson-row" key={lesson.id}>
+          <Link className="lesson-row-link" href={`/lessons/${lesson.id}`}><span className="lesson-index">{String(index + 1).padStart(2, "0")}</span><span className="lesson-main"><span className="lesson-title">{lesson.title}</span><span className="lesson-date">{lesson.lesson_date || "未设置日期"}</span></span></Link>
+          <div className="lesson-row-actions">
+            <label className={`button button-secondary lesson-upload${uploadingLessonId ? " is-disabled" : ""}`} role="button" tabIndex={uploadingLessonId ? -1 : 0} aria-label={`为${lesson.title}上传资料`} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } }}><input className="upload-input" type="file" multiple accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg,.webp,.txt,.md" onChange={(event) => uploadMaterials(event, lesson)} disabled={Boolean(uploadingLessonId)} />{uploadingLessonId === lesson.id ? "上传中…" : "＋ 上传资料"}</label>
+            <span className={`pill pill-${lesson.status}`}>{statusLabel[lesson.status] || lesson.status}</span>
+            <Link className="lesson-go" href={`/lessons/${lesson.id}`} aria-label={`进入${lesson.title}`}>→</Link>
+          </div>
+          {uploadStatus?.lessonId === lesson.id && <div className={`lesson-upload-status${uploadStatus.failed ? " is-error" : ""}`} role="status">{uploadStatus.text}</div>}
+        </div>)}</div>}
       </div>
     </section>
     {showModal && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowModal(false); }}><form className="modal" role="dialog" aria-modal="true" aria-label="创建资料" onKeyDown={(event) => { if (event.key === "Escape" && !saving) setShowModal(false); }} onSubmit={createLesson}><h2>新建课次</h2>{message && <p role="alert" className="notice">{message}</p>}<div className="form-grid"><label className="field-label">课次标题<input className="field" required maxLength={200} autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：第 1 讲：二叉树" /></label><label className="field-label">上课日期<input className="field" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label></div><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setShowModal(false)}>取消</button><button className="button button-primary" type="submit" disabled={saving}>{saving ? "创建中…" : "创建课次"}</button></div></form></div>}

@@ -68,6 +68,19 @@ class AudioMeta(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CourseMaterialRead(BaseModel):
+    id: str
+    course_id: str
+    lesson_id: str | None
+    filename: str
+    content_type: str
+    source: str
+    status: str
+    size_bytes: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SummaryRead(BaseModel):
     id: str
     lesson_id: str

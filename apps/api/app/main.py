@@ -14,6 +14,7 @@ from .modules.summaries.controller import router as summaries_router
 from .shared.models import User
 from .modules.rag.controller import router as rag_router
 from .modules.review_cards.controller import router as review_cards_router
+from .modules.materials.controller import router as materials_router
 
 
 app = FastAPI(title="ClassAgent API", version="0.1.0")
@@ -32,6 +33,7 @@ def prepare_database() -> None:
         connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     _prepare_course_owner_columns()
     _prepare_user_avatar_column()
+    _prepare_course_material_columns()
     Base.metadata.create_all(bind=engine)
     _seed_root_user()
     _backfill_course_owner_ids()
@@ -56,6 +58,18 @@ def _prepare_user_avatar_column() -> None:
     if inspector.has_table("users") and "avatar_content_type" not in {column["name"] for column in inspector.get_columns("users")}:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE users ADD COLUMN avatar_content_type VARCHAR(32)"))
+
+
+def _prepare_course_material_columns() -> None:
+    inspector = inspect(engine)
+    if not inspector.has_table("course_materials"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("course_materials")}
+    with engine.begin() as connection:
+        if "source" not in columns:
+            connection.execute(text("ALTER TABLE course_materials ADD COLUMN source VARCHAR(30) NOT NULL DEFAULT 'external'"))
+        if "status" not in columns:
+            connection.execute(text("ALTER TABLE course_materials ADD COLUMN status VARCHAR(30) NOT NULL DEFAULT 'stored'"))
 
 
 def _backfill_course_owner_ids() -> None:
@@ -93,3 +107,4 @@ app.include_router(search_router)
 app.include_router(summaries_router)
 app.include_router(rag_router)
 app.include_router(review_cards_router)
+app.include_router(materials_router)

@@ -67,6 +67,21 @@ class AudioFile(Base):
     lesson: Mapped[Lesson] = relationship(back_populates="audio_files")
 
 
+class CourseMaterial(Base):
+    __tablename__ = "course_materials"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
+    lesson_id: Mapped[str | None] = mapped_column(ForeignKey("lessons.id", ondelete="SET NULL"), nullable=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(100))
+    source: Mapped[str] = mapped_column(String(30), default="external")
+    status: Mapped[str] = mapped_column(String(30), default="stored")
+    object_key: Mapped[str] = mapped_column(String(500), unique=True)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
