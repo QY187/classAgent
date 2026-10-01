@@ -30,7 +30,12 @@ export default function TranscriptPage() {
     try {
       const nextLesson = await request<Lesson>(`/lessons/${lessonId}`);
       setLesson(nextLesson);
-      try { setSegments(await request<Segment[]>(`/lessons/${lessonId}/transcript`)); } catch { setSegments([]); }
+      try {
+        const transcript = await request<Segment[]>(`/lessons/${lessonId}/transcript`);
+        setSegments(transcript);
+        const target = Number(new URLSearchParams(window.location.search).get("t"));
+        if (window.location.search.includes("t=") && Number.isFinite(target) && target >= 0) seekTo(target);
+      } catch { setSegments([]); }
       try { setJob(await request<Job>(`/lessons/${lessonId}/jobs/latest`)); } catch { setJob(null); }
       try { setSpeakers(await request<{ raw_label: string; display_name: string }[]>(`/lessons/${lessonId}/speakers`)); } catch { setSpeakers([]); }
       try { setAudioMeta(await request<{ id: string; filename: string; content_type: string; size_bytes: number }>(`/lessons/${lessonId}/audio/meta`)); } catch { setAudioMeta(null); }

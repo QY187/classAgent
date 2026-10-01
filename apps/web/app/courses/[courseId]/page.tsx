@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { errorMessage, request } from "../../../lib/api";
+import CourseQa from "../../../components/CourseQa";
 
 type Course = { id: string; name: string; semester?: string | null };
 type Lesson = { id: string; title: string; lesson_date?: string | null; status: string; created_at: string };
@@ -57,6 +58,7 @@ export default function CoursePage() {
       <div className="page-hero-actions"><button className="button button-primary" onClick={() => setShowModal(true)}>＋ 新建课次</button></div>
     </section>
     {message && <div className="notice" style={{ marginBottom: 16 }}>{message}</div>}
+    <CourseQa courseId={courseId} />
     <section className="panel">
       <div className="panel-header"><h2>课次记录</h2><span>{lessons.length} 节课</span></div>
       <div className="panel-body">

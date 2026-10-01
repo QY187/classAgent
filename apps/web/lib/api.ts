@@ -30,7 +30,7 @@ async function fetchWithToken(path: string, options: RequestInit | undefined, to
   return fetch(`${apiUrl}${path}`, {
     ...options,
     headers,
-    signal: options?.signal ?? AbortSignal.timeout(15000),
+    signal: options?.signal ?? AbortSignal.timeout(path.endsWith("/ask") ? 130000 : 15000),
   });
 }
 
