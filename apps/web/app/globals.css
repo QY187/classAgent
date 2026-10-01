@@ -184,10 +184,9 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 22px; border-bottom: 1px solid #edf0f5; }
 .panel-header > span { color: var(--muted); font-size: 12px; }
 .panel-body { padding: 22px; }
-.course-materials { margin-bottom: 20px; }
-.material-subtitle { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
-.material-hint, .material-muted { color: var(--muted); font-size: 12px; }
-.material-hint { margin: 0; }
+.lesson-materials { flex-basis: 100%; min-width: 0; margin-top: 2px; padding: 16px 0 2px 50px; border-top: 1px solid #edf0f6; }
+.lesson-materials-heading { display: flex; align-items: center; gap: 10px; color: var(--ink); font-size: 13px; }
+.lesson-materials-heading span, .material-muted { color: var(--muted); font-size: 12px; }
 .material-empty { margin-top: 18px; padding: 25px; border: 1px dashed #dce3f3; border-radius: 14px; color: var(--muted); text-align: center; font-size: 13px; }
 .material-list { display: grid; gap: 8px; margin-top: 18px; }
 .material-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #edf0f6; border-radius: 12px; }
@@ -315,6 +314,8 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .lesson-row-link { display: flex; align-items: center; gap: 16px; flex: 0 1 38%; min-width: 0; }
 .lesson-row-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: 1; min-width: 0; }
 .lesson-upload { padding: 8px 12px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.lesson-view-materials { padding: 8px 12px; font-size: 12px; white-space: nowrap; }
+.lesson-view-materials[aria-expanded="true"] { border-color: #c3ceff; color: var(--blue); background: #f6f7ff; }
 .lesson-upload.is-disabled { opacity: .6; cursor: wait; }
 .lesson-upload-status { flex-basis: 100%; padding-left: 50px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .lesson-upload-status.is-error { color: #bd4545; }
@@ -661,6 +662,7 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
   .lesson-row-link { flex: 1 0 100%; }
   .lesson-row-actions { flex-basis: 100%; justify-content: flex-start; padding-left: 50px; }
   .lesson-upload-status { padding-left: 50px; }
+  .lesson-materials { padding-left: 0; }
   .material-row { flex-wrap: wrap; }
   .material-actions { width: 100%; padding-left: 48px; }
 }
