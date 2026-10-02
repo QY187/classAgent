@@ -1,3 +1,4 @@
+from ...core.visibility import visible_get
 import json
 import os
 from pathlib import Path
@@ -132,7 +133,7 @@ def merge_segments(db: Session, lesson_id: str, first_id: str, second_id: str, o
 
 def update_transcript_segment(db: Session, lesson_id: str, segment_id: str, text: str, owner_username: str) -> TranscriptSegment:
     get_lesson(db, lesson_id, owner_username)
-    segment = db.get(TranscriptSegment, segment_id)
+    segment = visible_get(db, TranscriptSegment, segment_id)
     if segment is None or segment.lesson_id != lesson_id:
         raise HTTPException(status_code=404, detail="文字片段不存在")
 

@@ -1,3 +1,4 @@
+from ...core.visibility import visible_get
 import json
 
 import httpx
@@ -13,14 +14,14 @@ from .schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit, WrongQuestion
 
 
 def _owned_course(db: Session, course_id: str, username: str) -> Course:
-    course = db.get(Course, course_id)
+    course = visible_get(db, Course, course_id)
     if course is None or course.owner_id != user_id_for_username(db, username):
         raise HTTPException(status_code=404, detail="课程不存在")
     return course
 
 
 def _owned_quiz(db: Session, quiz_id: str, username: str) -> Quiz:
-    quiz = db.get(Quiz, quiz_id)
+    quiz = visible_get(db, Quiz, quiz_id)
     if quiz is None:
         raise HTTPException(status_code=404, detail="小测不存在")
     _owned_course(db, quiz.course_id, username)
@@ -111,7 +112,7 @@ def serialize_quiz(quiz: Quiz, reveal_answers: bool = False) -> dict:
 
 def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: str) -> dict:
     course = _owned_course(db, course_id, username)
-    lesson = db.get(Lesson, payload.lesson_id) if payload.lesson_id else None
+    lesson = visible_get(db, Lesson, payload.lesson_id) if payload.lesson_id else None
     if payload.lesson_id and (lesson is None or lesson.course_id != course_id):
         raise HTTPException(status_code=400, detail="所选课次不属于当前课程")
     segments = [segment for segment in _source_segments(db, course_id, payload.lesson_id) if segment.text.strip()]
@@ -178,7 +179,7 @@ def publish_quiz(db: Session, quiz_id: str, username: str) -> dict:
 
 
 def serialize_attempt(db: Session, attempt: QuizAttempt) -> dict:
-    quiz = db.get(Quiz, attempt.quiz_id)
+    quiz = visible_get(db, Quiz, attempt.quiz_id)
     selected = {answer.question_id: answer for answer in attempt.answers}
     return {
         "id": attempt.id, "quiz_id": attempt.quiz_id, "course_id": quiz.course_id,
@@ -228,7 +229,7 @@ def list_attempts(db: Session, quiz_id: str, username: str) -> list[dict]:
 
 
 def get_attempt(db: Session, attempt_id: str, username: str) -> dict:
-    attempt = db.get(QuizAttempt, attempt_id)
+    attempt = visible_get(db, QuizAttempt, attempt_id)
     if attempt is None or attempt.user_id != user_id_for_username(db, username):
         raise HTTPException(status_code=404, detail="答题记录不存在")
     _owned_quiz(db, attempt.quiz_id, username)
@@ -236,12 +237,12 @@ def get_attempt(db: Session, attempt_id: str, username: str) -> dict:
 
 
 def add_wrong_answer_to_review(db: Session, attempt_id: str, question_id: str, username: str) -> dict:
-    attempt = db.get(QuizAttempt, attempt_id)
+    attempt = visible_get(db, QuizAttempt, attempt_id)
     if attempt is None or attempt.user_id != user_id_for_username(db, username):
         raise HTTPException(status_code=404, detail="答题记录不存在")
     quiz = _owned_quiz(db, attempt.quiz_id, username)
     answer = db.scalar(select(QuizAnswer).where(QuizAnswer.attempt_id == attempt_id, QuizAnswer.question_id == question_id))
-    question = db.get(QuizQuestion, question_id)
+    question = visible_get(db, QuizQuestion, question_id)
     if answer is None or question is None or answer.is_correct or question.quiz_id != quiz.id:
         raise HTTPException(status_code=400, detail="只能将本次答错的题目加入知识点")
     if not question.source_lesson_id or not question.source_segment_id:
@@ -319,7 +320,7 @@ def list_wrong_questions(db: Session, username: str, course_id: str | None = Non
 
 
 def retry_wrong_question(db: Session, question_id: str, payload: WrongQuestionRetry, username: str) -> dict:
-    question = db.get(QuizQuestion, question_id)
+    question = visible_get(db, QuizQuestion, question_id)
     if question is None:
         raise HTTPException(status_code=404, detail="错题不存在")
     _owned_quiz(db, question.quiz_id, username)

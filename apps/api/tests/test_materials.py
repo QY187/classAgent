@@ -61,11 +61,11 @@ class CourseMaterialsTest(unittest.TestCase):
                 self.assertEqual(denied.exception.status_code, 404)
                 storage.assert_not_called()
 
-    def test_delete_checks_owner_and_removes_file_and_record(self):
+    def test_delete_checks_owner_and_preserves_file_and_record(self):
         with Session(self.engine) as db, patch("app.modules.materials.service.upload_file"):
             material = upload_material(db, "c1", "l1", UploadFile(filename="讲义.pdf", file=BytesIO(b"%PDF-example")), "owner")
             material_id, object_key = material.id, material.object_key
-            with patch("app.modules.materials.service.delete_file") as storage:
+            with patch("app.infrastructure.storage.delete_file") as storage:
                 with self.assertRaises(HTTPException) as denied:
                     delete_material(db, "c1", material_id, "other")
                 self.assertEqual(denied.exception.status_code, 404)
@@ -73,7 +73,8 @@ class CourseMaterialsTest(unittest.TestCase):
                 self.assertIsNotNone(db.get(CourseMaterial, material_id))
 
                 delete_material(db, "c1", material_id, "owner")
-                storage.assert_called_once_with(object_key)
+                storage.assert_not_called()
+                self.assertIsNotNone(db.scalar(select(CourseMaterial).where(CourseMaterial.id == material_id).execution_options(include_deleted=True)))
                 self.assertIsNone(db.get(CourseMaterial, material_id))
                 with self.assertRaises(HTTPException) as missing:
                     delete_material(db, "c1", material_id, "owner")

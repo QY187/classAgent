@@ -1,3 +1,4 @@
+from ..core.visibility import visible_get
 from celery import Celery
 from sqlalchemy import select
 from pathlib import Path
@@ -19,10 +20,10 @@ def process_audio(job_id: str, object_key: str) -> None:
 
     db = SessionLocal()
     try:
-        job = db.get(ProcessingJob, job_id)
+        job = visible_get(db, ProcessingJob, job_id)
         if job is None:
             return
-        lesson = db.get(Lesson, job.lesson_id)
+        lesson = visible_get(db, Lesson, job.lesson_id)
         if lesson is None:
             raise RuntimeError("找不到对应课次")
         job.stage = "transcribing"
@@ -58,11 +59,11 @@ def process_audio(job_id: str, object_key: str) -> None:
         reindex_lesson.delay(lesson.id)
     except Exception as exc:
         db.rollback()
-        job = db.get(ProcessingJob, job_id)
+        job = visible_get(db, ProcessingJob, job_id)
         if job is not None:
             job.stage = "failed"
             job.error_message = str(exc)
-            lesson = db.get(Lesson, job.lesson_id)
+            lesson = visible_get(db, Lesson, job.lesson_id)
             if lesson is not None:
                 lesson.status = "failed"
             db.commit()
@@ -79,7 +80,7 @@ def generate_summary(lesson_id: str) -> None:
     db = SessionLocal()
     summary = None
     try:
-        lesson = db.get(Lesson, lesson_id)
+        lesson = visible_get(db, Lesson, lesson_id)
         if lesson is None:
             return
         summary = db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson_id))

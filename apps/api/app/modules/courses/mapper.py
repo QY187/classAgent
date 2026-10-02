@@ -1,3 +1,4 @@
+from ...core.visibility import visible_get
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,7 +13,7 @@ def save_course(db: Session, course: Course) -> Course:
 
 
 def find_course(db: Session, course_id: str) -> Course | None:
-    return db.get(Course, course_id)
+    return visible_get(db, Course, course_id)
 
 
 def find_courses(db: Session, owner_id: str) -> list[Course]:

@@ -21,3 +21,6 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
+
+# 注册可见性规则，API 和后台任务共用；模型在查询时再加载，避免循环导入。
+from . import visibility  # noqa: E402,F401

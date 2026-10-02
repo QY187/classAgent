@@ -1,3 +1,4 @@
+from ...core.visibility import visible_get
 import hashlib
 import json
 
@@ -11,14 +12,14 @@ from .schemas import CardCreate, CardReview, CardUpdate
 
 
 def _owned_lesson(db: Session, lesson_id: str, username: str) -> Lesson:
-    lesson = db.get(Lesson, lesson_id)
+    lesson = visible_get(db, Lesson, lesson_id)
     if lesson is None or lesson.course.owner_id != user_id_for_username(db, username):
         raise HTTPException(status_code=404, detail="课次不存在")
     return lesson
 
 
 def _owned_card(db: Session, card_id: str, username: str) -> ReviewCard:
-    card = db.get(ReviewCard, card_id)
+    card = visible_get(db, ReviewCard, card_id)
     if card is None or card.lesson.course.owner_id != user_id_for_username(db, username):
         raise HTTPException(status_code=404, detail="复习卡片不存在")
     return card
@@ -63,7 +64,7 @@ def create_card(db: Session, lesson_id: str, payload: CardCreate, username: str)
     lesson = _owned_lesson(db, lesson_id, username)
     segment = None
     if payload.source_segment_id:
-        segment = db.get(TranscriptSegment, payload.source_segment_id)
+        segment = visible_get(db, TranscriptSegment, payload.source_segment_id)
         if segment is None or segment.lesson_id != lesson_id:
             raise HTTPException(status_code=400, detail="来源片段不属于该课次")
     card = ReviewCard(

@@ -1,3 +1,4 @@
+from ...core.visibility import visible_get
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -5,7 +6,7 @@ from ...shared.models import AudioFile, Lesson, ProcessingJob, SpeakerAlias, Tra
 
 
 def find_lesson(db: Session, lesson_id: str) -> Lesson | None:
-    return db.get(Lesson, lesson_id)
+    return visible_get(db, Lesson, lesson_id)
 
 
 def clear_transcript(db: Session, lesson_id: str) -> None:
@@ -46,8 +47,8 @@ def replace_speaker_aliases(db: Session, lesson_id: str, aliases: dict[str, str]
 
 
 def merge_transcript_segments(db: Session, lesson_id: str, first_id: str, second_id: str) -> TranscriptSegment:
-    first = db.get(TranscriptSegment, first_id)
-    second = db.get(TranscriptSegment, second_id)
+    first = visible_get(db, TranscriptSegment, first_id)
+    second = visible_get(db, TranscriptSegment, second_id)
     if first is None or second is None or first.lesson_id != lesson_id or second.lesson_id != lesson_id:
         raise ValueError("文字片段不存在或不属于该课次")
     ordered = sorted([first, second], key=lambda segment: segment.start_ms)

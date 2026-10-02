@@ -1,10 +1,11 @@
+from ...core.visibility import visible_get
 from fastapi import HTTPException
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
-from ...infrastructure.storage import delete_file
-from ...shared.models import AudioFile, Course, CourseMaterial, Lesson, LessonSummary, Quiz, QuizAnswer, QuizAttempt, ReviewCard, TranscriptSegment
+from ..recycle_bin.service import move_to_bin
+from ...shared.models import Course, Lesson, LessonSummary, Quiz, QuizAnswer, QuizAttempt, ReviewCard, TranscriptSegment
 from ...shared.schemas import CourseCreate, CourseUpdate, LessonCreate, LessonUpdate
 from . import mapper
 
@@ -135,7 +136,7 @@ def list_lessons(db: Session, course_id: str, owner_username: str) -> list[Lesso
 
 
 def update_lesson(db: Session, lesson_id: str, payload: LessonUpdate, owner_username: str) -> Lesson:
-    lesson = db.get(Lesson, lesson_id)
+    lesson = visible_get(db, Lesson, lesson_id)
     if lesson is None:
         raise HTTPException(status_code=404, detail="课次不存在")
     course = mapper.find_course(db, lesson.course_id)
@@ -151,38 +152,9 @@ def update_lesson(db: Session, lesson_id: str, payload: LessonUpdate, owner_user
     return lesson
 
 
-def _check_deletable(db: Session, lesson_ids: list[str]) -> None:
-    if not lesson_ids:
-        return
-    active_lesson = db.scalar(select(Lesson.id).where(Lesson.id.in_(lesson_ids), Lesson.status == "transcribing").limit(1))
-    active_summary = db.scalar(select(LessonSummary.id).where(LessonSummary.lesson_id.in_(lesson_ids), LessonSummary.status == "generating").limit(1))
-    if active_lesson or active_summary:
-        raise HTTPException(status_code=409, detail="有课次正在转写或生成纪要，请处理完成后再删除")
-
-
 def delete_lesson(db: Session, lesson_id: str, owner_username: str) -> None:
-    lesson = db.get(Lesson, lesson_id)
-    if lesson is None or lesson.course.owner_id != user_id_for_username(db, owner_username):
-        raise HTTPException(status_code=404, detail="课次不存在")
-    _check_deletable(db, [lesson_id])
-    keys = list(db.scalars(select(AudioFile.object_key).where(AudioFile.lesson_id == lesson_id)))
-    keys += list(db.scalars(select(CourseMaterial.object_key).where(CourseMaterial.lesson_id == lesson_id)))
-    for key in keys:
-        delete_file(key)
-    db.execute(delete(CourseMaterial).where(CourseMaterial.lesson_id == lesson_id))
-    db.delete(lesson)
-    db.commit()
+    move_to_bin(db, "lesson", lesson_id, owner_username)
 
 
 def delete_course(db: Session, course_id: str, owner_username: str) -> None:
-    course = db.get(Course, course_id)
-    if course is None or course.owner_id != user_id_for_username(db, owner_username):
-        raise HTTPException(status_code=404, detail="课程不存在")
-    lesson_ids = list(db.scalars(select(Lesson.id).where(Lesson.course_id == course_id)))
-    _check_deletable(db, lesson_ids)
-    keys = list(db.scalars(select(AudioFile.object_key).where(AudioFile.lesson_id.in_(lesson_ids)))) if lesson_ids else []
-    keys += list(db.scalars(select(CourseMaterial.object_key).where(CourseMaterial.course_id == course_id)))
-    for key in keys:
-        delete_file(key)
-    db.delete(course)
-    db.commit()
+    move_to_bin(db, "course", course_id, owner_username)

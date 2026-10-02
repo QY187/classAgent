@@ -1,3 +1,4 @@
+from ...core.visibility import visible_get
 import json
 
 from sqlalchemy import delete, select, text
@@ -70,7 +71,7 @@ def make_chunks(segments: list[TranscriptSegment], summary_content: str | None =
 
 
 def reindex_lesson(db: Session, lesson_id: str) -> int:
-    lesson = db.get(Lesson, lesson_id)
+    lesson = visible_get(db, Lesson, lesson_id)
     if lesson is None:
         return 0
     # 同一课次的重复任务顺序执行，防止旧任务覆盖新索引。

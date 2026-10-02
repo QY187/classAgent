@@ -34,6 +34,7 @@ class Course(Base):
     owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(200))
     semester: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     lessons: Mapped[list["Lesson"]] = relationship(back_populates="course", cascade="all, delete-orphan")
 
@@ -47,6 +48,7 @@ class Lesson(Base):
     lesson_date: Mapped[str | None] = mapped_column(String(30), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="created")
     sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     course: Mapped[Course] = relationship(back_populates="lessons")
     audio_files: Mapped[list["AudioFile"]] = relationship(back_populates="lesson", cascade="all, delete-orphan")
@@ -80,6 +82,7 @@ class CourseMaterial(Base):
     status: Mapped[str] = mapped_column(String(30), default="stored")
     object_key: Mapped[str] = mapped_column(String(500), unique=True)
     size_bytes: Mapped[int] = mapped_column(Integer)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 

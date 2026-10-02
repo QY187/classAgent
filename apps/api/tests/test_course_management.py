@@ -1,7 +1,7 @@
 import unittest
 
 from fastapi import HTTPException
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 from unittest.mock import patch
 
@@ -74,7 +74,7 @@ class CourseManagementTest(unittest.TestCase):
             self.assertEqual(db.get(Course, "c1").name, "旧课程")
             self.assertEqual(db.get(Lesson, "l1").title, "旧课次")
 
-    def test_delete_lesson_removes_its_content_and_files(self):
+    def test_delete_lesson_hides_content_and_preserves_files(self):
         with Session(self.engine) as db:
             db.add_all([
                 AudioFile(id="a1", lesson_id="l1", filename="课堂.mp3", content_type="audio/mpeg", object_key="lessons/l1/a1.mp3", size_bytes=4),
@@ -84,23 +84,24 @@ class CourseManagementTest(unittest.TestCase):
                 ReviewCard(id="r1", course_id="c1", lesson_id="l1", title="概念", body="内容"),
             ])
             db.commit()
-            with patch("app.modules.courses.service.delete_file") as storage:
+            with patch("app.infrastructure.storage.delete_file") as storage:
                 with self.assertRaises(HTTPException) as denied:
                     delete_lesson(db, "l1", "other")
                 self.assertEqual(denied.exception.status_code, 404)
                 storage.assert_not_called()
                 delete_lesson(db, "l1", "owner")
-                self.assertEqual({call.args[0] for call in storage.call_args_list}, {"lessons/l1/a1.mp3", "materials/c1/m1.pdf"})
+                storage.assert_not_called()
             for model, row_id in ((Lesson, "l1"), (AudioFile, "a1"), (CourseMaterial, "m1"),
                                   (TranscriptSegment, "s1"), (LessonSummary, "sum1"), (ReviewCard, "r1")):
-                self.assertIsNone(db.get(model, row_id))
+                self.assertIsNone(db.scalar(select(model).where(model.id == row_id)))
+                self.assertIsNotNone(db.scalar(select(model).where(model.id == row_id).execution_options(include_deleted=True)))
             self.assertIsNotNone(db.get(Course, "c1"))
 
-    def test_delete_course_removes_lessons_and_rejects_active_processing(self):
+    def test_delete_course_hides_lessons_and_rejects_active_processing(self):
         with Session(self.engine) as db:
             db.add(CourseMaterial(id="m2", course_id="c1", lesson_id=None, filename="资料.pdf", content_type="application/pdf", object_key="materials/c1/m2.pdf", size_bytes=4))
             db.commit()
-            with patch("app.modules.courses.service.delete_file") as storage:
+            with patch("app.infrastructure.storage.delete_file") as storage:
                 with self.assertRaises(HTTPException) as denied:
                     delete_course(db, "c1", "other")
                 self.assertEqual(denied.exception.status_code, 404)
@@ -114,20 +115,19 @@ class CourseManagementTest(unittest.TestCase):
                 lesson.status = "completed"
                 db.commit()
                 delete_course(db, "c1", "owner")
-                storage.assert_called_once_with("materials/c1/m2.pdf")
+                storage.assert_not_called()
             self.assertIsNone(db.get(Course, "c1"))
             self.assertIsNone(db.get(Lesson, "l1"))
             self.assertIsNone(db.get(CourseMaterial, "m2"))
 
-    def test_storage_failure_keeps_course_record_for_retry(self):
+    def test_move_to_bin_does_not_depend_on_storage(self):
         with Session(self.engine) as db:
             db.add(CourseMaterial(id="m3", course_id="c1", filename="资料.pdf", content_type="application/pdf", object_key="materials/c1/m3.pdf", size_bytes=4))
             db.commit()
-            with patch("app.modules.courses.service.delete_file", side_effect=OSError("storage unavailable")):
-                with self.assertRaises(OSError):
-                    delete_course(db, "c1", "owner")
-            self.assertIsNotNone(db.get(Course, "c1"))
-            self.assertIsNotNone(db.get(CourseMaterial, "m3"))
+            with patch("app.infrastructure.storage.delete_file", side_effect=OSError("storage unavailable")):
+                delete_course(db, "c1", "owner")
+            self.assertIsNotNone(db.scalar(select(Course).execution_options(include_deleted=True)))
+            self.assertIsNotNone(db.scalar(select(CourseMaterial).execution_options(include_deleted=True)))
 
 
 if __name__ == "__main__":

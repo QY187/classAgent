@@ -16,6 +16,7 @@ from .modules.rag.controller import router as rag_router
 from .modules.review_cards.controller import router as review_cards_router
 from .modules.materials.controller import router as materials_router
 from .modules.quizzes.controller import router as quizzes_router
+from .modules.recycle_bin.migrations import prepare_deleted_columns
 
 
 app = FastAPI(title="ClassAgent API", version="0.1.0")
@@ -36,6 +37,7 @@ def prepare_database() -> None:
     _prepare_user_avatar_column()
     _prepare_course_material_columns()
     _prepare_lesson_sort_column()
+    prepare_deleted_columns(engine)
     Base.metadata.create_all(bind=engine)
     _seed_root_user()
     _backfill_course_owner_ids()

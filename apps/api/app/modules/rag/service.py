@@ -1,3 +1,4 @@
+from ...core.visibility import visible_get
 import json
 import re
 
@@ -13,7 +14,7 @@ from ...shared.models import Course, DocumentChunk, Lesson
 
 
 def owned_course(db: Session, course_id: str, username: str) -> Course:
-    course = db.get(Course, course_id)
+    course = visible_get(db, Course, course_id)
     if course is None or course.owner_id != user_id_for_username(db, username):
         raise HTTPException(status_code=404, detail="课程不存在")
     return course
