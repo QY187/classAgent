@@ -9,12 +9,12 @@ def ensure_idle(db: Session, lesson_ids: list[str]):
     if not lesson_ids:
         return
     options = {"include_deleted": True}
-    processing = db.scalar(select(Lesson.id).where(Lesson.id.in_(lesson_ids), Lesson.status == "transcribing")
+    processing = db.scalar(select(Lesson.id).where(Lesson.id.in_(lesson_ids), Lesson.status.in_(("queued", "transcribing")))
                            .execution_options(**options).limit(1))
-    summary = db.scalar(select(LessonSummary.id).where(LessonSummary.lesson_id.in_(lesson_ids), LessonSummary.status == "generating")
+    summary = db.scalar(select(LessonSummary.id).where(LessonSummary.lesson_id.in_(lesson_ids), LessonSummary.status.in_(("queued", "generating")))
                         .execution_options(**options).limit(1))
     if processing or summary:
-        raise HTTPException(status_code=409, detail="有课次正在转写或生成纪要，请处理完成后再删除")
+        raise HTTPException(status_code=409, detail="有课次正在排队、转写或生成纪要，请处理完成后再删除")
 
 
 def move_to_bin(db: Session, kind: str, identity: str, username: str):

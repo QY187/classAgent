@@ -9,10 +9,21 @@ from app.modules.recycle_bin.mapper import raw_get
 from app.modules.recycle_bin.file_cleanup import clean_pending_files
 from unittest.mock import patch
 from app.core.visibility import visible_get
-from app.shared.models import AudioFile, Course, CourseMaterial, Lesson, Quiz, QuizQuestion, User
+from app.shared.models import AudioFile, Course, CourseMaterial, Lesson, LessonSummary, Quiz, QuizQuestion, User
 
 
 class RecycleBinTest(RecycleVisibilityTest):
+    def test_queued_processing_cannot_be_recycled_and_lost(self):
+        with Session(self.engine) as db:
+            for model, identity, status in [(Lesson, "l", "queued"), (LessonSummary, "sum", "queued")]:
+                item = visible_get(db, model, identity)
+                old_status = item.status
+                item.status = status; db.commit()
+                with self.assertRaises(HTTPException) as blocked:
+                    move_to_bin(db, "course", "c", "owner")
+                self.assertEqual(blocked.exception.status_code, 409); db.rollback()
+                item.status = old_status; db.commit()
+            self.assertIsNotNone(visible_get(db, Course, "c"))
     def test_purge_deletes_descendants_and_preserves_other_courses(self):
         with Session(self.engine) as db:
             db.add(Course(id="keep", owner_id="u", name="保留")); db.commit()

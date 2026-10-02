@@ -21,7 +21,7 @@ class RecycleVisibilityTest(unittest.TestCase):
                 TranscriptSegment(id="s", lesson_id="l", start_ms=0, end_ms=1, text="原文"),
                 AudioFile(id="a", lesson_id="l", filename="a.mp3", content_type="audio/mpeg", object_key="a.mp3", size_bytes=1),
                 CourseMaterial(id="m", course_id="c", lesson_id="l", filename="m.pdf", content_type="application/pdf", object_key="m.pdf", size_bytes=1),
-                LessonSummary(id="sum", lesson_id="l", content="纪要"),
+                LessonSummary(id="sum", lesson_id="l", content="纪要", status="completed"),
                 ReviewCard(id="r", lesson_id="l", course_id="c", title="知识点", body="内容"),
             ])
             quiz = Quiz(id="q", course_id="c", lesson_id="l", title="小测")
