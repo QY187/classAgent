@@ -103,10 +103,28 @@ def update_course(db: Session, course_id: str, payload: CourseUpdate, owner_user
 
 
 def create_lesson(db: Session, course_id: str, payload: LessonCreate, owner_username: str) -> Lesson:
-    course = mapper.find_course(db, course_id)
+    course = db.scalar(select(Course).where(Course.id == course_id).with_for_update())
     if course is None or course.owner_id != user_id_for_username(db, owner_username):
         raise HTTPException(status_code=404, detail="课程不存在")
-    return mapper.save_lesson(db, Lesson(course_id=course_id, title=payload.title, lesson_date=payload.lesson_date))
+    first_order = db.scalar(select(func.min(Lesson.sort_order)).where(Lesson.course_id == course_id))
+    return mapper.save_lesson(db, Lesson(course_id=course_id, title=payload.title, lesson_date=payload.lesson_date, sort_order=(first_order - 1) if first_order is not None else 0))
+
+
+def reorder_lessons(db: Session, course_id: str, lesson_ids: list[str], expected_ids: list[str], owner_username: str) -> list[Lesson]:
+    course = db.scalar(select(Course).where(Course.id == course_id).with_for_update())
+    if course is None or course.owner_id != user_id_for_username(db, owner_username):
+        raise HTTPException(status_code=404, detail="课程不存在")
+    lessons = mapper.find_lessons(db, course_id)
+    current_ids = [lesson.id for lesson in lessons]
+    if len(set(lesson_ids)) != len(lesson_ids):
+        raise HTTPException(status_code=400, detail="课次不能重复")
+    if current_ids != expected_ids or set(current_ids) != set(lesson_ids):
+        raise HTTPException(status_code=409, detail="课次列表已发生变化，请刷新后重新排序")
+    by_id = {lesson.id: lesson for lesson in lessons}
+    for index, lesson_id in enumerate(lesson_ids):
+        by_id[lesson_id].sort_order = index
+    db.commit()
+    return mapper.find_lessons(db, course_id)
 
 
 def list_lessons(db: Session, course_id: str, owner_username: str) -> list[Lesson]:

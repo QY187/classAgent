@@ -46,6 +46,7 @@ class Lesson(Base):
     title: Mapped[str] = mapped_column(String(200))
     lesson_date: Mapped[str | None] = mapped_column(String(30), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="created")
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     course: Mapped[Course] = relationship(back_populates="lessons")
     audio_files: Mapped[list["AudioFile"]] = relationship(back_populates="lesson", cascade="all, delete-orphan")

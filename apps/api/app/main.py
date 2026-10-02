@@ -35,9 +35,17 @@ def prepare_database() -> None:
     _prepare_course_owner_columns()
     _prepare_user_avatar_column()
     _prepare_course_material_columns()
+    _prepare_lesson_sort_column()
     Base.metadata.create_all(bind=engine)
     _seed_root_user()
     _backfill_course_owner_ids()
+
+
+def _prepare_lesson_sort_column() -> None:
+    inspector = inspect(engine)
+    if inspector.has_table("lessons") and "sort_order" not in {column["name"] for column in inspector.get_columns("lessons")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE lessons ADD COLUMN sort_order INTEGER"))
 
 
 def _prepare_course_owner_columns() -> None:

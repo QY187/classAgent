@@ -385,6 +385,13 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 }
 .lesson-row:hover { border-color: #c3ceff; box-shadow: var(--shadow-sm); transform: translateY(-2px); }
 .lesson-row-link { display: flex; align-items: center; gap: 16px; flex: 0 1 38%; min-width: 0; }
+.lesson-sort-hint, .lesson-sort-notice { margin: 0 0 14px; color: var(--muted); font-size: 12px; }
+.lesson-sort-notice { color: var(--blue); }
+.lesson-drag-handle { flex: none; padding: 8px 4px; border: 0; border-radius: 7px; background: transparent; color: #8997b1; font-size: 23px; cursor: grab; }
+.lesson-drag-handle:hover { color: var(--blue); background: var(--blue-soft); }
+.lesson-drag-handle:active { cursor: grabbing; }
+.lesson-row.is-dragging { opacity: .45; }
+.lesson-row.is-drop-target { border-color: var(--blue); background: #f4f6ff; box-shadow: 0 0 0 2px #dfe5ff; }
 .lesson-row-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; flex: 1; min-width: 0; }
 .lesson-row-actions > .button { padding: 8px 12px; font-size: 12px; white-space: nowrap; }
 .lesson-upload { padding: 8px 12px; font-size: 12px; white-space: nowrap; cursor: pointer; }
@@ -771,6 +778,7 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
   .course-progress-grid { grid-template-columns: 1fr; }
   .lesson-row { align-items: flex-start; flex-wrap: wrap; }
   .lesson-row-link { flex: 1 0 100%; }
+  .lesson-row:has(.lesson-drag-handle) .lesson-row-link { flex: 1 0 calc(100% - 48px); }
   .lesson-row-actions { flex-basis: 100%; justify-content: flex-start; padding-left: 50px; }
   .lesson-upload-status { padding-left: 50px; }
   .lesson-materials { padding-left: 0; }

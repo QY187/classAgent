@@ -35,6 +35,31 @@ export default function CoursePage() {
   const [deletingLesson, setDeletingLesson] = useState<Lesson | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [draggedLessonId, setDraggedLessonId] = useState<string | null>(null);
+  const [dropLessonId, setDropLessonId] = useState<string | null>(null);
+  const [sorting, setSorting] = useState(false);
+  const [sortNotice, setSortNotice] = useState("");
+
+  async function moveLesson(sourceId: string, targetId: string) {
+    if (sorting || saving || editSaving || deleteBusy || sourceId === targetId) return;
+    const source = lessons.findIndex((lesson) => lesson.id === sourceId);
+    const target = lessons.findIndex((lesson) => lesson.id === targetId);
+    if (source < 0 || target < 0) return;
+    const previous = lessons;
+    const next = [...lessons];
+    next.splice(target, 0, next.splice(source, 1)[0]);
+    setLessons(next); setSorting(true); setSortNotice("正在保存课次顺序…");
+    try {
+      setLessons(await request<Lesson[]>(`/courses/${courseId}/lessons/order`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lesson_ids: next.map((lesson) => lesson.id), expected_lesson_ids: previous.map((lesson) => lesson.id) }),
+      }));
+      setSortNotice("课次顺序已保存");
+    } catch (error) {
+      setLessons(previous); setSortNotice(`排序未保存：${errorMessage(error)}`);
+      try { setLessons(await request<Lesson[]>(`/courses/${courseId}/lessons`)); } catch { /* 保留原列表供重试 */ }
+    } finally { setSorting(false); }
+  }
 
   async function load() {
     try {
@@ -48,6 +73,7 @@ export default function CoursePage() {
 
   async function createLesson(event: FormEvent) {
     event.preventDefault();
+    if (sorting) return;
     if (!title.trim()) return;
     if (saving) return;
     setSaving(true); setMessage("");
@@ -70,6 +96,7 @@ export default function CoursePage() {
 
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
+    if (sorting) return;
     if (!editName.trim() || editSaving) return;
     setEditSaving(true); setEditError("");
     try {
@@ -86,6 +113,7 @@ export default function CoursePage() {
   }
 
   async function confirmDelete() {
+    if (sorting) return;
     if (deleteBusy || (!deletingCourse && !deletingLesson)) return;
     setDeleteBusy(true); setDeleteError("");
     try {
@@ -165,7 +193,16 @@ export default function CoursePage() {
     <section className="panel">
       <div className="panel-header"><h2>课次记录</h2><span>{lessons.length} 节课</span></div>
       <div className="panel-body">
-        {lessons.length === 0 ? <div className="empty-state"><div className="empty-icon">◷</div><strong>还没有课次</strong><p>创建课次后上传录音，开始建立这门课的资料库。</p><button className="button button-primary" onClick={() => setShowModal(true)}>创建第一节课</button></div> : <div className="lesson-list">{lessons.map((lesson, index) => <div className="lesson-row" key={lesson.id}>
+        {lessons.length > 1 && <p className="lesson-sort-hint">拖动左侧手柄调整课次顺序，松开后自动保存。</p>}
+        {sortNotice && <p className="lesson-sort-notice" role="status">{sortNotice}</p>}
+        {lessons.length === 0 ? <div className="empty-state"><div className="empty-icon">◷</div><strong>还没有课次</strong><p>创建课次后上传录音，开始建立这门课的资料库。</p><button className="button button-primary" onClick={() => setShowModal(true)}>创建第一节课</button></div> : <div className="lesson-list" aria-busy={sorting}>{lessons.map((lesson, index) => <div className={`lesson-row${draggedLessonId === lesson.id ? " is-dragging" : ""}${dropLessonId === lesson.id ? " is-drop-target" : ""}`} key={lesson.id}
+          onDragOver={(event) => { if (draggedLessonId && draggedLessonId !== lesson.id) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropLessonId(lesson.id); } }}
+          onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropLessonId(null); }}
+          onDrop={(event) => { event.preventDefault(); if (draggedLessonId) void moveLesson(draggedLessonId, lesson.id); setDraggedLessonId(null); setDropLessonId(null); }}>
+          {lessons.length > 1 && <button type="button" className="lesson-drag-handle" draggable={!sorting && !saving && !editSaving && !deleteBusy} disabled={sorting || saving || editSaving || deleteBusy} aria-label={`调整${lesson.title}的顺序`} title="拖动排序，也可用上下方向键调整"
+            onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", lesson.id); setDraggedLessonId(lesson.id); setSortNotice(""); }}
+            onDragEnd={() => { setDraggedLessonId(null); setDropLessonId(null); }}
+            onKeyDown={(event) => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); const target = lessons[index + (event.key === "ArrowUp" ? -1 : 1)]; if (target) void moveLesson(lesson.id, target.id); } }}><span aria-hidden="true">⠿</span></button>}
           <Link className="lesson-row-link" href={`/lessons/${lesson.id}`}><span className="lesson-index">{String(index + 1).padStart(2, "0")}</span><span className="lesson-main"><span className="lesson-title">{lesson.title}</span><span className="lesson-date">{lesson.lesson_date || "未设置日期"}</span></span></Link>
           <div className="lesson-row-actions">
             <button type="button" className="button button-secondary" onClick={() => openLessonEdit(lesson)} aria-label={`编辑${lesson.title}`}>编辑</button>

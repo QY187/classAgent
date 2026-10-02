@@ -29,4 +29,4 @@ def save_lesson(db: Session, lesson: Lesson) -> Lesson:
 
 
 def find_lessons(db: Session, course_id: str) -> list[Lesson]:
-    return list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc())))
+    return list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.sort_order.asc().nulls_last(), Lesson.created_at.desc(), Lesson.id)))

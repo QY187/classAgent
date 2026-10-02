@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from ...core.db import get_db
 from ...core.deps import get_current_user
@@ -8,6 +9,16 @@ from . import service
 
 
 router = APIRouter(tags=["courses"], dependencies=[Depends(get_current_user)])
+
+
+class LessonOrderUpdate(BaseModel):
+    lesson_ids: list[str]
+    expected_lesson_ids: list[str]
+
+
+@router.put("/courses/{course_id}/lessons/order", response_model=list[LessonRead])
+def reorder_lessons(course_id: str, payload: LessonOrderUpdate, username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> list:
+    return service.reorder_lessons(db, course_id, payload.lesson_ids, payload.expected_lesson_ids, username)
 
 
 @router.post("/courses", response_model=CourseRead, status_code=201)

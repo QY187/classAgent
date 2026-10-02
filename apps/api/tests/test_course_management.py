@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 from unittest.mock import patch
 
 from app.core.db import Base
-from app.modules.courses.service import delete_course, delete_lesson, update_course, update_lesson
+from app.modules.courses.service import create_lesson, delete_course, delete_lesson, list_lessons, reorder_lessons, update_course, update_lesson
 from app.shared.models import AudioFile, Course, CourseMaterial, Lesson, LessonSummary, ReviewCard, TranscriptSegment, User
-from app.shared.schemas import CourseUpdate, LessonUpdate
+from app.shared.schemas import CourseUpdate, LessonCreate, LessonUpdate
 
 
 class CourseManagementTest(unittest.TestCase):
@@ -28,6 +28,32 @@ class CourseManagementTest(unittest.TestCase):
 
     def tearDown(self):
         self.engine.dispose()
+
+    def test_manual_order_survives_reload_and_new_lesson_goes_first(self):
+        with Session(self.engine) as db:
+            db.add(Lesson(id="l2", course_id="c1", title="第二讲"))
+            db.commit()
+            before = [lesson.id for lesson in list_lessons(db, "c1", "owner")]
+            reordered = list(reversed(before))
+            self.assertEqual([lesson.id for lesson in reorder_lessons(db, "c1", reordered, before, "owner")], reordered)
+        with Session(self.engine) as db:
+            self.assertEqual([lesson.id for lesson in list_lessons(db, "c1", "owner")], reordered)
+            new = create_lesson(db, "c1", LessonCreate(title="新课次"), "owner")
+            self.assertEqual([lesson.id for lesson in list_lessons(db, "c1", "owner")], [new.id, *reordered])
+
+    def test_reorder_rejects_other_user_duplicates_and_changed_list(self):
+        with Session(self.engine) as db:
+            for ids, expected, username, status in (
+                (["l1"], ["l1"], "other", 404),
+                (["l1", "l1"], ["l1"], "owner", 400),
+                (["unknown"], ["l1"], "owner", 409),
+                (["l1"], [], "owner", 409),
+            ):
+                with self.assertRaises(HTTPException) as denied:
+                    reorder_lessons(db, "c1", ids, expected, username)
+                self.assertEqual(denied.exception.status_code, status)
+                db.rollback()
+            self.assertIsNone(db.get(Lesson, "l1").sort_order)
 
     def test_edit_course_and_lesson_without_changing_ids(self):
         with Session(self.engine) as db:
