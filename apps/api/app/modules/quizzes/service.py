@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
 from ...core.ownership import user_id_for_username
-from ...shared.models import Course, Lesson, Quiz, QuizQuestion, TranscriptSegment
+from ...shared.models import Course, Lesson, Quiz, QuizAnswer, QuizAttempt, QuizQuestion, ReviewCard, TranscriptSegment
 from ..summaries.service import _parse_json
-from .schemas import QuizGenerate, QuizQuestionUpdate
+from .schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit
 
 
 def _owned_course(db: Session, course_id: str, username: str) -> Course:
@@ -80,7 +80,7 @@ def _generate_questions(segments: list[TranscriptSegment], count: int) -> list[d
         if (kind not in {"single_choice", "true_false"} or not stem or len(stem) > 500 or stem in seen
                 or not isinstance(options, list) or len(options) != (2 if kind == "true_false" else 4)
                 or any(not isinstance(option, str) or not option.strip() or len(option) > 200 for option in options)
-                or len(set(options)) != len(options) or (kind == "true_false" and options != ["正确", "错误"])
+                or len({option.strip() for option in options}) != len(options) or (kind == "true_false" and options != ["正确", "错误"])
                 or type(correct) is not int or not 0 <= correct < len(options)
                 or not explanation or len(explanation) > 2000
                 or type(source_index) is not int or not 1 <= source_index <= len(segments)
@@ -175,3 +175,92 @@ def publish_quiz(db: Session, quiz_id: str, username: str) -> dict:
     quiz.status = "ready"
     db.commit()
     return serialize_quiz(quiz)
+
+
+def serialize_attempt(db: Session, attempt: QuizAttempt) -> dict:
+    quiz = db.get(Quiz, attempt.quiz_id)
+    selected = {answer.question_id: answer for answer in attempt.answers}
+    return {
+        "id": attempt.id, "quiz_id": attempt.quiz_id, "course_id": quiz.course_id,
+        "title": quiz.title, "correct_count": attempt.correct_count,
+        "total_count": attempt.total_count, "created_at": attempt.created_at,
+        "questions": [{
+            "id": q.id, "kind": q.kind, "stem": q.stem, "options": json.loads(q.options_json),
+            "selected_option": selected[q.id].selected_option,
+            "correct_option": q.correct_option, "is_correct": selected[q.id].is_correct,
+            "explanation": q.explanation, "source_segment_id": q.source_segment_id,
+            "source_lesson_id": q.source_lesson_id, "source_start_ms": q.source_start_ms,
+            "source_excerpt": q.source_excerpt,
+        } for q in quiz.questions],
+    }
+
+
+def submit_quiz(db: Session, quiz_id: str, payload: QuizSubmit, username: str) -> dict:
+    quiz = _owned_quiz(db, quiz_id, username)
+    if quiz.status != "ready":
+        raise HTTPException(status_code=409, detail="请先核对并开始小测")
+    questions = quiz.questions
+    if set(payload.answers) != {question.id for question in questions}:
+        raise HTTPException(status_code=400, detail="请回答全部题目后提交")
+    for question in questions:
+        selected = payload.answers[question.id]
+        if type(selected) is not int or not 0 <= selected < len(json.loads(question.options_json)):
+            raise HTTPException(status_code=400, detail="答案选项无效")
+    user_id = user_id_for_username(db, username)
+    attempt = QuizAttempt(quiz_id=quiz_id, user_id=user_id,
+                          correct_count=sum(payload.answers[q.id] == q.correct_option for q in questions),
+                          total_count=len(questions))
+    attempt.answers = [QuizAnswer(question_id=q.id, selected_option=payload.answers[q.id],
+                                  is_correct=payload.answers[q.id] == q.correct_option) for q in questions]
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+    return serialize_attempt(db, attempt)
+
+
+def list_attempts(db: Session, quiz_id: str, username: str) -> list[dict]:
+    _owned_quiz(db, quiz_id, username)
+    user_id = user_id_for_username(db, username)
+    attempts = db.scalars(select(QuizAttempt).where(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == user_id)
+                          .order_by(QuizAttempt.created_at.desc())).all()
+    return [{"id": attempt.id, "correct_count": attempt.correct_count, "total_count": attempt.total_count,
+             "created_at": attempt.created_at} for attempt in attempts]
+
+
+def get_attempt(db: Session, attempt_id: str, username: str) -> dict:
+    attempt = db.get(QuizAttempt, attempt_id)
+    if attempt is None or attempt.user_id != user_id_for_username(db, username):
+        raise HTTPException(status_code=404, detail="答题记录不存在")
+    _owned_quiz(db, attempt.quiz_id, username)
+    return serialize_attempt(db, attempt)
+
+
+def add_wrong_answer_to_review(db: Session, attempt_id: str, question_id: str, username: str) -> dict:
+    attempt = db.get(QuizAttempt, attempt_id)
+    if attempt is None or attempt.user_id != user_id_for_username(db, username):
+        raise HTTPException(status_code=404, detail="答题记录不存在")
+    quiz = _owned_quiz(db, attempt.quiz_id, username)
+    answer = db.scalar(select(QuizAnswer).where(QuizAnswer.attempt_id == attempt_id, QuizAnswer.question_id == question_id))
+    question = db.get(QuizQuestion, question_id)
+    if answer is None or question is None or answer.is_correct or question.quiz_id != quiz.id:
+        raise HTTPException(status_code=400, detail="只能将本次答错的题目加入知识点")
+    if not question.source_lesson_id or not question.source_segment_id:
+        raise HTTPException(status_code=409, detail="原课堂片段已不存在，无法建立有来源的卡片")
+    origin_key = f"quiz:{question.id}"
+    existing = db.scalar(select(ReviewCard).where(ReviewCard.lesson_id == question.source_lesson_id,
+                                                  ReviewCard.origin_key == origin_key))
+    if existing:
+        return {"card_id": existing.id, "created": False}
+    options = json.loads(question.options_json)
+    card = ReviewCard(
+        course_id=quiz.course_id, lesson_id=question.source_lesson_id, card_type="question",
+        title=question.stem[:200],
+        body=f"正确答案：{options[question.correct_option]}\n解析：{question.explanation}"[:10000],
+        status="review", origin_key=origin_key,
+        source_segment_id=question.source_segment_id,
+        source_start_ms=question.source_start_ms, source_excerpt=question.source_excerpt,
+    )
+    db.add(card)
+    db.commit()
+    db.refresh(card)
+    return {"card_id": card.id, "created": True}

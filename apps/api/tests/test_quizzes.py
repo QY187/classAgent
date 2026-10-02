@@ -3,18 +3,21 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
 from app.core.db import Base
-from app.modules.quizzes.service import _generate_questions, generate_quiz, get_quiz, publish_quiz, update_question
-from app.modules.quizzes.schemas import QuizGenerate, QuizQuestionUpdate
-from app.shared.models import Course, Lesson, TranscriptSegment, User
+from app.modules.quizzes.service import _generate_questions, add_wrong_answer_to_review, generate_quiz, get_attempt, get_quiz, list_attempts, publish_quiz, submit_quiz, update_question
+from app.modules.quizzes.schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit
+from app.shared.models import Course, Lesson, ReviewCard, TranscriptSegment, User
 
 
 class QuizTest(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
+        @event.listens_for(self.engine, "connect")
+        def enable_foreign_keys(connection, _record):
+            connection.execute("PRAGMA foreign_keys=ON")
         Base.metadata.create_all(self.engine)
         with Session(self.engine) as db:
             db.add_all([User(id="u1", username="owner", password_hash="x"), User(id="u2", username="other", password_hash="x")])
@@ -72,6 +75,32 @@ class QuizTest(unittest.TestCase):
                                 QuizQuestionUpdate(stem="再改", options=["正确", "错误"], correct_option=0,
                                                    explanation="解析"), "owner")
             self.assertEqual(locked.exception.status_code, 409)
+
+            question_ids = [question["id"] for question in ready["questions"]]
+            with self.assertRaises(HTTPException) as incomplete:
+                submit_quiz(db, quiz_id, QuizSubmit(answers={question_ids[0]: 1}), "owner")
+            self.assertEqual(incomplete.exception.status_code, 400)
+            result = submit_quiz(db, quiz_id, QuizSubmit(answers={question_ids[0]: 1, question_ids[1]: 0, question_ids[2]: 1}), "owner")
+            self.assertEqual((result["correct_count"], result["total_count"]), (2, 3))
+            self.assertEqual([item["is_correct"] for item in result["questions"]], [True, True, False])
+            self.assertEqual(len(list_attempts(db, quiz_id, "owner")), 1)
+            self.assertEqual(get_attempt(db, result["id"], "owner")["questions"][0]["correct_option"], 1)
+            with self.assertRaises(HTTPException) as private:
+                get_attempt(db, result["id"], "other")
+            self.assertEqual(private.exception.status_code, 404)
+
+            with self.assertRaises(HTTPException) as not_wrong:
+                add_wrong_answer_to_review(db, result["id"], question_ids[0], "owner")
+            self.assertEqual(not_wrong.exception.status_code, 400)
+            with self.assertRaises(HTTPException) as denied_card:
+                add_wrong_answer_to_review(db, result["id"], question_ids[2], "other")
+            self.assertEqual(denied_card.exception.status_code, 404)
+            card_result = add_wrong_answer_to_review(db, result["id"], question_ids[2], "owner")
+            self.assertTrue(card_result["created"])
+            card = db.get(ReviewCard, card_result["card_id"])
+            self.assertEqual((card.status, card.lesson_id, card.source_segment_id), ("review", "l1", "s1"))
+            again = add_wrong_answer_to_review(db, result["id"], question_ids[2], "owner")
+            self.assertEqual(again, {"card_id": card.id, "created": False})
 
 
 if __name__ == "__main__":
