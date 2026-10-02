@@ -17,7 +17,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [lessonInfo, setLessonInfo] = useState<LessonInfo | null>(null);
-  const courseMatch = pathname.match(/^\/courses\/([^/]+)\/?$/);
+  const courseMatch = pathname.match(/^\/courses\/([^/]+)(?:\/.*)?$/);
   const lessonMatch = pathname.match(/^\/lessons\/([^/]+)(?:\/.*)?\/?$/);
   const activeCourseId = lessonMatch && lessonInfo ? lessonInfo.course_id : courseMatch?.[1];
   const libraryActive = pathname === "/" || pathname.startsWith("/courses") || pathname.startsWith("/lessons");

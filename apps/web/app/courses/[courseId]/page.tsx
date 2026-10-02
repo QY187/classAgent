@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { errorMessage, request } from "../../../lib/api";
-import CourseQa from "../../../components/CourseQa";
 import CourseMaterials from "../../../components/CourseMaterials";
 
 type Course = { id: string; name: string; semester?: string | null };
@@ -148,11 +147,20 @@ export default function CoursePage() {
         <h1>{course.name}</h1>
         <p>{course.semester || "未设置学期"} · {lessons.length} 节课 · 持续整理这门课的每一次学习</p>
       </div>
-      <div className="page-hero-actions"><button className="button button-secondary" onClick={openCourseEdit}>编辑课程</button><button className="button material-delete-button" onClick={() => { setDeleteError(""); setDeletingCourse(true); }}>删除课程</button><button className="button button-primary" onClick={() => setShowModal(true)}>＋ 新建课次</button></div>
+      <div className="page-hero-actions course-hero-actions">
+        <Link className="button button-secondary" href={`/courses/${courseId}/ask`}>课程问答</Link>
+        <Link className="button button-secondary" href={`/courses/${courseId}/quizzes`}>课堂小测</Link>
+        <button className="button button-primary" onClick={() => setShowModal(true)}>＋ 新建课次</button>
+        <details className="course-manage-menu">
+          <summary className="button button-secondary">管理课程</summary>
+          <div className="course-manage-options">
+            <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); openCourseEdit(); }}>编辑课程</button>
+            <button type="button" className="is-danger" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); setDeleteError(""); setDeletingCourse(true); }}>删除课程</button>
+          </div>
+        </details>
+      </div>
     </section>
     {message && <div className="notice" style={{ marginBottom: 16 }}>{message}</div>}
-    <CourseQa courseId={courseId} />
-    <section className="panel quiz-entry-panel"><div><span className="eyebrow">课后练习</span><h2>课堂小测</h2><p>从这门课的文字记录生成有课堂依据的题目，先核对再作答。</p></div><Link className="button button-secondary" href={`/courses/${courseId}/quizzes`}>进入小测 →</Link></section>
     <section className="panel">
       <div className="panel-header"><h2>课次记录</h2><span>{lessons.length} 节课</span></div>
       <div className="panel-body">
