@@ -20,6 +20,11 @@ def list_courses(username: str = Depends(get_current_user), db: Session = Depend
     return service.list_courses(db, username)
 
 
+@router.get("/courses/{course_id}/progress")
+def get_course_progress(course_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    return service.get_course_progress(db, course_id, username)
+
+
 @router.patch("/courses/{course_id}", response_model=CourseRead)
 def update_course(course_id: str, payload: CourseUpdate, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return service.update_course(db, course_id, payload, username)

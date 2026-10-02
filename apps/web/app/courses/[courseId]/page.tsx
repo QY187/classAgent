@@ -146,6 +146,7 @@ export default function CoursePage() {
         <div className="eyebrow">课程空间</div>
         <h1>{course.name}</h1>
         <p>{course.semester || "未设置学期"} · {lessons.length} 节课 · 持续整理这门课的每一次学习</p>
+        <Link className="course-progress-link" href={`/courses/${courseId}/progress`}>查看学习进度 →</Link>
       </div>
       <div className="page-hero-actions course-hero-actions">
         <Link className="button button-secondary" href={`/courses/${courseId}/ask`}>课程问答</Link>

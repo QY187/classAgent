@@ -1,10 +1,10 @@
 from fastapi import HTTPException
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
 from ...infrastructure.storage import delete_file
-from ...shared.models import AudioFile, Course, CourseMaterial, Lesson, LessonSummary
+from ...shared.models import AudioFile, Course, CourseMaterial, Lesson, LessonSummary, Quiz, QuizAnswer, QuizAttempt, ReviewCard, TranscriptSegment
 from ...shared.schemas import CourseCreate, CourseUpdate, LessonCreate, LessonUpdate
 from . import mapper
 
@@ -15,6 +15,77 @@ def create_course(db: Session, payload: CourseCreate, owner_username: str) -> Co
 
 def list_courses(db: Session, owner_username: str) -> list[Course]:
     return mapper.find_courses(db, user_id_for_username(db, owner_username))
+
+
+def get_course_progress(db: Session, course_id: str, owner_username: str) -> dict:
+    course = mapper.find_course(db, course_id)
+    if course is None or course.owner_id != user_id_for_username(db, owner_username):
+        raise HTTPException(status_code=404, detail="课程不存在")
+
+    lesson_total = db.scalar(select(func.count(Lesson.id)).where(Lesson.course_id == course_id)) or 0
+    transcript_lessons = db.scalar(
+        select(func.count(func.distinct(TranscriptSegment.lesson_id)))
+        .join(Lesson, TranscriptSegment.lesson_id == Lesson.id)
+        .where(Lesson.course_id == course_id)
+    ) or 0
+    summary_lessons = db.scalar(
+        select(func.count(LessonSummary.id))
+        .join(Lesson, LessonSummary.lesson_id == Lesson.id)
+        .where(
+            Lesson.course_id == course_id,
+            LessonSummary.status.in_(("completed", "edited")),
+            LessonSummary.content.is_not(None),
+            LessonSummary.content != "",
+        )
+    ) or 0
+    card_counts = {"new": 0, "review": 0, "mastered": 0}
+    for status, count in db.execute(
+        select(ReviewCard.status, func.count(ReviewCard.id))
+        .where(ReviewCard.course_id == course_id)
+        .group_by(ReviewCard.status)
+    ):
+        if status in card_counts:
+            card_counts[status] = count
+    attempt_count, average_score = db.execute(
+        select(
+            func.count(QuizAttempt.id),
+            func.avg(100.0 * QuizAttempt.correct_count / func.nullif(QuizAttempt.total_count, 0)),
+        ).join(Quiz, QuizAttempt.quiz_id == Quiz.id).where(
+            Quiz.course_id == course_id, QuizAttempt.user_id == course.owner_id
+        )
+    ).one()
+    recent = db.execute(
+        select(QuizAttempt, Quiz.title)
+        .join(Quiz, QuizAttempt.quiz_id == Quiz.id)
+        .where(Quiz.course_id == course_id, QuizAttempt.user_id == course.owner_id)
+        .order_by(QuizAttempt.created_at.desc(), QuizAttempt.id.desc())
+        .limit(1)
+    ).first()
+    wrong_question_count = db.scalar(
+        select(func.count(func.distinct(QuizAnswer.question_id)))
+        .join(QuizAttempt, QuizAnswer.attempt_id == QuizAttempt.id)
+        .join(Quiz, QuizAttempt.quiz_id == Quiz.id)
+        .where(Quiz.course_id == course_id, QuizAttempt.user_id == course.owner_id, QuizAnswer.is_correct.is_(False))
+    ) or 0
+    return {
+        "course_id": course_id,
+        "lesson_total": lesson_total,
+        "transcript_lessons": transcript_lessons,
+        "summary_lessons": summary_lessons,
+        "review_cards": {"total": sum(card_counts.values()), **card_counts},
+        "quizzes": {
+            "attempt_count": attempt_count,
+            "average_score": round(average_score) if average_score is not None else None,
+            "wrong_question_count": wrong_question_count,
+            "recent_attempt": {
+                "id": recent[0].id,
+                "title": recent[1],
+                "correct_count": recent[0].correct_count,
+                "total_count": recent[0].total_count,
+                "created_at": recent[0].created_at.isoformat(),
+            } if recent else None,
+        },
+    }
 
 
 def update_course(db: Session, course_id: str, payload: CourseUpdate, owner_username: str) -> Course:

@@ -20,6 +20,14 @@ export default function KnowledgePage() {
   const [courseMenuOpen, setCourseMenuOpen] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const course = params.get("course");
+    const status = params.get("status");
+    if (course) setSelectedCourseId(course);
+    if (status === "new" || status === "review" || status === "mastered") setStatusFilter(status);
+  }, []);
+
+  useEffect(() => {
     Promise.all([request<ReviewCard[]>("/review-cards"), request<Course[]>("/courses")])
       .then(([items, availableCourses]) => { setCards(items); setCourses(availableCourses); })
       .catch((error) => setMessage(errorMessage(error)))
