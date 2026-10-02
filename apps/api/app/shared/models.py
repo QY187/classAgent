@@ -236,3 +236,14 @@ class QuizAnswer(Base):
     selected_option: Mapped[int] = mapped_column(Integer)
     is_correct: Mapped[bool] = mapped_column(default=False)
     attempt: Mapped[QuizAttempt] = relationship(back_populates="answers")
+
+
+class QuizQuestionRetry(Base):
+    __tablename__ = "quiz_question_retries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    question_id: Mapped[str] = mapped_column(ForeignKey("quiz_questions.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    selected_option: Mapped[int] = mapped_column(Integer)
+    is_correct: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

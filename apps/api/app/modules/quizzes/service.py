@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
 from ...core.ownership import user_id_for_username
-from ...shared.models import Course, Lesson, Quiz, QuizAnswer, QuizAttempt, QuizQuestion, ReviewCard, TranscriptSegment
+from ...shared.models import Course, Lesson, Quiz, QuizAnswer, QuizAttempt, QuizQuestion, QuizQuestionRetry, ReviewCard, TranscriptSegment
 from ..summaries.service import _parse_json
-from .schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit
+from .schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit, WrongQuestionRetry
 
 
 def _owned_course(db: Session, course_id: str, username: str) -> Course:
@@ -264,3 +264,82 @@ def add_wrong_answer_to_review(db: Session, attempt_id: str, question_id: str, u
     db.commit()
     db.refresh(card)
     return {"card_id": card.id, "created": True}
+
+
+def list_wrong_questions(db: Session, username: str, course_id: str | None = None) -> list[dict]:
+    user_id = user_id_for_username(db, username)
+    if course_id:
+        _owned_course(db, course_id, username)
+    query = (select(QuizQuestion, QuizAnswer, QuizAttempt, Quiz, Course)
+             .join(QuizAnswer, QuizAnswer.question_id == QuizQuestion.id)
+             .join(QuizAttempt, QuizAttempt.id == QuizAnswer.attempt_id)
+             .join(Quiz, Quiz.id == QuizQuestion.quiz_id)
+             .join(Course, Course.id == Quiz.course_id)
+             .where(QuizAttempt.user_id == user_id, Course.owner_id == user_id)
+             .order_by(QuizAttempt.created_at.desc(), QuizAttempt.id.desc(), QuizQuestion.position))
+    if course_id:
+        query = query.where(Course.id == course_id)
+    grouped = {}
+    latest_answers = {}
+    for question, answer, attempt, quiz, course in db.execute(query):
+        latest_answers.setdefault(question.id, (attempt.created_at, answer.is_correct))
+        if answer.is_correct:
+            continue
+        if question.id in grouped:
+            grouped[question.id]["wrong_count"] += 1
+            continue
+        grouped[question.id] = {
+            "id": question.id, "kind": question.kind, "stem": question.stem,
+            "options": json.loads(question.options_json), "course_id": course.id, "course_name": course.name,
+            "quiz_id": quiz.id, "quiz_title": quiz.title, "last_attempt_id": attempt.id,
+            "last_selected_option": answer.selected_option, "last_wrong_at": attempt.created_at,
+            "wrong_count": 1, "source_lesson_id": question.source_lesson_id,
+            "source_start_ms": question.source_start_ms,
+        }
+    if not grouped:
+        return []
+    retries = db.scalars(select(QuizQuestionRetry).where(
+        QuizQuestionRetry.user_id == user_id, QuizQuestionRetry.question_id.in_(grouped)
+    ).order_by(QuizQuestionRetry.created_at.desc(), QuizQuestionRetry.id.desc())).all()
+    latest_retries = {}
+    counts = {}
+    for retry in retries:
+        latest_retries.setdefault(retry.question_id, retry)
+        counts[retry.question_id] = counts.get(retry.question_id, 0) + 1
+    for item in grouped.values():
+        latest_at, correct = latest_answers[item["id"]]
+        retry = latest_retries.get(item["id"])
+        # Both tables are read from the same database, with the same timezone handling.
+        if retry and retry.created_at >= latest_at:
+            correct = retry.is_correct
+        item["status"] = "mastered" if correct else "pending"
+        item["retry_count"] = counts.get(item["id"], 0)
+        item["last_retry_at"] = retry.created_at if retry else None
+    return list(grouped.values())
+
+
+def retry_wrong_question(db: Session, question_id: str, payload: WrongQuestionRetry, username: str) -> dict:
+    question = db.get(QuizQuestion, question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="错题不存在")
+    _owned_quiz(db, question.quiz_id, username)
+    user_id = user_id_for_username(db, username)
+    wrong = db.scalar(select(QuizAnswer.id).join(QuizAttempt).where(
+        QuizAttempt.user_id == user_id, QuizAnswer.question_id == question_id, QuizAnswer.is_correct.is_(False)
+    ).limit(1))
+    if wrong is None:
+        raise HTTPException(status_code=404, detail="错题不存在")
+    options = json.loads(question.options_json)
+    if payload.selected_option >= len(options):
+        raise HTTPException(status_code=400, detail="答案选项无效")
+    retry = QuizQuestionRetry(question_id=question_id, user_id=user_id,
+                              selected_option=payload.selected_option,
+                              is_correct=payload.selected_option == question.correct_option)
+    db.add(retry)
+    db.commit()
+    db.refresh(retry)
+    return {"id": retry.id, "question_id": question_id, "selected_option": retry.selected_option,
+            "is_correct": retry.is_correct, "correct_option": question.correct_option,
+            "explanation": question.explanation, "source_excerpt": question.source_excerpt,
+            "source_lesson_id": question.source_lesson_id, "source_start_ms": question.source_start_ms,
+            "created_at": retry.created_at}

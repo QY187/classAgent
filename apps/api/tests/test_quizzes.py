@@ -3,13 +3,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import HTTPException
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, delete, event
 from sqlalchemy.orm import Session
 
 from app.core.db import Base
-from app.modules.quizzes.service import _generate_questions, add_wrong_answer_to_review, generate_quiz, get_attempt, get_quiz, list_attempts, publish_quiz, submit_quiz, update_question
-from app.modules.quizzes.schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit
-from app.shared.models import Course, Lesson, ReviewCard, TranscriptSegment, User
+from app.modules.quizzes.service import _generate_questions, add_wrong_answer_to_review, generate_quiz, get_attempt, get_quiz, list_attempts, list_wrong_questions, publish_quiz, retry_wrong_question, submit_quiz, update_question
+from app.modules.quizzes.schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit, WrongQuestionRetry
+from app.shared.models import Course, Lesson, Quiz, QuizQuestionRetry, ReviewCard, TranscriptSegment, User
 
 
 class QuizTest(unittest.TestCase):
@@ -32,6 +32,65 @@ class QuizTest(unittest.TestCase):
 
     def tearDown(self):
         self.engine.dispose()
+
+    def ready_quiz(self, db):
+        source = db.get(TranscriptSegment, "s1")
+        generated = [{"kind": "true_false", "stem": f"判断题 {i}", "options": ["正确", "错误"],
+                      "correct_option": 0, "explanation": "依据原文", "source": source, "evidence": source.text[:8]} for i in range(3)]
+        with patch("app.modules.quizzes.service._generate_questions", return_value=generated):
+            draft = generate_quiz(db, "c1", QuizGenerate(lesson_id="l1"), "owner")
+        return publish_quiz(db, draft["id"], "owner")
+
+    def test_wrong_book_aggregates_history_and_isolates_users(self):
+        with Session(self.engine) as db:
+            quiz = self.ready_quiz(db)
+            ids = [q["id"] for q in quiz["questions"]]
+            submit_quiz(db, quiz["id"], QuizSubmit(answers=dict.fromkeys(ids, 1)), "owner")
+            latest = submit_quiz(db, quiz["id"], QuizSubmit(answers={ids[0]: 1, ids[1]: 0, ids[2]: 0}), "owner")
+            wrongs = list_wrong_questions(db, "owner", "c1")
+            self.assertEqual(len(wrongs), 3)
+            repeated = next(q for q in wrongs if q["id"] == ids[0])
+            self.assertEqual(repeated["wrong_count"], 2)
+            self.assertEqual(repeated["last_attempt_id"], latest["id"])
+            self.assertNotIn("correct_option", repeated)
+            self.assertEqual(list_wrong_questions(db, "other"), [])
+            with self.assertRaises(HTTPException) as denied:
+                list_wrong_questions(db, "other", "c1")
+            self.assertEqual(denied.exception.status_code, 404)
+
+    def test_retry_grades_independently_and_tracks_latest_result(self):
+        with Session(self.engine) as db:
+            quiz = self.ready_quiz(db)
+            ids = [q["id"] for q in quiz["questions"]]
+            original = submit_quiz(db, quiz["id"], QuizSubmit(answers={ids[0]: 1, ids[1]: 0, ids[2]: 0}), "owner")
+            self.assertEqual(list_wrong_questions(db, "owner")[0]["status"], "pending")
+            retry = retry_wrong_question(db, ids[0], WrongQuestionRetry(selected_option=0), "owner")
+            self.assertTrue(retry["is_correct"])
+            self.assertEqual(retry["correct_option"], 0)
+            item = list_wrong_questions(db, "owner")[0]
+            self.assertEqual((item["status"], item["wrong_count"], item["retry_count"]), ("mastered", 1, 1))
+            self.assertEqual(get_attempt(db, original["id"], "owner")["correct_count"], 2)
+            retry_wrong_question(db, ids[0], WrongQuestionRetry(selected_option=1), "owner")
+            self.assertEqual(list_wrong_questions(db, "owner")[0]["status"], "pending")
+            submit_quiz(db, quiz["id"], QuizSubmit(answers=dict.fromkeys(ids, 0)), "owner")
+            self.assertEqual(list_wrong_questions(db, "owner")[0]["status"], "mastered")
+            submit_quiz(db, quiz["id"], QuizSubmit(answers=dict.fromkeys(ids, 1)), "owner")
+            self.assertEqual(list_wrong_questions(db, "owner")[0]["status"], "pending")
+            db.execute(delete(Quiz).where(Quiz.id == quiz["id"]))
+            db.commit()
+            self.assertEqual(db.query(QuizQuestionRetry).count(), 0)
+
+    def test_retry_rejects_other_users_non_wrong_questions_and_invalid_options(self):
+        with Session(self.engine) as db:
+            quiz = self.ready_quiz(db)
+            ids = [q["id"] for q in quiz["questions"]]
+            submit_quiz(db, quiz["id"], QuizSubmit(answers={ids[0]: 1, ids[1]: 0, ids[2]: 0}), "owner")
+            for question_id, username, option, code in [(ids[0], "other", 0, 404), (ids[1], "owner", 0, 404),
+                                                       (ids[0], "owner", 2, 400), ("missing", "owner", 0, 404)]:
+                with self.assertRaises(HTTPException) as error:
+                    retry_wrong_question(db, question_id, WrongQuestionRetry(selected_option=option), username)
+                self.assertEqual(error.exception.status_code, code)
+            self.assertEqual(db.query(QuizQuestionRetry).count(), 0)
 
     def test_generation_checks_evidence_and_drops_unsupported_question(self):
         with Session(self.engine) as db:

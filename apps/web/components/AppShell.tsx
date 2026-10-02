@@ -22,6 +22,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const activeCourseId = lessonMatch && lessonInfo ? lessonInfo.course_id : courseMatch?.[1];
   const libraryActive = pathname === "/" || pathname.startsWith("/courses") || pathname.startsWith("/lessons");
   const reviewActive = pathname === "/review";
+  const wrongBookActive = pathname === "/wrong-questions";
   const searchActive = pathname === "/search";
   const settingsActive = pathname === "/settings";
 
@@ -89,6 +90,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <Link className={`nav-item ${libraryActive && !activeCourseId ? "active" : ""}`} href="/"><span className="nav-icon">▦</span><span>课程库</span></Link>
           <Link className={`nav-item ${searchActive ? "active" : ""}`} href="/search" aria-label="全局搜索"><span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg></span><span>全局搜索</span></Link>
           <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review"><span className="nav-icon">◷</span><span>知识点清单</span></Link>
+          <Link className={`nav-item ${wrongBookActive ? "active" : ""}`} href="/wrong-questions"><span className="nav-icon">▤</span><span>错题本</span></Link>
         </nav>
         <div className="side-section">
           <div className="nav-label">我的课程</div>
@@ -112,7 +114,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <div className="main-area">
         <header className="topbar">
           <nav className="breadcrumb" aria-label="当前位置">
-            {courseMatch || lessonMatch || searchActive || reviewActive || settingsActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
+            {courseMatch || lessonMatch || searchActive || reviewActive || wrongBookActive || settingsActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
+            {wrongBookActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">错题本</span></>}
             {searchActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">全局搜索</span></>}
             {reviewActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">知识点清单</span></>}
             {settingsActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">个人设置</span></>}

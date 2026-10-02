@@ -4,10 +4,21 @@ from sqlalchemy.orm import Session
 from ...core.db import get_db
 from ...core.deps import get_current_user
 from . import service
-from .schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit
+from .schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit, WrongQuestionRetry
 
 
 router = APIRouter(tags=["quizzes"])
+
+
+@router.get("/wrong-questions")
+def list_wrong_questions(course_id: str | None = None, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.list_wrong_questions(db, username, course_id)
+
+
+@router.post("/wrong-questions/{question_id}/retries", status_code=201)
+def retry_wrong_question(question_id: str, payload: WrongQuestionRetry,
+                         username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.retry_wrong_question(db, question_id, payload, username)
 
 
 @router.post("/courses/{course_id}/quizzes", status_code=201)

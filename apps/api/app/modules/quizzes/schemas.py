@@ -15,3 +15,7 @@ class QuizQuestionUpdate(BaseModel):
 
 class QuizSubmit(BaseModel):
     answers: dict[str, int]
+
+
+class WrongQuestionRetry(BaseModel):
+    selected_option: int = Field(strict=True, ge=0, le=3)
