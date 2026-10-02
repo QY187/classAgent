@@ -250,3 +250,12 @@ class QuizQuestionRetry(Base):
     selected_option: Mapped[int] = mapped_column(Integer)
     is_correct: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class PendingFileDeletion(Base):
+    __tablename__ = "pending_file_deletions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    object_key: Mapped[str] = mapped_column(String(500), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

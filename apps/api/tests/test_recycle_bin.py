@@ -4,11 +4,47 @@ from test_recycle_visibility import RecycleVisibilityTest
 from app.modules.recycle_bin.queries import list_items
 from app.modules.recycle_bin.service import move_to_bin
 from app.modules.recycle_bin.restore import restore_item
+from app.modules.recycle_bin.purge import purge_item
+from app.modules.recycle_bin.mapper import raw_get
+from app.modules.recycle_bin.file_cleanup import clean_pending_files
+from unittest.mock import patch
 from app.core.visibility import visible_get
-from app.shared.models import AudioFile, Course, CourseMaterial, Lesson, User
+from app.shared.models import AudioFile, Course, CourseMaterial, Lesson, Quiz, QuizQuestion, User
 
 
 class RecycleBinTest(RecycleVisibilityTest):
+    def test_purge_deletes_descendants_and_preserves_other_courses(self):
+        with Session(self.engine) as db:
+            db.add(Course(id="keep", owner_id="u", name="保留")); db.commit()
+            move_to_bin(db, "course", "c", "owner")
+            with patch("app.modules.recycle_bin.file_cleanup.delete_file") as storage:
+                self.assertEqual(purge_item(db, "course", "c", "owner"), {"cleaned": 2, "pending": 0})
+                self.assertEqual({call.args[0] for call in storage.call_args_list}, {"a.mp3", "m.pdf"})
+            for model, identity in [(Course, "c"), (Lesson, "l"), (CourseMaterial, "m"), (Quiz, "q"), (QuizQuestion, "question")]:
+                self.assertIsNone(raw_get(db, model, identity))
+            self.assertIsNotNone(visible_get(db, Course, "keep"))
+
+    def test_purge_lesson_removes_its_materials_without_orphans(self):
+        with Session(self.engine) as db:
+            move_to_bin(db, "lesson", "l", "owner")
+            with patch("app.modules.recycle_bin.file_cleanup.delete_file"):
+                purge_item(db, "lesson", "l", "owner")
+            self.assertIsNone(raw_get(db, CourseMaterial, "m"))
+            self.assertIsNotNone(visible_get(db, Course, "c"))
+
+    def test_purge_rejects_active_content_and_retains_failed_cleanup_for_retry(self):
+        with Session(self.engine) as db:
+            with self.assertRaises(HTTPException) as active:
+                purge_item(db, "course", "c", "owner")
+            self.assertEqual(active.exception.status_code, 409); db.rollback()
+            move_to_bin(db, "material", "m", "owner")
+            with patch("app.modules.recycle_bin.file_cleanup.delete_file", side_effect=OSError("unavailable")), patch("app.modules.recycle_bin.file_cleanup.logger.warning"):
+                self.assertEqual(purge_item(db, "material", "m", "owner"), {"cleaned": 0, "pending": 1})
+            self.assertIsNone(raw_get(db, CourseMaterial, "m"))
+            with patch("app.modules.recycle_bin.file_cleanup.delete_file") as storage:
+                self.assertEqual(clean_pending_files(db, "owner"), {"cleaned": 1, "pending": 0})
+                storage.assert_called_once_with("m.pdf")
+
     def test_restore_preserves_individual_deletions_ids_and_files(self):
         with Session(self.engine) as db:
             move_to_bin(db, "material", "m", "owner")

@@ -8,7 +8,7 @@ MODELS = {"course": Course, "lesson": Lesson, "material": CourseMaterial}
 
 
 def raw_get(db: Session, model, identity: str, lock=False):
-    query = select(model).where(model.id == identity).execution_options(include_deleted=True)
+    query = select(model).where(model.id == identity).execution_options(include_deleted=True, populate_existing=True)
     return db.scalar(query.with_for_update() if lock else query)
 
 
