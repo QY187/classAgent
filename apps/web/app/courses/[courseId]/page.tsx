@@ -152,6 +152,7 @@ export default function CoursePage() {
     </section>
     {message && <div className="notice" style={{ marginBottom: 16 }}>{message}</div>}
     <CourseQa courseId={courseId} />
+    <section className="panel quiz-entry-panel"><div><span className="eyebrow">课后练习</span><h2>课堂小测</h2><p>从这门课的文字记录生成有课堂依据的题目，先核对再作答。</p></div><Link className="button button-secondary" href={`/courses/${courseId}/quizzes`}>进入小测 →</Link></section>
     <section className="panel">
       <div className="panel-header"><h2>课次记录</h2><span>{lessons.length} 节课</span></div>
       <div className="panel-body">

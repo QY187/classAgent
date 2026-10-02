@@ -180,3 +180,58 @@ class ReviewCard(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
     lesson: Mapped[Lesson] = relationship(back_populates="review_cards")
+
+
+class Quiz(Base):
+    __tablename__ = "quizzes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
+    lesson_id: Mapped[str | None] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), nullable=True)
+    title: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    questions: Mapped[list["QuizQuestion"]] = relationship(back_populates="quiz", cascade="all, delete-orphan", order_by="QuizQuestion.position")
+    attempts: Mapped[list["QuizAttempt"]] = relationship(back_populates="quiz", cascade="all, delete-orphan")
+
+
+class QuizQuestion(Base):
+    __tablename__ = "quiz_questions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    quiz_id: Mapped[str] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(20))
+    stem: Mapped[str] = mapped_column(Text)
+    options_json: Mapped[str] = mapped_column(Text)
+    correct_option: Mapped[int] = mapped_column(Integer)
+    explanation: Mapped[str] = mapped_column(Text)
+    source_segment_id: Mapped[str | None] = mapped_column(ForeignKey("transcript_segments.id", ondelete="SET NULL"), nullable=True)
+    source_lesson_id: Mapped[str | None] = mapped_column(ForeignKey("lessons.id", ondelete="SET NULL"), nullable=True)
+    source_start_ms: Mapped[int] = mapped_column(Integer)
+    source_excerpt: Mapped[str] = mapped_column(Text)
+    quiz: Mapped[Quiz] = relationship(back_populates="questions")
+
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    quiz_id: Mapped[str] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    correct_count: Mapped[int] = mapped_column(Integer)
+    total_count: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    quiz: Mapped[Quiz] = relationship(back_populates="attempts")
+    answers: Mapped[list["QuizAnswer"]] = relationship(back_populates="attempt", cascade="all, delete-orphan")
+
+
+class QuizAnswer(Base):
+    __tablename__ = "quiz_answers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    attempt_id: Mapped[str] = mapped_column(ForeignKey("quiz_attempts.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[str] = mapped_column(ForeignKey("quiz_questions.id", ondelete="CASCADE"))
+    selected_option: Mapped[int] = mapped_column(Integer)
+    is_correct: Mapped[bool] = mapped_column(default=False)
+    attempt: Mapped[QuizAttempt] = relationship(back_populates="answers")
