@@ -124,9 +124,9 @@ export default function CourseMaterials({ courseId, lessonId, refreshKey }: { co
       </div>)}</div>}
     {deleting && createPortal(<div className="modal-backdrop" onMouseDown={(event) => { if (!deleteBusy && event.target === event.currentTarget) setDeleting(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="material-delete-title">
       <h2 id="material-delete-title">删除资料</h2>
-      <p>确定删除「<strong className="material-delete-filename">{deleting.filename}</strong>」吗？删除后无法恢复。</p>
+      <p>确定删除「<strong className="material-delete-filename">{deleting.filename}</strong>」吗？资料将移入回收站，之后可以恢复。</p>
       {deleteError && <p className="notice" role="alert">删除失败：{deleteError}</p>}
-      <div className="modal-actions"><button type="button" className="button button-secondary" autoFocus disabled={deleteBusy} onClick={() => setDeleting(null)}>取消</button><button type="button" className="button button-danger" disabled={deleteBusy} onClick={confirmDelete}>{deleteBusy ? "正在删除…" : "确认删除"}</button></div>
+      <div className="modal-actions"><button type="button" className="button button-secondary" autoFocus disabled={deleteBusy} onClick={() => setDeleting(null)}>取消</button><button type="button" className="button button-danger" disabled={deleteBusy} onClick={confirmDelete}>{deleteBusy ? "正在移入…" : "移入回收站"}</button></div>
     </div></div>, document.body)}
     {preview && createPortal(<div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closePreview(); }}><div className="modal material-preview-modal" role="dialog" aria-modal="true" aria-label={`查看${preview.filename}`}>
       <div className="material-preview-header"><h2 title={preview.filename}>{preview.filename}</h2><button ref={closeButton} type="button" className="button button-secondary" onClick={closePreview}>关闭</button></div>
