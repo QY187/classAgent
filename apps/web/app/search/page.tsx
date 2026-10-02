@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { errorMessage, request } from "../../lib/api";
 
@@ -47,6 +47,9 @@ function SearchResultsPage() {
   const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [draft, setDraft] = useState(query);
+
+  useEffect(() => { setDraft(query); }, [query]);
 
   useEffect(() => {
     request<{ id: string; name: string }[]>("/courses").then(setCourses).catch(() => {});
@@ -57,6 +60,18 @@ function SearchResultsPage() {
     if (value && value !== "all") next.set(key, value);
     else next.delete(key);
     router.replace(`/search?${next.toString()}`, { scroll: false });
+  }
+
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const term = draft.trim();
+    if (!term) {
+      router.push("/search");
+      return;
+    }
+    const next = new URLSearchParams(params.toString());
+    next.set("q", term);
+    router.push(`/search?${next.toString()}`);
   }
 
   useEffect(() => {
@@ -84,17 +99,23 @@ function SearchResultsPage() {
     : 0;
 
   return (
-    <div className="page page-search">
-      <div className="page-hero">
-        <div className="eyebrow">站内检索</div>
-        <h1>搜索结果</h1>
-        <p>{query ? <>关键词：<strong>{query}</strong></> : "请输入关键词进行检索"}</p>
+    <main className="content page-search">
+      <div className="page-heading">
+        <div><div className="eyebrow">站内检索</div><h1>全局搜索</h1><p>搜索课程、课次、文字记录、智能纪要和知识点。</p></div>
       </div>
+
+      <form className="search-page-form" role="search" onSubmit={submitSearch}>
+        <label className="sr-only" htmlFor="search-page-query">搜索关键词</label>
+        <input id="search-page-query" className="field" type="search" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="输入想查找的课程或内容…" autoComplete="off" />
+        <button className="button button-primary" type="submit">搜索</button>
+      </form>
 
       {query && <div className="search-filter-bar" role="group" aria-label="搜索筛选">
         <label>课程<select className="field" value={courseId} onChange={(event) => updateFilter("course_id", event.target.value)}><option value="">全部课程</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</select></label>
         <label>内容类型<select className="field" value={kind} onChange={(event) => updateFilter("kind", event.target.value)}><option value="all">全部类型</option><option value="courses">课程</option><option value="lessons">课次</option><option value="transcript">文字记录</option><option value="summaries">智能纪要</option><option value="review_cards">知识点</option></select></label>
       </div>}
+
+      {query && <p className="search-page-summary" role="status">{loading ? "正在搜索…" : error ? "搜索失败" : results ? `“${query}”找到 ${total} 条结果` : `正在搜索“${query}”`}</p>}
 
       {error && <div className="notice">{error}</div>}
 
@@ -102,7 +123,7 @@ function SearchResultsPage() {
         <div className="empty-state">
           <div className="empty-icon">⌕</div>
           <strong>还没有检索词</strong>
-          <p>在右上角搜索框输入课程、课次、文字记录、纪要或知识点关键词后回车即可。</p>
+          <p>在上方输入关键词，按回车或点击“搜索”查看结果。</p>
         </div>
       )}
 
@@ -180,7 +201,7 @@ function SearchResultsPage() {
           </section>}
         </div>
       )}
-    </div>
+    </main>
   );
 }
 

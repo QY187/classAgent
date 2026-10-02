@@ -16,6 +16,7 @@
   --radius: 18px;
 }
 * { box-sizing: border-box; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 html, body { margin: 0; min-height: 100%; background: var(--soft); color: var(--ink); }
 body {
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
@@ -65,6 +66,7 @@ a { color: inherit; text-decoration: none; }
   width: 3px; height: 20px; border-radius: 0 4px 4px 0; background: linear-gradient(180deg, var(--blue), var(--blue-2));
 }
 .nav-icon { width: 20px; text-align: center; font-size: 17px; }
+.nav-icon svg { display: block; width: 19px; height: 19px; margin: auto; }
 .side-section { margin-top: 28px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .side-course-list { overflow-y: auto; display: grid; gap: 2px; align-content: start; }
 .side-course { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; color: #64728b; font-size: 13px; transition: color .18s, background .18s; }
@@ -360,6 +362,10 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .review-card-confirm .button { padding: 7px 10px; font-size: 11px; }
 .review-card-error { color: #b83b47; font-size: 12px; }
 .search-results { display: grid; gap: 18px; }
+.search-page-form { display: flex; gap: 12px; max-width: 860px; margin-bottom: 20px; }
+.search-page-form .field { flex: 1; min-width: 0; padding: 14px 16px; font-size: 15px; }
+.search-page-form .button { flex: none; min-width: 96px; }
+.search-page-summary { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
 .search-filter-bar { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin: -5px 0 22px; }
 .search-filter-bar label { display: grid; gap: 7px; min-width: min(230px, 100%); color: #40506e; font-size: 13px; font-weight: 700; }
 .search-filter-bar .field { min-width: 0; background: #fff; }
@@ -720,6 +726,8 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
   .workspace-entry-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
+  .search-page-form { gap: 8px; }
+  .search-page-form .button { min-width: 72px; padding-left: 12px; padding-right: 12px; }
   .settings-profile-content { flex-wrap: wrap; gap: 16px; }
   .settings-upload-action { width: 100%; justify-items: start; }
   .settings-password-fields { grid-template-columns: 1fr; padding: 22px; }
