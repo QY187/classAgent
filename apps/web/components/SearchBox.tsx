@@ -8,10 +8,12 @@ import { request } from "../lib/api";
 type SearchResults = {
   query: string;
   courses: { id: string; name: string; semester?: string | null }[];
-  lessons: { id: string; course_id: string; title: string; lesson_date?: string | null }[];
+  lessons: { id: string; course_id: string; course_name: string; title: string; lesson_date?: string | null }[];
   transcript: { segment_id: string; lesson_id: string; course_id: string; lesson_title: string; course_name: string; speaker: string; start_ms: number; text: string; snippet: string }[];
   summaries: { lesson_id: string; course_id: string; lesson_title: string; course_name: string }[];
+  review_cards: { id: string; lesson_id: string; course_id: string; lesson_title: string; course_name: string; title: string; snippet: string }[];
 };
+type SearchScope = "all" | "transcript" | "summaries" | "review_cards";
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -35,7 +37,9 @@ export default function SearchBox() {
   const [results, setResults] = useState<SearchResults | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [scope, setScope] = useState<SearchScope>("all");
   const containerRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const term = query.trim();
@@ -46,9 +50,10 @@ export default function SearchBox() {
     }
     const controller = new AbortController();
     setLoading(true);
+    setResults(null);
     const timer = window.setTimeout(() => {
       request<SearchResults>(`/search?q=${encodeURIComponent(term)}`, { signal: controller.signal })
-        .then(setResults)
+        .then((value) => { if (!controller.signal.aborted) setResults(value); })
         .catch(() => {})
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
@@ -69,9 +74,17 @@ export default function SearchBox() {
 
   const term = query.trim();
   const total = results
-    ? results.courses.length + results.lessons.length + results.transcript.length + results.summaries.length
+    ? results.courses.length + results.lessons.length + results.transcript.length + results.summaries.length + results.review_cards.length
     : 0;
   const showDropdown = open && term.length > 0;
+  const previewLimit = scope === "all" ? 2 : undefined;
+  const scopes: { id: SearchScope; label: string; count: number }[] = [
+    { id: "all", label: "全部", count: total },
+    { id: "transcript", label: "文字记录", count: results?.transcript.length ?? 0 },
+    { id: "summaries", label: "智能纪要", count: results?.summaries.length ?? 0 },
+    { id: "review_cards", label: "知识点", count: results?.review_cards.length ?? 0 },
+  ];
+  const searchUrl = (kind?: Exclude<SearchScope, "all">) => `/search?q=${encodeURIComponent(term)}${kind ? `&kind=${kind}` : ""}`;
 
   return (
     <div className="search" ref={containerRef}>
@@ -79,9 +92,11 @@ export default function SearchBox() {
         className="search-input"
         type="search"
         value={query}
-        placeholder="搜索课程、课次、文字或纪要…"
+        placeholder="搜索课程、课次、文字或知识点…"
         aria-label="站内搜索"
-        onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
+        aria-expanded={showDropdown}
+        aria-controls="search-suggestions"
+        onChange={(event) => { setQuery(event.target.value); if (!event.target.value.trim()) setScope("all"); if (resultsRef.current) resultsRef.current.scrollTop = 0; setOpen(true); }}
         onFocus={() => setOpen(true)}
         onKeyDown={(event) => {
           if (event.key === "Escape") setOpen(false);
@@ -95,13 +110,17 @@ export default function SearchBox() {
         }}
       />
       {showDropdown && (
-        <div className="search-dropdown" role="listbox">
+        <div className="search-dropdown" id="search-suggestions">
+          <div className="search-scope-switch" role="group" aria-label="选择搜索结果类型">
+            {scopes.map((item) => <button type="button" key={item.id} className={scope === item.id ? "is-active" : ""} aria-pressed={scope === item.id} onClick={() => { setScope(item.id); if (resultsRef.current) resultsRef.current.scrollTop = 0; }}><span>{item.label}</span><b>{item.count}</b></button>)}
+          </div>
+          <div className="search-dropdown-results" ref={resultsRef}>
           {loading && !results && <div className="search-empty">搜索中…</div>}
-          {!loading && results && total === 0 && <div className="search-empty">没有找到与“{term}”相关的内容</div>}
-          {results && results.courses.length > 0 && (
+          {!loading && results && (scope === "all" ? total === 0 : results[scope].length === 0) && <div className="search-empty">{scope === "all" ? `没有找到与“${term}”相关的内容` : `这一类没有匹配“${term}”的内容`}</div>}
+          {results && scope === "all" && results.courses.length > 0 && (
             <>
-              <div className="search-section-label">课程</div>
-              {results.courses.map((course) => (
+              <div className="search-section-label"><span>课程 <b>{results.courses.length}</b></span><Link href={searchUrl()} onClick={() => setOpen(false)}>查看全部 →</Link></div>
+              {results.courses.slice(0, previewLimit).map((course) => (
                 <Link key={course.id} className="search-item" href={`/courses/${course.id}`} onClick={() => setOpen(false)}>
                   <div className="search-item-title"><Highlight text={course.name} query={term} /></div>
                   <div className="search-item-sub">{course.semester || "未设置学期"}</div>
@@ -109,32 +128,32 @@ export default function SearchBox() {
               ))}
             </>
           )}
-          {results && results.lessons.length > 0 && (
+          {results && scope === "all" && results.lessons.length > 0 && (
             <>
-              <div className="search-section-label">课次</div>
-              {results.lessons.map((lesson) => (
+              <div className="search-section-label"><span>课次 <b>{results.lessons.length}</b></span><Link href={searchUrl()} onClick={() => setOpen(false)}>查看全部 →</Link></div>
+              {results.lessons.slice(0, previewLimit).map((lesson) => (
                 <Link key={lesson.id} className="search-item" href={`/lessons/${lesson.id}`} onClick={() => setOpen(false)}>
                   <div className="search-item-title"><Highlight text={lesson.title} query={term} /></div>
-                  <div className="search-item-sub">课次 · {lesson.lesson_date || "未设置日期"}</div>
+                  <div className="search-item-sub">{lesson.course_name} · {lesson.lesson_date || "未设置日期"}</div>
                 </Link>
               ))}
             </>
           )}
-          {results && results.transcript.length > 0 && (
+          {results && (scope === "all" || scope === "transcript") && results.transcript.length > 0 && (
             <>
-              <div className="search-section-label">文字记录片段</div>
-              {results.transcript.map((segment) => (
-                <Link key={segment.segment_id} className="search-item" href={`/lessons/${segment.lesson_id}/transcript`} onClick={() => setOpen(false)}>
+              <div className="search-section-label"><span>文字记录 <b>{results.transcript.length}</b></span><Link href={searchUrl("transcript")} onClick={() => setOpen(false)}>查看全部 →</Link></div>
+              {results.transcript.slice(0, previewLimit).map((segment) => (
+                <Link key={segment.segment_id} className="search-item" href={`/lessons/${segment.lesson_id}/transcript?t=${segment.start_ms}`} onClick={() => setOpen(false)}>
                   <div className="search-item-title"><Highlight text={segment.lesson_title} query={term} /><span className="search-count">{segment.course_name}</span></div>
                   <div className="search-item-snippet"><Highlight text={segment.snippet} query={term} /></div>
                 </Link>
               ))}
             </>
           )}
-          {results && results.summaries.length > 0 && (
+          {results && (scope === "all" || scope === "summaries") && results.summaries.length > 0 && (
             <>
-              <div className="search-section-label">智能纪要命中</div>
-              {results.summaries.map((summary) => (
+              <div className="search-section-label"><span>智能纪要 <b>{results.summaries.length}</b></span><Link href={searchUrl("summaries")} onClick={() => setOpen(false)}>查看全部 →</Link></div>
+              {results.summaries.slice(0, previewLimit).map((summary) => (
                 <Link key={summary.lesson_id} className="search-item" href={`/lessons/${summary.lesson_id}/summary`} onClick={() => setOpen(false)}>
                   <div className="search-item-title"><Highlight text={summary.lesson_title} query={term} /><span className="search-count">{summary.course_name}</span></div>
                   <div className="search-item-sub">该课次的智能纪要中包含“{term}”</div>
@@ -142,6 +161,18 @@ export default function SearchBox() {
               ))}
             </>
           )}
+          {results && (scope === "all" || scope === "review_cards") && results.review_cards.length > 0 && (
+            <>
+              <div className="search-section-label"><span>知识点 <b>{results.review_cards.length}</b></span><Link href={searchUrl("review_cards")} onClick={() => setOpen(false)}>查看全部 →</Link></div>
+              {results.review_cards.slice(0, previewLimit).map((card) => (
+                <Link key={card.id} className="search-item" href={`/lessons/${card.lesson_id}/review#review-card-${card.id}`} onClick={() => setOpen(false)}>
+                  <div className="search-item-title"><Highlight text={card.title} query={term} /><span className="search-count">{card.course_name} · {card.lesson_title}</span></div>
+                  <div className="search-item-snippet"><Highlight text={card.snippet} query={term} /></div>
+                </Link>
+              ))}
+            </>
+          )}
+          </div>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import ReviewCardItem from "../../../../components/ReviewCardItem";
 import { errorMessage, request } from "../../../../lib/api";
@@ -20,6 +20,7 @@ export default function LessonReviewPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [cardType, setCardType] = useState<CardType>("concept");
+  const focusedCardRef = useRef("");
 
   async function reloadCards() {
     setCards(await request<ReviewCard[]>(`/lessons/${lessonId}/review-cards`));
@@ -31,6 +32,17 @@ export default function LessonReviewPage() {
       .catch((error) => setMessage(errorMessage(error)))
       .finally(() => setLoading(false));
   }, [lessonId]);
+
+  useEffect(() => {
+    if (!cards.length) return;
+    const hash = window.location.hash.slice(1);
+    if (!hash.startsWith("review-card-") || focusedCardRef.current === hash) return;
+    const target = document.getElementById(hash);
+    if (target) {
+      target.scrollIntoView({ block: "center" });
+      focusedCardRef.current = hash;
+    }
+  }, [cards]);
 
   async function generate() {
     if (busy) return;

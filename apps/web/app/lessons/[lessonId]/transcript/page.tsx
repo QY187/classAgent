@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { errorMessage, apiUrl, request } from "../../../../lib/api";
 import { getToken } from "../../../../lib/auth";
@@ -21,6 +21,7 @@ export default function TranscriptPage() {
   const [audioMeta, setAudioMeta] = useState<{ id: string; filename: string; content_type: string; size_bytes: number } | null>(null);
   const [seek, setSeek] = useState<{ ms: number; n: number } | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const scrolledTimeRef = useRef<string | null>(null);
 
   const aliasMap = Object.fromEntries(speakers.map((item) => [item.raw_label, item.display_name]));
   const displayName = (raw: string) => aliasMap[raw] || raw;
@@ -43,6 +44,18 @@ export default function TranscriptPage() {
   }
   useEffect(() => { if (lessonId) load(); }, [lessonId]);
   useEffect(() => { if (!job || ["completed", "failed"].includes(job.stage)) return; const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer); }, [job?.stage, lessonId]);
+  useEffect(() => {
+    if (!segments.length) return;
+    const value = new URLSearchParams(window.location.search).get("t");
+    if (value === null || scrolledTimeRef.current === value) return;
+    const target = Number(value);
+    if (!Number.isFinite(target) || target < 0) return;
+    const nextIndex = segments.findIndex((segment) => segment.start_ms > target);
+    const index = nextIndex < 0 ? segments.length - 1 : Math.max(0, nextIndex - 1);
+    setActiveId(segments[index].id);
+    scrolledTimeRef.current = value;
+    requestAnimationFrame(() => document.querySelectorAll(".transcript-segment")[index]?.scrollIntoView({ block: "center" }));
+  }, [segments]);
 
   async function saveText(segmentId: string, text: string) {
     const updated = await saveSegment(lessonId, segmentId, text);

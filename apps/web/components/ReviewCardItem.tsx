@@ -28,7 +28,7 @@ export default function ReviewCardItem({ card, onReview, onSave, onDelete, showL
     finally { setBusy(false); }
   }
 
-  return <article className="review-card">
+  return <article className="review-card" id={`review-card-${card.id}`}>
     <div className="review-card-top"><span className="review-card-kind">{cardTypeLabel[card.card_type]}</span><span className={`review-card-status review-card-status-${card.status}`}>{cardStatusLabel[card.status]}</span></div>
     {showLesson && <Link className="review-card-lesson" href={`/lessons/${card.lesson_id}`}>{card.lesson_title} ↗</Link>}
     {editing ? <form className="review-card-edit" onSubmit={(event) => {
