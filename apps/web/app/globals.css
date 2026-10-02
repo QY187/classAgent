@@ -247,6 +247,13 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .recycle-item-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .recycle-item-actions .button { padding: 10px 16px; font-size: 13px; }
 .recycle-success { color: #168a72; background: #eaf8f2; }
+.recycle-purge-button { color: #ba4050; background: #fff5f5; border: 1px solid #f5d9dd; box-shadow: none; }
+.purge-acknowledgement { display: flex; align-items: flex-start; gap: 12px; line-height: 1.7; font-size: 14px; margin: 22px 0; }
+.purge-acknowledgement input { margin-top: 5px; accent-color: #ba4050; }
+.recycle-cleanup { padding: 24px; display: flex; align-items: center; flex-wrap: wrap; gap: 18px; }
+.recycle-cleanup > div { flex: 1; min-width: 200px; }
+.recycle-cleanup h2 { font-size: 16px; margin: 0 0 8px; }
+.recycle-cleanup p { color: var(--muted); font-size: 13px; line-height: 1.8; margin: 0; }
 @media (max-width: 760px) { .recycle-item { flex-wrap: wrap; padding: 18px; } .recycle-item-copy { flex-basis: calc(100% - 70px); } .recycle-item-actions { width: 100%; justify-content: flex-end; } .recycle-search { min-width: 0; flex-basis: 100%; } }
 .wrong-book-list { display: grid; gap: 16px; margin-top: 24px; }
 .wrong-book-item { padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: #fff; scroll-margin-top: 90px; }
