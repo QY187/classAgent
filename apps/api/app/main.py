@@ -17,6 +17,7 @@ from .modules.review_cards.controller import router as review_cards_router
 from .modules.materials.controller import router as materials_router
 from .modules.quizzes.controller import router as quizzes_router
 from .modules.recycle_bin.migrations import prepare_deleted_columns
+from .modules.recycle_bin.controller import router as recycle_bin_router
 
 
 app = FastAPI(title="ClassAgent API", version="0.1.0")
@@ -120,3 +121,4 @@ app.include_router(rag_router)
 app.include_router(review_cards_router)
 app.include_router(materials_router)
 app.include_router(quizzes_router)
+app.include_router(recycle_bin_router)
