@@ -64,6 +64,20 @@ services:
       redis:
         condition: service_healthy
 
+  beat:
+    build: ./apps/api
+    restart: unless-stopped
+    command: celery -A app.infrastructure.tasks.celery_app beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql+psycopg://classagent:${DB_PASSWORD}@postgres:5432/classagent
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
   web:
     build:
       context: ./apps/web

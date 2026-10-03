@@ -13,6 +13,13 @@ def purge_item(db: Session, kind: str, identity: str, username: str) -> dict:
         raise HTTPException(status_code=409, detail="只能彻底删除回收站中的内容")
     if (kind != "course" and course.deleted_at is not None) or (lesson and lesson.deleted_at is not None):
         raise HTTPException(status_code=409, detail="所属课程或课次也在回收站，请先恢复父级或直接删除父级")
+    purge_locked_item(db, kind, item, course)
+    return clean_pending_files(db, username)
+
+
+def purge_locked_item(db: Session, kind: str, item, course) -> None:
+    """调用方必须先锁定课程和目标，并校验删除条件；只负责数据库事务。"""
+    identity = item.id
     if kind == "material":
         keys = [item.object_key]
     else:
@@ -33,4 +40,3 @@ def purge_item(db: Session, kind: str, identity: str, username: str) -> dict:
     db.execute(delete(table).where(table.c.id == identity))
     db.commit()
     db.expunge_all()
-    return clean_pending_files(db, username)

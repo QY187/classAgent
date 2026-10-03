@@ -241,6 +241,10 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .recycle-item-icon { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border-radius: 14px; background: var(--blue-soft); color: var(--blue); font-size: 23px; }
 .recycle-item-icon.material { background: #e9f7f1; color: #168a72; }
 .recycle-item-copy { flex: 1; min-width: 0; }
+.recycle-item-expiry { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; }
+.recycle-item-expiry small { color: var(--muted); font-size: 12px; }
+.recycle-expiry-badge { padding: 5px 10px; border-radius: 8px; background: #eef2ff; color: #555bd9; font-size: 12px; font-weight: 600; }
+.recycle-expiry-badge.urgent { background: #fff2e5; color: #a95c17; }
 .recycle-kind-label { color: var(--muted); font-size: 12px; }
 .recycle-item-copy h3 { font-size: 16px; line-height: 1.7; margin: 5px 0; overflow-wrap: anywhere; }
 .recycle-item-copy p { color: var(--muted); font-size: 12px; line-height: 1.8; margin: 0; }

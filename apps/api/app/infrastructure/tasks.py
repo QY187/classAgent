@@ -10,7 +10,17 @@ from ..modules.summaries.service import generate_summary as build_summary
 
 
 celery_app = Celery("classagent", broker=get_settings().redis_url, backend=get_settings().redis_url)
-celery_app.conf.update(task_track_started=True, result_expires=3600)
+celery_app.conf.update(task_track_started=True, result_expires=3600, beat_schedule={
+    "recycle-bin-expiration": {"task": "classagent.clean_recycle_bin", "schedule": 600.0},
+})
+
+
+@celery_app.task(name="classagent.clean_recycle_bin")
+def clean_recycle_bin() -> dict:
+    from ..core.db import SessionLocal
+    from ..modules.recycle_bin.expiration import remove_expired_items
+    with SessionLocal() as db:
+        return remove_expired_items(db)
 
 
 @celery_app.task(name="classagent.process_audio")

@@ -2,6 +2,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from ...core.ownership import user_id_for_username
 from ...shared.models import Course, CourseMaterial, Lesson
+from .retention import expires_at
 
 
 def list_items(db: Session, username: str) -> list[dict]:
@@ -26,4 +27,6 @@ def list_items(db: Session, username: str) -> list[dict]:
     for material, course, lesson in materials:
         items.append({"id": material.id, "kind": "material", "title": material.filename, "course_name": course.name,
                       "lesson_title": lesson.title if lesson else None, "deleted_at": material.deleted_at})
+    for item in items:
+        item["expires_at"] = expires_at(item["deleted_at"])
     return sorted(items, key=lambda item: (item["deleted_at"], item["id"]), reverse=True)
