@@ -27,22 +27,34 @@ def index_status(db: Session, course_id: str, username: str) -> dict:
     return {"chunk_count": count, "configured": bool(settings.dashscope_api_key and settings.deepseek_api_key)}
 
 
-def ask_course(db: Session, course_id: str, username: str, question: str) -> dict:
+def chunk_scope(course_id: str, lesson_id: str | None = None):
+    conditions = [DocumentChunk.course_id == course_id]
+    if lesson_id is not None:
+        conditions.append(DocumentChunk.lesson_id == lesson_id)
+    return conditions
+
+
+def ask_course(db: Session, course_id: str, username: str, question: str, *, lesson_id: str | None = None) -> dict:
     owned_course(db, course_id, username)
+    if lesson_id is not None:
+        lesson = visible_get(db, Lesson, lesson_id)
+        if lesson is None or lesson.course_id != course_id:
+            raise HTTPException(404, "课次不存在")
     if len(question.strip()) < 2:
         raise HTTPException(status_code=422, detail="请输入至少两个字的问题")
     settings = get_settings()
     if not settings.deepseek_api_key:
         raise HTTPException(status_code=503, detail="未配置 DEEPSEEK_API_KEY，暂时无法问答")
-    total = db.scalar(select(func.count()).select_from(DocumentChunk).where(DocumentChunk.course_id == course_id)) or 0
+    scope = chunk_scope(course_id, lesson_id)
+    total = db.scalar(select(func.count()).select_from(DocumentChunk).where(*scope)) or 0
     if total == 0:
-        return {"answer": "这门课程还没有可检索的课堂内容，请先完成转写或重建索引。", "citations": []}
+        return {"answer": f"{'本课次' if lesson_id else '这门课程'}还没有可检索的课堂内容，请先完成转写或更新所属课程的问答资料。", "citations": []}
     try:
         vector = embed_texts([question])[0]
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     matches = list(db.scalars(
-        select(DocumentChunk).where(DocumentChunk.course_id == course_id)
+        select(DocumentChunk).where(*scope)
         .order_by(DocumentChunk.embedding.cosine_distance(vector)).limit(8)
     ))
     lessons = {lesson.id: lesson for lesson in db.scalars(select(Lesson).where(Lesson.id.in_([item.lesson_id for item in matches])))}
