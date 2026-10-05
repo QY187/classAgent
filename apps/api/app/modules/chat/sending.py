@@ -8,6 +8,7 @@ from ..rag.service import ask_course
 from .access import owned_conversation
 from .messages import read_messages
 from .generation import is_generating
+from .context import recent_context
 
 
 def _finish_failed(db: Session, conversation_id: str, request_id: str, token: str, error: str):
@@ -60,9 +61,11 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
     lesson = db.scalar(select(Lesson).where(Lesson.id == lesson_id))
     course_id = lesson.course_id
     position = existing.position
+    context = recent_context(db, conversation_id, position)
     db.commit()
     try:
-        result = ask_course(db, course_id, username, question, lesson_id=lesson_id)
+        options = {"history": context} if context else {}
+        result = ask_course(db, course_id, username, question, lesson_id=lesson_id, **options)
         db.rollback()
         conversation = owned_conversation(db, conversation_id, username, lock=True)
         if conversation.generation_token != token:

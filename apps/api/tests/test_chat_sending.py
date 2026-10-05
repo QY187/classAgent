@@ -13,6 +13,18 @@ class ChatSendingTest(unittest.TestCase):
     setUp = fixtures.RecycleVisibilityTest.setUp
     tearDown = fixtures.RecycleVisibilityTest.tearDown
 
+    @patch("app.modules.chat.sending.ask_course", return_value={"answer":"原文依据", "citations":[]})
+    def test_follow_up_uses_only_this_conversation_completed_history(self, ask):
+        with Session(self.engine) as db:
+            chat = create_conversation(db, "l", "owner")
+            other = create_conversation(db, "l", "owner")
+            send_message(db, other["id"], "owner", "其他对话", "other")
+            send_message(db, chat["id"], "owner", "二叉树定义", "first")
+            send_message(db, chat["id"], "owner", "能举个例子吗", "follow")
+            context = ask.call_args.kwargs["history"]
+            self.assertEqual([item["content"] for item in context], ["二叉树定义", "原文依据"])
+            self.assertEqual(ask.call_args.kwargs["lesson_id"], "l")
+
     @patch("app.modules.chat.sending.ask_course", return_value={"answer":"有依据的答案", "citations":[{"id":1}]})
     def test_saving_and_same_request_is_idempotent(self, ask):
         with Session(self.engine) as db:
