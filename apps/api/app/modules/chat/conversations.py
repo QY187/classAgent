@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 from ...core.ownership import user_id_for_username
 from ...shared.models import ChatConversation
 from .access import owned_lesson
+from .generation import is_generating
 
 
 def conversation_read(item: ChatConversation) -> dict:
     return {"id": item.id, "lesson_id": item.lesson_id, "title": item.title,
-            "created_at": item.created_at, "updated_at": item.updated_at}
+            "created_at": item.created_at, "updated_at": item.updated_at, "generating": is_generating(item)}
 
 
 def create_conversation(db: Session, lesson_id: str, username: str) -> dict:

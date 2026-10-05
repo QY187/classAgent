@@ -1,6 +1,5 @@
 """消息发送、幂等请求和失败恢复；模型检索由独立 RAG 服务承担。"""
 import json
-from datetime import timedelta, timezone
 from fastapi import HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -8,15 +7,7 @@ from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_
 from ..rag.service import ask_course
 from .access import owned_conversation
 from .messages import read_messages
-
-GENERATION_LEASE = timedelta(minutes=5)
-
-
-def is_generating(conversation: ChatConversation) -> bool:
-    started = conversation.generating_at
-    if started is not None and started.tzinfo is None:
-        started = started.replace(tzinfo=timezone.utc)
-    return bool(conversation.generation_token and started and started + GENERATION_LEASE > now_utc())
+from .generation import is_generating
 
 
 def _finish_failed(db: Session, conversation_id: str, request_id: str, token: str, error: str):

@@ -6,8 +6,14 @@ from ...core.db import get_db
 from ...core.deps import get_current_user
 from . import conversations, messages
 from .sending import send_message
+from .tree import lesson_tree
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+@router.get("/lessons")
+def get_lesson_tree(username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return lesson_tree(db, username)
 
 
 class SendMessage(BaseModel):

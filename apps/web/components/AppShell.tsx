@@ -25,6 +25,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const wrongBookActive = pathname === "/wrong-questions";
   const recycleActive = pathname === "/recycle-bin";
   const searchActive = pathname === "/search";
+  const chatActive = pathname === "/chat";
   const settingsActive = pathname === "/settings";
 
   useEffect(() => {
@@ -91,6 +92,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <Link className={`nav-item ${libraryActive && !activeCourseId ? "active" : ""}`} href="/"><span className="nav-icon">▦</span><span>课程库</span></Link>
           <Link className={`nav-item ${searchActive ? "active" : ""}`} href="/search" aria-label="全局搜索"><span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg></span><span>全局搜索</span></Link>
           <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review"><span className="nav-icon">◷</span><span>知识点清单</span></Link>
+          <Link className={`nav-item ${chatActive ? "active" : ""}`} href="/chat"><span className="nav-icon">◌</span><span>问答工作台</span></Link>
           <Link className={`nav-item ${wrongBookActive ? "active" : ""}`} href="/wrong-questions"><span className="nav-icon">▤</span><span>错题本</span></Link>
           <Link className={`nav-item ${recycleActive ? "active" : ""}`} href="/recycle-bin"><span className="nav-icon">↺</span><span>回收站</span></Link>
         </nav>
@@ -116,7 +118,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <div className="main-area">
         <header className="topbar">
           <nav className="breadcrumb" aria-label="当前位置">
-            {courseMatch || lessonMatch || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
+            {courseMatch || lessonMatch || chatActive || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
+            {chatActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">问答工作台</span></>}
             {recycleActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">回收站</span></>}
             {wrongBookActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">错题本</span></>}
             {searchActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">全局搜索</span></>}
