@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from uuid import UUID
@@ -8,8 +8,14 @@ from . import conversations, messages
 from .sending import send_message
 from .tree import lesson_tree
 from .deletion import delete_conversation
+from .search import search_conversations
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+@router.get("/search")
+def search(query: str = Query(min_length=1, max_length=200), username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return search_conversations(db, username, query)
 
 
 @router.delete("/conversations/{conversation_id}", status_code=204)

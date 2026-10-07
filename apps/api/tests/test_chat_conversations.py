@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.shared.models import ChatMessage, Lesson, User, now_utc
 from sqlalchemy import select
 from app.modules.chat.deletion import delete_conversation
+from app.modules.chat.search import search_conversations
 from app.modules.chat.messages import read_messages
 from app.modules.chat.conversations import create_conversation, list_conversations, rename_conversation
 
@@ -12,6 +13,15 @@ from app.modules.chat.conversations import create_conversation, list_conversatio
 class ChatConversationTest(unittest.TestCase):
     setUp = fixtures.RecycleVisibilityTest.setUp
     tearDown = fixtures.RecycleVisibilityTest.tearDown
+
+    def test_search_escapes_wildcards_and_hides_recycled(self):
+        with Session(self.engine) as db:
+            chat = create_conversation(db, "l", "owner")
+            rename_conversation(db, chat["id"], "owner", "遍历练习")
+            self.assertEqual(len(search_conversations(db, "owner", "遍历")), 1)
+            self.assertEqual(search_conversations(db, "owner", "%"), [])
+            db.get(Lesson, "l").deleted_at = now_utc(); db.commit()
+            self.assertEqual(search_conversations(db, "owner", "遍历"), [])
 
     def test_delete_removes_only_selected_conversation_messages(self):
         with Session(self.engine) as db:
