@@ -5,6 +5,7 @@ import { errorMessage, request } from "../../lib/api";
 import type { ChatHistory, Conversation } from "../../lib/chat";
 import ChatMessageList from "./ChatMessageList";
 import ChatComposer from "./ChatComposer";
+import ChatTitleEditor from "./ChatTitleEditor";
 
 export default function ChatThread({ conversationId, onLoaded, onChanged }: { conversationId: string; onLoaded: (item: Conversation) => void; onChanged: () => void }) {
   const [history, setHistory] = useState<ChatHistory | null>(null);
@@ -55,7 +56,7 @@ export default function ChatThread({ conversationId, onLoaded, onChanged }: { co
   }
   const last = history?.messages.at(-1);
   const retryable = last?.role === "user" && (last.status === "failed" || (last.status === "pending" && !history?.conversation.generating));
-  return <><header className="chat-thread-header"><div><span className="eyebrow">课次对话</span><h2>{history?.conversation.title || "正在读取对话"}</h2></div>{history && <Link className="button button-quiet" href={`/lessons/${history.conversation.lesson_id}/summary`}>查看本课纪要 ↗</Link>}</header>
+  return <><header className="chat-thread-header"><div><span className="eyebrow">课次对话</span>{history ? <ChatTitleEditor conversation={history.conversation} disabled={sending || history.conversation.generating} onRenamed={(item) => { setHistory({ ...history, conversation: item }); onChanged(); }} /> : <h2>正在读取对话</h2>}</div>{history && <Link className="button button-quiet" href={`/lessons/${history.conversation.lesson_id}/summary`}>查看本课纪要 ↗</Link>}</header>
     {error && <div className="chat-thread-notice"><p role="alert">{error}</p><button className="button button-secondary" onClick={() => void load()}>重新加载</button></div>}
     <div className="chat-message-scroll"><div className="chat-message-column">{loading ? <p role="status">正在读取消息…</p> : history?.messages.length ? <ChatMessageList messages={history.messages} generating={history.conversation.generating} /> : !error && <div className="chat-empty-conversation"><h3>有什么想弄明白的？</h3><p>回答会依据本课次的文字记录与纪要，并附上原文时间点。</p></div>}{retryable && <button className="button button-secondary" disabled={sending} onClick={() => void send(last.content, last.request_id)}>重试这条问题</button>}<div ref={bottom} /></div></div>
     {history && <ChatComposer disabled={loading || history.conversation.generating} busy={sending} onSend={send} />}</>;

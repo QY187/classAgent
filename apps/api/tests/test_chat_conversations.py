@@ -4,12 +4,21 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.shared.models import ChatMessage, Lesson, User, now_utc
 from app.modules.chat.messages import read_messages
-from app.modules.chat.conversations import create_conversation, list_conversations
+from app.modules.chat.conversations import create_conversation, list_conversations, rename_conversation
 
 
 class ChatConversationTest(unittest.TestCase):
     setUp = fixtures.RecycleVisibilityTest.setUp
     tearDown = fixtures.RecycleVisibilityTest.tearDown
+
+    def test_rename_validates_and_persists_title(self):
+        with Session(self.engine) as db:
+            chat = create_conversation(db, "l", "owner")
+            renamed = rename_conversation(db, chat["id"], "owner", "  遍历问题  ")
+            self.assertEqual(renamed["title"], "遍历问题")
+            self.assertEqual(read_messages(db, chat["id"], "owner")["conversation"]["title"], "遍历问题")
+            with self.assertRaises(HTTPException):
+                rename_conversation(db, chat["id"], "owner", "  ")
 
     def test_history_keeps_order_and_checks_owner(self):
         with Session(self.engine) as db:

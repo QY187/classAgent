@@ -21,6 +21,15 @@ class SendMessage(BaseModel):
     request_id: UUID
 
 
+class RenameConversation(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+@router.patch("/conversations/{conversation_id}")
+def rename(conversation_id: str, body: RenameConversation, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return conversations.rename_conversation(db, conversation_id, username, body.title)
+
+
 @router.post("/conversations/{conversation_id}/ask")
 def send(conversation_id: str, body: SendMessage, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return send_message(db, conversation_id, username, body.content, str(body.request_id))
