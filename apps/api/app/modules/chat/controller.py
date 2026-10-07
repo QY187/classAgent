@@ -7,8 +7,14 @@ from ...core.deps import get_current_user
 from . import conversations, messages
 from .sending import send_message
 from .tree import lesson_tree
+from .deletion import delete_conversation
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+def remove(conversation_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    delete_conversation(db, conversation_id, username)
 
 
 @router.get("/lessons")

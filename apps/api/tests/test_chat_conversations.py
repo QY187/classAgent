@@ -3,6 +3,8 @@ import test_recycle_visibility as fixtures
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.shared.models import ChatMessage, Lesson, User, now_utc
+from sqlalchemy import select
+from app.modules.chat.deletion import delete_conversation
 from app.modules.chat.messages import read_messages
 from app.modules.chat.conversations import create_conversation, list_conversations, rename_conversation
 
@@ -10,6 +12,17 @@ from app.modules.chat.conversations import create_conversation, list_conversatio
 class ChatConversationTest(unittest.TestCase):
     setUp = fixtures.RecycleVisibilityTest.setUp
     tearDown = fixtures.RecycleVisibilityTest.tearDown
+
+    def test_delete_removes_only_selected_conversation_messages(self):
+        with Session(self.engine) as db:
+            first = create_conversation(db, "l", "owner")
+            second = create_conversation(db, "l", "owner")
+            db.add(ChatMessage(conversation_id=first["id"], request_id="r", position=1, role="user", content="问题")); db.commit()
+            delete_conversation(db, first["id"], "owner")
+            self.assertEqual(list(db.scalars(select(ChatMessage))), [])
+            self.assertEqual(len(list_conversations(db, "l", "owner")), 1)
+            self.assertEqual(list_conversations(db, "l", "owner")[0]["id"], second["id"])
+            self.assertIsNotNone(db.get(Lesson, "l"))
 
     def test_rename_validates_and_persists_title(self):
         with Session(self.engine) as db:
