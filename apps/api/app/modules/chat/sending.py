@@ -58,8 +58,10 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
     if conversation.title == "新对话":
         conversation.title = question[:40]
     lesson_id = conversation.lesson_id
-    lesson = db.scalar(select(Lesson).where(Lesson.id == lesson_id))
-    course_id = lesson.course_id
+    course_id = conversation.course_id
+    if lesson_id is not None:
+        lesson = db.scalar(select(Lesson).where(Lesson.id == lesson_id))
+        course_id = lesson.course_id
     position = existing.position
     context = recent_context(db, conversation_id, position)
     db.commit()

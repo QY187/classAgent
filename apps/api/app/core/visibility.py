@@ -28,7 +28,8 @@ def _criteria():
                  or_(m.CourseMaterial.lesson_id.is_(None), lesson_active(m.CourseMaterial.lesson_id)))),
              (m.Quiz, and_(course_active(m.Quiz.course_id), or_(m.Quiz.lesson_id.is_(None), lesson_active(m.Quiz.lesson_id)))),
              (m.QuizQuestion, quiz_active(m.QuizQuestion.quiz_id)), (m.QuizAttempt, quiz_active(m.QuizAttempt.quiz_id))]
-    for model in (m.AudioFile, m.ProcessingJob, m.TranscriptSegment, m.LessonSummary, m.SpeakerAlias, m.DocumentChunk, m.ReviewCard, m.ChatConversation):
+    rules.append((m.ChatConversation, or_(lesson_active(m.ChatConversation.lesson_id), course_active(m.ChatConversation.course_id))))
+    for model in (m.AudioFile, m.ProcessingJob, m.TranscriptSegment, m.LessonSummary, m.SpeakerAlias, m.DocumentChunk, m.ReviewCard):
         rules.append((model, lesson_active(model.lesson_id)))
     for model in (m.QuizAnswer, m.QuizQuestionRetry):
         rules.append((model, exists(select(questions.c.id).where(questions.c.id == model.question_id,
@@ -36,7 +37,7 @@ def _criteria():
     segments = m.TranscriptSegment.__table__.alias("visible_segment")
     conversations = m.ChatConversation.__table__.alias("visible_conversation")
     rules.append((m.ChatMessage, exists(select(conversations.c.id).where(
-        conversations.c.id == m.ChatMessage.conversation_id, lesson_active(conversations.c.lesson_id)
+        conversations.c.id == m.ChatMessage.conversation_id, or_(lesson_active(conversations.c.lesson_id), course_active(conversations.c.course_id))
     ).correlate_except(conversations))))
     rules.append((m.TranscriptRevision, exists(select(segments.c.id).where(segments.c.id == m.TranscriptRevision.segment_id,
                   lesson_active(segments.c.lesson_id)).correlate_except(segments))))

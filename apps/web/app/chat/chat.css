@@ -28,6 +28,10 @@
 .chat-search-hit span { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
 .chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .chat-conversations { padding: 0 4px 8px 18px; }
+.chat-course-conversations { margin: 4px 0 12px 20px; padding-left: 4px; border-left: 1px solid #e2e7f1; }
+.chat-course-conversations .chat-conversations { padding-left: 0; }
+.chat-scope-caption { display: block; color: #8b97ad; font-size: 10px; padding: 6px 10px 2px; }
+.chat-lesson-caption { padding-left: 30px; }
 .chat-new-conversation, .chat-conversation-link { border: 0; background: transparent; width: 100%; text-align: left; border-radius: 8px; padding: 9px 10px; font-size: 12px; }
 .chat-new-conversation { color: var(--blue); font-weight: 600; }
 .chat-conversation-link { display: flex; gap: 8px; color: #59677e; }
