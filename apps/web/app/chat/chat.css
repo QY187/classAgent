@@ -6,7 +6,15 @@
 .chat-tree-header .field { width: 100%; padding: 10px 12px; font-size: 12px; border-radius: 10px; }
 .chat-tree-scroll { overflow-y: auto; padding: 14px 10px 24px; }
 .chat-course-group h2 { font-size: 11px; color: var(--muted); margin: 16px 10px 8px; overflow-wrap: anywhere; }
-.chat-lesson { margin: 4px 0; }
+.chat-course-group .chat-course-heading { display: flex; align-items: center; gap: 8px; color: #43516c; font-size: 13px; margin: 22px 8px 10px; }
+.chat-course-icon { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 7px; background: #eaf0ff; color: var(--blue); }
+.chat-course-icon svg { width: 17px; height: 17px; }
+.chat-course-title { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.chat-course-label { flex: none; font-size: 10px; font-weight: 400; color: #8894a8; }
+.chat-course-toggle { width: 100%; display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: inherit; text-align: left; padding: 0; font-weight: inherit; }
+.chat-course-toggle:hover .chat-course-title { color: var(--blue); }
+.chat-course-toggle .chat-tree-chevron { font-size: 13px; flex: none; }
+.chat-lesson { margin: 4px 0 4px 20px; border-left: 1px solid #e2e7f1; padding-left: 4px; }
 .chat-lesson summary { cursor: pointer; display: flex; gap: 12px; justify-content: space-between; padding: 11px 10px; border-radius: 8px; font-weight: 600; font-size: 13px; list-style: none; }
 .chat-lesson summary::-webkit-details-marker { display: none; }
 .chat-lesson summary:hover { background: #eef1ff; }
