@@ -6,6 +6,7 @@ from app.shared.models import ChatMessage, Lesson, User, now_utc
 from sqlalchemy import select
 from app.modules.chat.deletion import delete_conversation
 from app.modules.chat.search import search_conversations
+from app.modules.chat.tree import lesson_tree
 from app.modules.chat.messages import read_messages
 from app.modules.chat.conversations import create_conversation, list_conversations, rename_conversation
 
@@ -13,6 +14,14 @@ from app.modules.chat.conversations import create_conversation, list_conversatio
 class ChatConversationTest(unittest.TestCase):
     setUp = fixtures.RecycleVisibilityTest.setUp
     tearDown = fixtures.RecycleVisibilityTest.tearDown
+
+    def test_tree_respects_manual_order_and_recycle(self):
+        with Session(self.engine) as db:
+            db.get(Lesson, "l").sort_order = 2
+            db.add(Lesson(id="first", course_id="c", title="第一节", sort_order=1)); db.commit()
+            self.assertEqual([item["id"] for item in lesson_tree(db, "owner")], ["first", "l"])
+            db.get(Lesson, "first").deleted_at = now_utc(); db.commit()
+            self.assertEqual([item["id"] for item in lesson_tree(db, "owner")], ["l"])
 
     def test_search_escapes_wildcards_and_hides_recycled(self):
         with Session(self.engine) as db:

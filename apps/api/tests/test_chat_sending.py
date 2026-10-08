@@ -6,12 +6,40 @@ from sqlalchemy.orm import Session
 from app.modules.chat.conversations import create_conversation
 from app.modules.chat.messages import read_messages
 from app.modules.chat.sending import send_message
-from app.shared.models import ChatConversation, now_utc
+from app.shared.models import ChatConversation, ChatMessage, Lesson, now_utc
+from sqlalchemy import select
+from datetime import timedelta
 
 
 class ChatSendingTest(unittest.TestCase):
     setUp = fixtures.RecycleVisibilityTest.setUp
     tearDown = fixtures.RecycleVisibilityTest.tearDown
+
+    @patch("app.modules.chat.sending.ask_course", return_value={"answer":"恢复后的回答", "citations":[]})
+    def test_expired_generation_can_retry_original_question(self, ask):
+        with Session(self.engine) as db:
+            chat = create_conversation(db, "l", "owner")
+            item = db.get(ChatConversation, chat["id"])
+            item.generation_token = "expired"; item.generating_at = now_utc() - timedelta(minutes=6)
+            db.add(ChatMessage(conversation_id=chat["id"], request_id="r", position=1, role="user", content="课堂问题", status="pending")); db.commit()
+            result = send_message(db, chat["id"], "owner", "课堂问题", "r")
+            self.assertEqual(len(result["messages"]), 2)
+            self.assertFalse(result["conversation"]["generating"])
+
+    @patch("app.modules.chat.sending.ask_course")
+    def test_recycled_lesson_during_generation_does_not_save_answer(self, ask):
+        with Session(self.engine) as db:
+            chat = create_conversation(db, "l", "owner")
+            def recycle(*args, **kwargs):
+                db.get(Lesson, "l").deleted_at = now_utc(); db.commit()
+                return {"answer":"不可写入", "citations":[]}
+            ask.side_effect = recycle
+            with self.assertRaises(HTTPException) as err:
+                send_message(db, chat["id"], "owner", "课堂问题", "r")
+            self.assertEqual(err.exception.status_code, 404)
+            rows = list(db.scalars(select(ChatMessage).execution_options(include_deleted=True)))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].status, "failed")
 
     @patch("app.modules.chat.sending.ask_course", return_value={"answer":"原文依据", "citations":[]})
     def test_follow_up_uses_only_this_conversation_completed_history(self, ask):

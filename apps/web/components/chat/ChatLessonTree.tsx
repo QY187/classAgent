@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { errorMessage, request } from "../../lib/api";
 import type { ChatLesson, ChatSearchResult, Conversation } from "../../lib/chat";
 
-export default function ChatLessonTree({ renderLesson, selectedLessonId, onSelect }: { renderLesson?: (lesson: ChatLesson) => ReactNode; selectedLessonId?: string | null; onSelect: (item: Conversation) => void }) {
+export default function ChatLessonTree({ renderLesson, selectedLessonId, onSelect, revision }: { renderLesson?: (lesson: ChatLesson) => ReactNode; selectedLessonId?: string | null; onSelect: (item: Conversation) => void; revision: number }) {
   const [lessons, setLessons] = useState<ChatLesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -24,7 +24,7 @@ export default function ChatLessonTree({ renderLesson, selectedLessonId, onSelec
         .finally(() => { if (!controller.signal.aborted) setSearching(false); });
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [query]);
+  }, [query, revision]);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setError("");

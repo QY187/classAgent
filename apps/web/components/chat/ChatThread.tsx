@@ -41,6 +41,7 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
     if (last?.request_id !== requestId) setHistory({ ...history, conversation: { ...history.conversation, generating: true }, messages: [...history.messages, {
       id: requestId, request_id: requestId, position: (last?.position || 0) + 1, role: "user", content, status: "pending", citations: [], error_message: null, created_at: new Date().toISOString(),
     }] });
+    else setHistory({ ...history, conversation: { ...history.conversation, generating: true }, messages: history.messages.map((item) => item.request_id === requestId && item.role === "user" ? { ...item, status: "pending", error_message: null } : item) });
     try {
       const result = await request<ChatHistory>(`/chat/conversations/${conversationId}/ask`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, request_id: requestId }),

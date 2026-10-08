@@ -21,5 +21,5 @@ export default function ChatWorkspace() {
     setSelectedId(item.id); setSelectedLessonId(item.lesson_id);
     window.history.pushState(null, "", `/chat?conversation=${encodeURIComponent(item.id)}`);
   }
-  return <main className="chat-workspace"><ChatLessonTree selectedLessonId={selectedLessonId} onSelect={select} renderLesson={(lesson) => <ChatConversationList lesson={lesson} selectedId={selectedId} onSelect={select} revision={revision} />} /><section className="chat-main">{selectedId ? <ChatThread key={selectedId} conversationId={selectedId} onLoaded={loaded} onChanged={changed} onDeleted={deleted} /> : <div className="chat-welcome"><span className="chat-welcome-icon">◌</span><h2>从一节课开始对话</h2><p>在左侧展开课次，查看或新建对话。</p></div>}</section></main>;
+  return <main className="chat-workspace"><ChatLessonTree selectedLessonId={selectedLessonId} onSelect={select} revision={revision} renderLesson={(lesson) => <ChatConversationList lesson={lesson} selectedId={selectedId} onSelect={select} revision={revision} />} /><section className="chat-main">{selectedId ? <ChatThread key={selectedId} conversationId={selectedId} onLoaded={loaded} onChanged={changed} onDeleted={deleted} /> : <div className="chat-welcome"><span className="chat-welcome-icon">◌</span><h2>从一节课开始对话</h2><p>在左侧展开课次，查看或新建对话。</p></div>}</section></main>;
 }

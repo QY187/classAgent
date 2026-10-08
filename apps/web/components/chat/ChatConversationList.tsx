@@ -27,7 +27,7 @@ export default function ChatConversationList({ lesson, selectedId, onSelect, rev
     } catch (err) { setError(errorMessage(err)); }
     finally { setCreating(false); }
   }
-  return <div className="chat-conversations"><button className="chat-new-conversation" disabled={creating} onClick={create}>{creating ? "正在创建…" : "＋ 新建对话"}</button>
+  return <div className="chat-conversations"><button className="chat-new-conversation" disabled={creating || loading} onClick={create}>{creating ? "正在创建…" : "＋ 新建对话"}</button>
     {error && <div className="chat-tree-hint"><p role="alert">{error}</p><button className="button button-quiet" onClick={() => setRetry((value) => value + 1)}>重试</button></div>}
     {loading ? <p className="chat-tree-hint">读取对话…</p> : items.length ? items.map((item) => <button key={item.id} className={`chat-conversation-link${item.id === selectedId ? " active" : ""}`} aria-current={item.id === selectedId ? "true" : undefined} title={item.title} onClick={() => onSelect(item)}><span aria-hidden="true">◌</span><span>{item.title}</span></button>) : !error && <p className="chat-tree-hint">还没有对话</p>}
   </div>;
