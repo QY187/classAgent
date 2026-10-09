@@ -14,7 +14,12 @@ export default function ChatWorkspace() {
   const changed = useCallback(() => setRevision((value) => value + 1), []);
   const deleted = useCallback(() => { setSelectedId(null); window.history.replaceState(null, "", "/chat"); setRevision((value) => value + 1); }, []);
   useEffect(() => {
-    const restore = () => setSelectedId(new URLSearchParams(window.location.search).get("conversation"));
+    const restore = () => {
+      const params = new URLSearchParams(window.location.search);
+      setSelectedId(params.get("conversation"));
+      setSelectedLessonId(null);
+      setSelectedCourseId(params.get("conversation") ? null : params.get("course"));
+    };
     restore(); window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, []);

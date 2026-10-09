@@ -177,7 +177,7 @@ export default function CoursePage() {
         <Link className="course-progress-link" href={`/courses/${courseId}/progress`}>查看学习进度 →</Link>
       </div>
       <div className="page-hero-actions course-hero-actions">
-        <Link className="button button-secondary" href={`/courses/${courseId}/ask`}>课程问答</Link>
+        <Link className="button button-secondary" href={`/chat?course=${encodeURIComponent(courseId)}`}>课程问答</Link>
         <Link className="button button-secondary" href={`/courses/${courseId}/quizzes`}>课堂小测</Link>
         <button className="button button-primary" onClick={() => setShowModal(true)}>＋ 新建课次</button>
         <details className="course-manage-menu">

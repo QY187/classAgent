@@ -1,19 +1,14 @@
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...core.db import get_db
 from ...core.deps import get_current_user
 from ...core.config import get_settings
 from fastapi import HTTPException
-from .service import ask_course, index_status, owned_course
+from .service import index_status, owned_course
 
 
 router = APIRouter(prefix="/courses/{course_id}", tags=["course-qa"])
-
-
-class AskRequest(BaseModel):
-    question: str = Field(min_length=2, max_length=1000)
 
 
 @router.get("/index-status")
@@ -29,8 +24,3 @@ def reindex_course(course_id: str, username: str = Depends(get_current_user), db
     from ...infrastructure.tasks import reindex_course as task
     result = task.delay(course_id)
     return {"task_id": result.id, "status": "queued"}
-
-
-@router.post("/ask")
-def ask(course_id: str, body: AskRequest, username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    return ask_course(db, course_id, username, body.question.strip())

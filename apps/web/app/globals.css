@@ -325,42 +325,6 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .material-preview-image { display: block; max-width: 100%; max-height: 72vh; margin: auto; object-fit: contain; }
 .material-preview-text { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; color: var(--ink); font-size: 14px; }
 .material-preview-truncated { margin-top: 16px; color: var(--muted); font-size: 12px; }
-.course-qa { margin-bottom: 20px; }
-.qa-header { padding: 24px 28px 20px; background: linear-gradient(110deg, #fff 42%, #f5f7ff); }
-.qa-eyebrow { display: block; margin-bottom: 5px; color: var(--blue); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
-.qa-header h2 { font-size: 21px; }
-.qa-header .qa-index-count { color: #687892; font-size: 12px; white-space: nowrap; }
-.qa-body { padding: 24px 28px 28px; }
-.qa-intro { margin: 0 0 18px; color: #64728a; font-size: 13px; line-height: 1.7; }
-.qa-form { display: flex; gap: 10px; }
-.qa-input { flex: 1; min-width: 0; min-height: 48px; }
-.qa-submit { min-width: 82px; }
-.qa-hint { margin: 13px 0 0; color: var(--muted); font-size: 12px; }
-.qa-rebuild { margin-top: 10px; font-size: 12px; }
-.qa-notice { margin-top: 12px; }
-.qa-result { margin-top: 26px; padding: 24px 26px 22px; border: 1px solid #e4e9f7; border-radius: 16px; background: linear-gradient(180deg, #fafbff, #fff 100px); }
-.qa-answer-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.qa-answer-heading h3 { margin: 0; font-size: 17px; }
-.qa-answer-mark { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: var(--blue); background: var(--blue-soft); font-size: 16px; }
-.qa-answer-text { color: #26344e; font-size: 14.5px; line-height: 1.9; white-space: pre-line; }
-.qa-answer-text p { margin: 0 0 12px; }
-.qa-answer-text p:last-child { margin-bottom: 0; }
-.qa-evidence { margin-top: 24px; border-top: 1px solid #e7ebf4; }
-.qa-evidence summary { display: flex; align-items: center; gap: 9px; padding: 16px 2px 0; color: #5365cb; font-size: 13px; font-weight: 700; cursor: pointer; list-style: none; }
-.qa-evidence summary::-webkit-details-marker { display: none; }
-.qa-evidence summary:focus-visible { outline: 3px solid rgba(91, 110, 240, .3); outline-offset: 3px; border-radius: 5px; }
-.qa-evidence-count { color: #8c98ac; font-size: 12px; font-weight: 500; }
-.qa-chevron { margin-left: auto; font-size: 19px; line-height: 1; transition: transform .18s; }
-.qa-evidence[open] .qa-chevron { transform: rotate(180deg); }
-.qa-evidence-list { display: grid; gap: 9px; margin-top: 15px; }
-.qa-evidence-item { display: flex; align-items: center; gap: 13px; min-width: 0; padding: 14px 17px; border: 1px solid #e7ebf4; border-radius: 12px; background: #fff; transition: background .18s, border-color .18s; }
-.qa-evidence-item:hover { border-color: #bdc7fa; background: #f9faff; }
-.qa-evidence-main { display: grid; min-width: 0; flex: 1; gap: 4px; }
-.qa-evidence-main strong { color: #24324c; font-size: 13px; }
-.qa-evidence-main strong span { color: #78869d; font-weight: 500; }
-.qa-evidence-snippet { overflow: hidden; color: #6d7b91; font-size: 12px; line-height: 1.55; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.qa-evidence-refs { color: #7886a0; font-size: 11px; line-height: 1.5; }
-.qa-evidence-arrow { margin-left: auto; color: var(--blue); font-size: 17px; }
 .review-page { max-width: 1180px; }
 .review-notice { margin-bottom: 18px; }
 .review-create { margin-bottom: 20px; }
@@ -793,12 +757,6 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
   .settings-password-fields { grid-template-columns: 1fr; padding: 22px; }
   .settings-password-footer { align-items: stretch; flex-direction: column; padding: 20px 22px; }
   .settings-section-heading, .settings-profile-content { padding-left: 22px; padding-right: 22px; }
-  .qa-header { align-items: flex-start; gap: 10px; padding: 20px 18px 16px; }
-  .qa-header h2 { font-size: 18px; }
-  .qa-body { padding: 20px 18px; }
-  .qa-form { flex-direction: column; }
-  .qa-submit { width: 100%; }
-  .qa-result { padding: 20px 17px; }
   .sidebar { flex-basis: 66px; padding: 18px 8px; }
   .brand { padding: 0 6px 27px; }
   .brand-copy, .nav-label, .nav-item span:not(.nav-icon) { display: none; }
