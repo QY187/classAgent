@@ -41,13 +41,14 @@ export type Quiz = {
   id: string;
   course_id: string;
   lesson_id: string | null;
+  lesson_ids?: string[];
   title: string;
   status: "draft" | "ready";
   created_at: string;
   questions: QuizQuestion[];
 };
 
-export type QuizListItem = Pick<Quiz, "id" | "title" | "lesson_id" | "status" | "created_at"> & { question_count: number };
+export type QuizListItem = Pick<Quiz, "id" | "title" | "lesson_id" | "lesson_ids" | "status" | "created_at"> & { question_count: number };
 
 export type QuizAttemptItem = { id: string; correct_count: number; total_count: number; created_at: string };
 export type QuizAttempt = QuizAttemptItem & {

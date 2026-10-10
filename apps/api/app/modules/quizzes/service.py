@@ -28,23 +28,48 @@ def _owned_quiz(db: Session, quiz_id: str, username: str) -> Quiz:
     return quiz
 
 
-def _source_segments(db: Session, course_id: str, lesson_id: str | None) -> list[TranscriptSegment]:
+def _source_segments(db: Session, course_id: str, lesson_ids: list[str] | None) -> list[TranscriptSegment]:
     query = select(TranscriptSegment).join(Lesson, TranscriptSegment.lesson_id == Lesson.id).where(Lesson.course_id == course_id)
-    if lesson_id:
-        query = query.where(Lesson.id == lesson_id)
-    rows = list(db.scalars(query.order_by(Lesson.created_at, TranscriptSegment.start_ms)).all())
+    if lesson_ids:
+        query = query.where(Lesson.id.in_(lesson_ids))
+    rows = [row for row in db.scalars(query.order_by(Lesson.created_at, Lesson.id, TranscriptSegment.start_ms)).all() if row.text.strip()]
     if len(rows) <= 60:
         return rows
-    return [rows[round(i * (len(rows) - 1) / 59)] for i in range(60)]
+    # 为每节选中的课保留样本，避免长课次挤掉短课次；各课内均匀抽样。
+    groups = {}
+    for row in rows:
+        groups.setdefault(row.lesson_id, []).append(row)
+    if len(groups) > 60:
+        return [rows[round(i * (len(rows) - 1) / 59)] for i in range(60)]
+    allocations = dict.fromkeys(groups, 1)
+    remaining = 60 - len(groups)
+    while remaining:
+        for lesson_id, group in groups.items():
+            if remaining and allocations[lesson_id] < len(group):
+                allocations[lesson_id] += 1
+                remaining -= 1
+    samples = []
+    for lesson_id, group in groups.items():
+        size = allocations[lesson_id]
+        if size == 1:
+            samples.append(group[0])
+        else:
+            samples.extend(group[round(i * (len(group) - 1) / (size - 1))] for i in range(size))
+    return samples
 
 
-def _generate_questions(segments: list[TranscriptSegment], count: int) -> list[dict]:
+def _generate_questions(segments: list[TranscriptSegment], count: int, question_type: str = "mixed") -> list[dict]:
     settings = get_settings()
     if not settings.deepseek_api_key:
         raise HTTPException(status_code=503, detail="未配置 AI 服务，无法生成课堂小测")
-    sources = "\n".join(f"[{i}] {segment.text[:350]}" for i, segment in enumerate(segments, 1))
+    sources = "\n".join(f"[{i}]（课次 {segment.lesson_id}）{segment.text[:350]}" for i, segment in enumerate(segments, 1))
+    type_instruction = {
+        "mixed": "单选题和判断题混合，两种题型都必须包含。",
+        "single_choice": "只出单选题，kind 必须是 single_choice，每题四个选项。",
+        "true_false": "只出判断题，kind 必须是 true_false。",
+    }[question_type]
     prompt = (
-        f"只根据以下课堂文字记录出 {count} 道不重复的小测题，单选题和判断题均可。"
+        f"只根据以下课堂文字记录出 {count} 道不重复的小测题。" + type_instruction +
         "每题只有一个明确正确答案；不要引入课堂记录以外的事实，也不要为模糊内容出题。"
         "返回严格 JSON：{\"questions\":[{\"kind\":\"single_choice 或 true_false\",\"stem\":\"题干\","
         "\"options\":[\"选项1\",\"选项2\",\"选项3\",\"选项4\"],\"correct_option\":0,"
@@ -78,7 +103,8 @@ def _generate_questions(segments: list[TranscriptSegment], count: int) -> list[d
         explanation = str(item.get("explanation") or "").strip()
         source_index = item.get("source_index")
         evidence = str(item.get("evidence") or "").strip()
-        if (kind not in {"single_choice", "true_false"} or not stem or len(stem) > 500 or stem in seen
+        if (kind not in {"single_choice", "true_false"} or (question_type != "mixed" and kind != question_type)
+                or not stem or len(stem) > 500 or stem in seen
                 or not isinstance(options, list) or len(options) != (2 if kind == "true_false" else 4)
                 or any(not isinstance(option, str) or not option.strip() or len(option) > 200 for option in options)
                 or len({option.strip() for option in options}) != len(options) or (kind == "true_false" and options != ["正确", "错误"])
@@ -94,12 +120,15 @@ def _generate_questions(segments: list[TranscriptSegment], count: int) -> list[d
             break
     if len(valid) < 3:
         raise HTTPException(status_code=502, detail="生成的题目缺少可核对的课堂依据，请重试")
+    if question_type == "mixed" and len({item["kind"] for item in valid}) < 2:
+        raise HTTPException(status_code=502, detail="未生成同时包含单选题和判断题的混合小测，请重试")
     return valid
 
 
 def serialize_quiz(quiz: Quiz, reveal_answers: bool = False) -> dict:
     return {
         "id": quiz.id, "course_id": quiz.course_id, "lesson_id": quiz.lesson_id,
+        "lesson_ids": _quiz_lesson_ids(quiz),
         "title": quiz.title, "status": quiz.status, "created_at": quiz.created_at,
         "questions": [{
             "id": q.id, "kind": q.kind, "stem": q.stem, "options": json.loads(q.options_json),
@@ -110,17 +139,27 @@ def serialize_quiz(quiz: Quiz, reveal_answers: bool = False) -> dict:
     }
 
 
+def _quiz_lesson_ids(quiz: Quiz) -> list[str]:
+    return json.loads(quiz.lesson_ids_json) if quiz.lesson_ids_json else ([quiz.lesson_id] if quiz.lesson_id else [])
+
+
 def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: str) -> dict:
     course = _owned_course(db, course_id, username)
-    lesson = visible_get(db, Lesson, payload.lesson_id) if payload.lesson_id else None
-    if payload.lesson_id and (lesson is None or lesson.course_id != course_id):
-        raise HTTPException(status_code=400, detail="所选课次不属于当前课程")
-    segments = [segment for segment in _source_segments(db, course_id, payload.lesson_id) if segment.text.strip()]
+    lesson_ids = payload.lesson_ids or ([payload.lesson_id] if payload.lesson_id else None)
+    selected_lessons = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id, Lesson.id.in_(lesson_ids))).all()) if lesson_ids else []
+    if lesson_ids and len(selected_lessons) != len(lesson_ids):
+        raise HTTPException(status_code=400, detail="所选课次不存在、已删除或不属于当前课程")
+    segments = _source_segments(db, course_id, lesson_ids)
+    if lesson_ids and set(lesson_ids) - {segment.lesson_id for segment in segments}:
+        raise HTTPException(status_code=400, detail="所选课次中有课次没有文字记录，请先完成转写或调整范围")
     if len(segments) < 3:
         raise HTTPException(status_code=400, detail="文字记录不足，至少需要 3 段内容才能生成小测")
-    generated = _generate_questions(segments, payload.count)
-    quiz = Quiz(course_id=course_id, lesson_id=payload.lesson_id,
-                title=f"{lesson.title if lesson else course.name} · 课堂小测", status="draft")
+    generated = _generate_questions(segments, payload.count, payload.question_type)
+    lesson = selected_lessons[0] if len(selected_lessons) == 1 else None
+    scope_title = lesson.title if lesson else f"{course.name} · 指定{len(selected_lessons)}节课" if selected_lessons else course.name
+    quiz = Quiz(course_id=course_id, lesson_id=lesson.id if lesson else None,
+                lesson_ids_json=json.dumps(lesson_ids) if lesson_ids else None,
+                title=f"{scope_title[:185]} · 课堂小测", status="draft")
     for position, item in enumerate(generated, 1):
         source = item["source"]
         quiz.questions.append(QuizQuestion(
@@ -138,7 +177,7 @@ def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: 
 def list_quizzes(db: Session, course_id: str, username: str) -> list[dict]:
     _owned_course(db, course_id, username)
     quizzes = db.scalars(select(Quiz).where(Quiz.course_id == course_id).order_by(Quiz.created_at.desc())).all()
-    return [{"id": quiz.id, "title": quiz.title, "lesson_id": quiz.lesson_id, "status": quiz.status,
+    return [{"id": quiz.id, "title": quiz.title, "lesson_id": quiz.lesson_id, "lesson_ids": _quiz_lesson_ids(quiz), "status": quiz.status,
              "question_count": len(quiz.questions), "created_at": quiz.created_at} for quiz in quizzes]
 
 
