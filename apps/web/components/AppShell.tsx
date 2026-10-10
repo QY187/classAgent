@@ -17,6 +17,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [lessonInfo, setLessonInfo] = useState<LessonInfo | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    let preference: string | null = null;
+    try { preference = window.localStorage.getItem("classagent:sidebar-collapsed"); } catch {}
+    setSidebarCollapsed(preference === null ? window.matchMedia("(max-width: 640px)").matches : preference === "true");
+  }, []);
+  function toggleSidebar() {
+    const collapsed = !sidebarCollapsed;
+    setSidebarCollapsed(collapsed);
+    try { window.localStorage.setItem("classagent:sidebar-collapsed", String(collapsed)); } catch {}
+  }
   const courseMatch = pathname.match(/^\/courses\/([^/]+)(?:\/.*)?$/);
   const lessonMatch = pathname.match(/^\/lessons\/([^/]+)(?:\/.*)?\/?$/);
   const activeCourseId = lessonMatch && lessonInfo ? lessonInfo.course_id : courseMatch?.[1];
@@ -81,27 +92,28 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const lessonTitle = lessonMatch ? lessonInfo?.title : undefined;
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <Link href="/" className="brand">
+    <div className={`app-shell${sidebarCollapsed ? " sidebar-is-collapsed" : ""}`}>
+      <aside id="app-sidebar" className={`sidebar${sidebarCollapsed ? " sidebar-collapsed" : ""}`} aria-label="左侧导航">
+        {!sidebarCollapsed && <button type="button" className="sidebar-mobile-close" onClick={toggleSidebar} aria-label="关闭左侧导航" title="关闭左侧导航">×</button>}
+        <Link href="/" className="brand" aria-label="ClassAgent 课程库" title="ClassAgent 课程库">
           <span className="brand-mark">C</span>
           <span className="brand-copy"><span className="brand-name">ClassAgent</span><span className="brand-subtitle">课堂学习助手</span></span>
         </Link>
         <div className="nav-label">我的空间</div>
         <nav className="nav" aria-label="主导航">
-          <Link className={`nav-item ${libraryActive && !activeCourseId ? "active" : ""}`} href="/"><span className="nav-icon">▦</span><span>课程库</span></Link>
-          <Link className={`nav-item ${searchActive ? "active" : ""}`} href="/search" aria-label="全局搜索"><span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg></span><span>全局搜索</span></Link>
-          <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review"><span className="nav-icon">◷</span><span>知识点清单</span></Link>
-          <Link className={`nav-item ${chatActive ? "active" : ""}`} href="/chat"><span className="nav-icon">◌</span><span>问答工作台</span></Link>
-          <Link className={`nav-item ${wrongBookActive ? "active" : ""}`} href="/wrong-questions"><span className="nav-icon">▤</span><span>错题本</span></Link>
-          <Link className={`nav-item ${recycleActive ? "active" : ""}`} href="/recycle-bin"><span className="nav-icon">↺</span><span>回收站</span></Link>
+          <Link className={`nav-item ${libraryActive && !activeCourseId ? "active" : ""}`} href="/" aria-label="课程库" title="课程库"><span className="nav-icon" aria-hidden="true">▦</span><span>课程库</span></Link>
+          <Link className={`nav-item ${searchActive ? "active" : ""}`} href="/search" aria-label="全局搜索" title="全局搜索"><span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg></span><span>全局搜索</span></Link>
+          <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review" aria-label="知识点清单" title="知识点清单"><span className="nav-icon" aria-hidden="true">◷</span><span>知识点清单</span></Link>
+          <Link className={`nav-item ${chatActive ? "active" : ""}`} href="/chat" aria-label="问答工作台" title="问答工作台"><span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 3V11.5A8.5 8.5 0 0 1 9.5 3h3a8.5 8.5 0 0 1 8.5 8.5Z" /><path d="M7 9h8M7 13h5" /></svg></span><span>问答工作台</span></Link>
+          <Link className={`nav-item ${wrongBookActive ? "active" : ""}`} href="/wrong-questions" aria-label="错题本" title="错题本"><span className="nav-icon" aria-hidden="true">▤</span><span>错题本</span></Link>
+          <Link className={`nav-item ${recycleActive ? "active" : ""}`} href="/recycle-bin" aria-label="回收站" title="回收站"><span className="nav-icon" aria-hidden="true">↺</span><span>回收站</span></Link>
         </nav>
         <div className="side-section">
           <div className="nav-label">我的课程</div>
           <div className="side-course-list">
             {courses.length === 0 && <div className="side-course-empty">还没有课程</div>}
             {courses.slice(0, 8).map((course) => (
-              <Link key={course.id} href={`/courses/${course.id}`} className={`side-course ${activeCourseId === course.id ? "active" : ""}`}>
+              <Link key={course.id} href={`/courses/${course.id}`} className={`side-course ${activeCourseId === course.id ? "active" : ""}`} title={course.name}>
                 <span className="side-course-dot" aria-hidden="true" />
                 <span className="side-course-name">{course.name}</span>
               </Link>
@@ -110,13 +122,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <div className="side-footer">
-          <nav aria-label="账户设置"><Link className={`nav-item ${settingsActive ? "active" : ""}`} href="/settings" aria-label="个人设置"><span className="nav-icon" aria-hidden="true">⚙</span><span>个人设置</span></Link></nav>
-          {user && <div className="side-user"><UserAvatar username={user.username} hasAvatar={user.has_avatar} /><span className="side-user-name">{user.username}</span></div>}
-          <button className="button button-secondary side-logout" type="button" onClick={logout}>退出登录</button>
+          <nav aria-label="账户设置"><Link className={`nav-item ${settingsActive ? "active" : ""}`} href="/settings" aria-label="个人设置" title="个人设置"><span className="nav-icon" aria-hidden="true">⚙</span><span>个人设置</span></Link></nav>
+          {user && <div className="side-user" title={user.username}><UserAvatar username={user.username} hasAvatar={user.has_avatar} /><span className="side-user-name">{user.username}</span></div>}
+          <button className="button button-secondary side-logout" type="button" onClick={logout} aria-label="退出登录" title="退出登录"><span className="side-logout-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h10" /></svg></span><span className="side-logout-label">退出登录</span></button>
         </div>
       </aside>
       <div className="main-area">
         <header className="topbar">
+          <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-controls="app-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"} title={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /><path d={sidebarCollapsed ? "m13 9 3 3-3 3" : "m16 9-3 3 3 3"} /></svg></button>
           <nav className="breadcrumb" aria-label="当前位置">
             {courseMatch || lessonMatch || chatActive || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
             {chatActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">问答工作台</span></>}
