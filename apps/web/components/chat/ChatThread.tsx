@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { errorMessage, request } from "../../lib/api";
+import { getStoredUser, type AuthUser } from "../../lib/auth";
 import type { ChatHistory, Conversation } from "../../lib/chat";
 import ChatMessageList from "./ChatMessageList";
 import ChatComposer from "./ChatComposer";
@@ -11,6 +12,15 @@ import { streamAnswer, type AnswerPreview } from "../../lib/chat-stream";
 
 export default function ChatThread({ conversationId, onLoaded, onChanged, onDeleted }: { conversationId: string; onLoaded: (item: Conversation) => void; onChanged: () => void; onDeleted: () => void }) {
   const [history, setHistory] = useState<ChatHistory | null>(null);
+  const [username, setUsername] = useState("我的账号");
+  useEffect(() => {
+    const controller = new AbortController();
+    setUsername(getStoredUser()?.username || "我的账号");
+    request<AuthUser>("/auth/me", { signal: controller.signal })
+      .then((user) => { if (!controller.signal.aborted) setUsername(user.username); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -100,6 +110,6 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
   const canStop = !stopping && (sending ? !!readyRequestId : !!history?.conversation.generating && history.messages.some((item) => item.role === "user" && item.status === "pending"));
   return <><header className="chat-thread-header"><div><span className="eyebrow">{history?.conversation.scope === "course" ? "课程对话 · 全部课次" : "课次对话 · 仅本课次"}</span>{history ? <ChatTitleEditor conversation={history.conversation} disabled={sending || history.conversation.generating} onRenamed={(item) => { setHistory({ ...history, conversation: item }); onChanged(); }} /> : <h2>正在读取对话</h2>}</div>{history && <div className="chat-thread-actions"><Link className="button button-quiet" href={history.conversation.scope === "course" ? `/courses/${history.conversation.course_id}` : `/lessons/${history.conversation.lesson_id}/summary`}>{history.conversation.scope === "course" ? "查看课程 ↗" : "查看本课纪要 ↗"}</Link><ChatDeleteButton conversation={history.conversation} disabled={sending || history.conversation.generating} onDeleted={onDeleted} /></div>}</header>
     {error && <div className="chat-thread-notice"><p role="alert">{error}</p><button className="button button-secondary" onClick={() => void load()}>重新加载</button></div>}
-    <div className="chat-message-scroll"><div className="chat-message-column">{loading ? <p role="status">正在读取消息…</p> : history?.messages.length ? <ChatMessageList messages={visibleMessages} generating={history.conversation.generating} /> : !error && <div className="chat-empty-conversation"><h3>有什么想弄明白的？</h3><p>{history?.conversation.scope === "course" ? "综合这门课程的多节课回答，并附上来源课次和原文时间点。" : "回答会依据本课次的文字记录与纪要，并附上原文时间点。"}</p></div>}{retryable && <button className="button button-secondary" disabled={sending} onClick={() => void send(last.content, last.request_id)}>重试这条问题</button>}<div ref={bottom} /></div></div>
+    <div className="chat-message-scroll"><div className="chat-message-column">{loading ? <p role="status">正在读取消息…</p> : history?.messages.length ? <ChatMessageList username={username} messages={visibleMessages} generating={history.conversation.generating} /> : !error && <div className="chat-empty-conversation"><h3>有什么想弄明白的？</h3><p>{history?.conversation.scope === "course" ? "综合这门课程的多节课回答，并附上来源课次和原文时间点。" : "回答会依据本课次的文字记录与纪要，并附上原文时间点。"}</p></div>}{retryable && <button className="button button-secondary" disabled={sending} onClick={() => void send(last.content, last.request_id)}>重试这条问题</button>}<div ref={bottom} /></div></div>
     {history && <ChatComposer scope={history.conversation.scope} disabled={loading || history.conversation.generating || stopping} busy={sending} onSend={send} onStop={() => void stop()} canStop={canStop} stopping={stopping} />}</>;
 }
