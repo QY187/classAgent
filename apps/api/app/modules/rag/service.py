@@ -11,6 +11,7 @@ from ...core.config import get_settings
 from ...core.ownership import user_id_for_username
 from ...core.embeddings import embed_texts
 from ...shared.models import Course, DocumentChunk, Lesson
+from .streaming import stream_completion
 
 
 def owned_course(db: Session, course_id: str, username: str) -> Course:
@@ -34,7 +35,7 @@ def chunk_scope(course_id: str, lesson_id: str | None = None):
     return conditions
 
 
-def ask_course(db: Session, course_id: str, username: str, question: str, *, lesson_id: str | None = None, history: list[dict] | None = None) -> dict:
+def ask_course(db: Session, course_id: str, username: str, question: str, *, lesson_id: str | None = None, history: list[dict] | None = None, on_progress=None, on_check=None) -> dict:
     owned_course(db, course_id, username)
     if lesson_id is not None:
         lesson = visible_get(db, Lesson, lesson_id)
@@ -76,16 +77,22 @@ def ask_course(db: Session, course_id: str, username: str, question: str, *, les
         f"问题：{question}\n\n课堂片段：\n{context}"
     )
     try:
-        response = httpx.post(
-            "https://api.deepseek.com/chat/completions",
-            headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
-            json={"model": settings.summary_model, "temperature": 0, "messages": [
+        url = "https://api.deepseek.com/chat/completions"
+        headers = {"Authorization": f"Bearer {settings.deepseek_api_key}"}
+        body = {"model": settings.summary_model, "temperature": 0, "messages": [
                 {"role": "system", "content": "只依据用户消息中的课堂片段回答，并严格输出 JSON。"},
                 {"role": "user", "content": prompt},
-            ]}, timeout=120,
-        )
-        response.raise_for_status()
-        raw = response.json()["choices"][0]["message"]["content"]
+            ]}
+        if on_progress is not None:
+            def publish(claims):
+                result = ground_claims(claims, evidence, lessons)
+                if result["citations"]:
+                    on_progress(result)
+            raw = stream_completion(url, headers, body, publish, on_check=on_check)
+        else:
+            response = httpx.post(url, headers=headers, json=body, timeout=120)
+            response.raise_for_status()
+            raw = response.json()["choices"][0]["message"]["content"]
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         payload = json.loads(match.group(0) if match else raw)
     except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError) as exc:

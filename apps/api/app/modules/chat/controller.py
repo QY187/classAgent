@@ -2,6 +2,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from uuid import UUID
+from fastapi.responses import StreamingResponse
+from .access import owned_conversation
+from .streaming import message_events
+from .cancellation import stop_generation
 from ...core.db import get_db
 from ...core.deps import get_current_user
 from . import conversations, messages
@@ -47,6 +51,15 @@ class RenameConversation(BaseModel):
     title: str = Field(min_length=1, max_length=200)
 
 
+class StopGeneration(BaseModel):
+    request_id: UUID
+
+
+@router.post("/conversations/{conversation_id}/stop")
+def stop(conversation_id: str, body: StopGeneration, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return stop_generation(db, conversation_id, username, str(body.request_id))
+
+
 @router.patch("/conversations/{conversation_id}")
 def rename(conversation_id: str, body: RenameConversation, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return conversations.rename_conversation(db, conversation_id, username, body.title)
@@ -60,6 +73,15 @@ def send(conversation_id: str, body: SendMessage, username: str = Depends(get_cu
 @router.get("/conversations/{conversation_id}/messages")
 def get_messages(conversation_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return messages.read_messages(db, conversation_id, username)
+
+
+@router.post("/conversations/{conversation_id}/ask/stream")
+def send_stream(conversation_id: str, body: SendMessage, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    owned_conversation(db, conversation_id, username)
+    db.rollback()
+    return StreamingResponse(message_events(conversation_id, username, body.content, str(body.request_id)),
+                             media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.get("/lessons/{lesson_id}/conversations")

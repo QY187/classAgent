@@ -1,6 +1,25 @@
 from sqlalchemy import inspect, text
 
 
+def prepare_chat_cancellation(engine) -> None:
+    inspector = inspect(engine)
+    if inspector.has_table("chat_conversations"):
+        columns = {item["name"] for item in inspector.get_columns("chat_conversations")}
+        if "generation_preview_json" not in columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE chat_conversations ADD COLUMN generation_preview_json TEXT"))
+    if not inspector.has_table("chat_messages"):
+        return
+    status = next((item for item in inspector.get_check_constraints("chat_messages")
+                   if item["name"] == "ck_chat_message_status"), None)
+    if status and "cancelled" in status["sqltext"]:
+        return
+    with engine.begin() as connection:
+        if status:
+            connection.execute(text("ALTER TABLE chat_messages DROP CONSTRAINT ck_chat_message_status"))
+        connection.execute(text("ALTER TABLE chat_messages ADD CONSTRAINT ck_chat_message_status CHECK (status IN ('pending', 'completed', 'failed', 'cancelled'))"))
+
+
 def prepare_chat_scope(engine) -> None:
     """保留已有课次对话，增加互斥的课程对话归属。"""
     inspector = inspect(engine)

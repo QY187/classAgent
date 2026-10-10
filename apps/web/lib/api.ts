@@ -30,11 +30,11 @@ async function fetchWithToken(path: string, options: RequestInit | undefined, to
   return fetch(`${apiUrl}${path}`, {
     ...options,
     headers,
-    signal: options?.signal ?? AbortSignal.timeout(path.endsWith("/ask") ? 130000 : 15000),
+    signal: options?.signal ?? AbortSignal.timeout(/\/ask(?:\/stream)?$/.test(path) ? 180000 : 15000),
   });
 }
 
-async function authorizedResponse(path: string, options?: RequestInit): Promise<Response> {
+export async function authorizedResponse(path: string, options?: RequestInit): Promise<Response> {
   let response = await fetchWithToken(path, options, getToken());
 
   // 登录/刷新接口的 401 是“凭证无效”，不属于会话过期

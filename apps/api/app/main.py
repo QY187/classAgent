@@ -19,7 +19,7 @@ from .modules.quizzes.controller import router as quizzes_router
 from .modules.recycle_bin.migrations import prepare_deleted_columns
 from .modules.recycle_bin.controller import router as recycle_bin_router
 from .modules.chat.controller import router as chat_router
-from .modules.chat.migrations import prepare_chat_scope
+from .modules.chat.migrations import prepare_chat_scope, prepare_chat_cancellation
 
 
 app = FastAPI(title="ClassAgent API", version="0.1.0")
@@ -42,6 +42,7 @@ def prepare_database() -> None:
     _prepare_lesson_sort_column()
     prepare_deleted_columns(engine)
     prepare_chat_scope(engine)
+    prepare_chat_cancellation(engine)
     Base.metadata.create_all(bind=engine)
     _seed_root_user()
     _backfill_course_owner_ids()

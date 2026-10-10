@@ -7,12 +7,18 @@ import ChatMessageList from "./ChatMessageList";
 import ChatComposer from "./ChatComposer";
 import ChatTitleEditor from "./ChatTitleEditor";
 import ChatDeleteButton from "./ChatDeleteButton";
+import { streamAnswer, type AnswerPreview } from "../../lib/chat-stream";
 
 export default function ChatThread({ conversationId, onLoaded, onChanged, onDeleted }: { conversationId: string; onLoaded: (item: Conversation) => void; onChanged: () => void; onDeleted: () => void }) {
   const [history, setHistory] = useState<ChatHistory | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [preview, setPreview] = useState<AnswerPreview | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [readyRequestId, setReadyRequestId] = useState<string | null>(null);
+  const stopRef = useRef(false);
+  const activeRun = useRef<{ controller: AbortController; stopped: boolean } | null>(null);
   const sendingRef = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -34,32 +40,66 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
   }, [history?.conversation.generating, load, sending]);
   useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [history?.messages.length]);
   async function send(content: string, retryRequest?: string) {
-    if (sendingRef.current || !history) return false;
-    sendingRef.current = true; setSending(true); setError("");
+    if (sendingRef.current || stopRef.current || !history) return false;
+    const run = { controller: new AbortController(), stopped: false };
+    activeRun.current = run;
+    sendingRef.current = true; setSending(true); setError(""); setPreview(null); setReadyRequestId(null);
     const last = history.messages.at(-1);
-    const requestId = retryRequest || (last?.role === "user" && last.content === content && last.status !== "completed" ? last.request_id : crypto.randomUUID());
+    const requestId = retryRequest || (last?.role === "user" && last.content === content && (last.status === "failed" || last.status === "pending") ? last.request_id : crypto.randomUUID());
     if (last?.request_id !== requestId) setHistory({ ...history, conversation: { ...history.conversation, generating: true }, messages: [...history.messages, {
       id: requestId, request_id: requestId, position: (last?.position || 0) + 1, role: "user", content, status: "pending", citations: [], error_message: null, created_at: new Date().toISOString(),
     }] });
     else setHistory({ ...history, conversation: { ...history.conversation, generating: true }, messages: history.messages.map((item) => item.request_id === requestId && item.role === "user" ? { ...item, status: "pending", error_message: null } : item) });
     try {
-      const result = await request<ChatHistory>(`/chat/conversations/${conversationId}/ask`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, request_id: requestId }),
+      const result = await streamAnswer(conversationId, content, requestId, (value) => {
+        if (mounted.current && activeRun.current === run && !run.stopped) setPreview(value);
+      }, {
+        signal: AbortSignal.any([run.controller.signal, AbortSignal.timeout(180000)]),
+        onReady: () => { if (mounted.current && activeRun.current === run && !run.stopped) { setReadyRequestId(requestId); onChanged(); } },
       });
-      if (mounted.current) { setHistory(result); onLoaded(result.conversation); onChanged(); }
+      if (mounted.current && activeRun.current === run && !run.stopped) { setPreview(null); setHistory(result); onLoaded(result.conversation); onChanged(); }
       return true;
     } catch (err) {
+      if (run.stopped) return true;
       if (mounted.current) {
+        setPreview(null);
         await load();
         if (mounted.current) setError(errorMessage(err));
       }
       return false;
-    } finally { sendingRef.current = false; if (mounted.current) setSending(false); }
+    } finally {
+      if (activeRun.current === run) {
+        activeRun.current = null; sendingRef.current = false;
+        if (mounted.current) { setSending(false); setReadyRequestId(null); }
+      }
+    }
+  }
+  async function stop() {
+    const pending = history?.messages.findLast((item) => item.role === "user" && item.status === "pending");
+    const requestId = readyRequestId || (!sending ? pending?.request_id : null);
+    if (!requestId || stopRef.current) return;
+    const run = activeRun.current;
+    stopRef.current = true; setStopping(true); setError("");
+    try {
+      const result = await request<ChatHistory>(`/chat/conversations/${conversationId}/stop`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request_id: requestId }),
+      });
+      if (run) { run.stopped = true; run.controller.abort(); }
+      if (activeRun.current === run) { activeRun.current = null; sendingRef.current = false; }
+      if (mounted.current) { setPreview(null); setSending(false); setReadyRequestId(null); setHistory(result); onLoaded(result.conversation); onChanged(); }
+    } catch (err) { if (mounted.current) setError(errorMessage(err)); }
+    finally { stopRef.current = false; if (mounted.current) setStopping(false); }
   }
   const last = history?.messages.at(-1);
+  const visibleMessages = history ? [...history.messages, ...(preview ? [{
+    id: "stream-preview", request_id: last?.request_id || "", position: (last?.position || 0) + 1,
+    role: "assistant" as const, content: preview.answer, status: "pending" as const,
+    citations: preview.citations, error_message: null, created_at: last?.created_at || new Date().toISOString(),
+  }] : [])] : [];
   const retryable = last?.role === "user" && (last.status === "failed" || (last.status === "pending" && !history?.conversation.generating));
+  const canStop = !stopping && (sending ? !!readyRequestId : !!history?.conversation.generating && history.messages.some((item) => item.role === "user" && item.status === "pending"));
   return <><header className="chat-thread-header"><div><span className="eyebrow">{history?.conversation.scope === "course" ? "课程对话 · 全部课次" : "课次对话 · 仅本课次"}</span>{history ? <ChatTitleEditor conversation={history.conversation} disabled={sending || history.conversation.generating} onRenamed={(item) => { setHistory({ ...history, conversation: item }); onChanged(); }} /> : <h2>正在读取对话</h2>}</div>{history && <div className="chat-thread-actions"><Link className="button button-quiet" href={history.conversation.scope === "course" ? `/courses/${history.conversation.course_id}` : `/lessons/${history.conversation.lesson_id}/summary`}>{history.conversation.scope === "course" ? "查看课程 ↗" : "查看本课纪要 ↗"}</Link><ChatDeleteButton conversation={history.conversation} disabled={sending || history.conversation.generating} onDeleted={onDeleted} /></div>}</header>
     {error && <div className="chat-thread-notice"><p role="alert">{error}</p><button className="button button-secondary" onClick={() => void load()}>重新加载</button></div>}
-    <div className="chat-message-scroll"><div className="chat-message-column">{loading ? <p role="status">正在读取消息…</p> : history?.messages.length ? <ChatMessageList messages={history.messages} generating={history.conversation.generating} /> : !error && <div className="chat-empty-conversation"><h3>有什么想弄明白的？</h3><p>{history?.conversation.scope === "course" ? "综合这门课程的多节课回答，并附上来源课次和原文时间点。" : "回答会依据本课次的文字记录与纪要，并附上原文时间点。"}</p></div>}{retryable && <button className="button button-secondary" disabled={sending} onClick={() => void send(last.content, last.request_id)}>重试这条问题</button>}<div ref={bottom} /></div></div>
-    {history && <ChatComposer scope={history.conversation.scope} disabled={loading || history.conversation.generating} busy={sending} onSend={send} />}</>;
+    <div className="chat-message-scroll"><div className="chat-message-column">{loading ? <p role="status">正在读取消息…</p> : history?.messages.length ? <ChatMessageList messages={visibleMessages} generating={history.conversation.generating} /> : !error && <div className="chat-empty-conversation"><h3>有什么想弄明白的？</h3><p>{history?.conversation.scope === "course" ? "综合这门课程的多节课回答，并附上来源课次和原文时间点。" : "回答会依据本课次的文字记录与纪要，并附上原文时间点。"}</p></div>}{retryable && <button className="button button-secondary" disabled={sending} onClick={() => void send(last.content, last.request_id)}>重试这条问题</button>}<div ref={bottom} /></div></div>
+    {history && <ChatComposer scope={history.conversation.scope} disabled={loading || history.conversation.generating || stopping} busy={sending} onSend={send} onStop={() => void stop()} canStop={canStop} stopping={stopping} />}</>;
 }

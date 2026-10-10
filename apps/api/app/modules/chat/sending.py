@@ -7,15 +7,16 @@ from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_
 from ..rag.service import ask_course
 from .access import owned_conversation
 from .messages import read_messages
-from .generation import is_generating
+from .generation import is_generating, GenerationStopped
 from .context import recent_context
+from .previews import save_preview
 
 
 def _finish_failed(db: Session, conversation_id: str, request_id: str, token: str, error: str):
     db.rollback()
     conversations = ChatConversation.__table__
     updated = db.execute(update(conversations).where(conversations.c.id == conversation_id,
-        conversations.c.generation_token == token).values(generation_token=None, generating_at=None))
+        conversations.c.generation_token == token).values(generation_token=None, generating_at=None, generation_preview_json=None))
     if updated.rowcount:
         messages = ChatMessage.__table__
         db.execute(update(messages).where(messages.c.conversation_id == conversation_id,
@@ -24,7 +25,7 @@ def _finish_failed(db: Session, conversation_id: str, request_id: str, token: st
     db.commit()
 
 
-def send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str) -> dict:
+def send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None) -> dict:
     question = content.strip()
     if not 2 <= len(question) <= 1000:
         raise HTTPException(422, "请输入 2 到 1000 字的问题")
@@ -33,7 +34,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
         ChatMessage.request_id == request_id, ChatMessage.role == "user"))
     if existing is not None and existing.content != question:
         raise HTTPException(409, "请求编号已用于其他问题")
-    if existing is not None and existing.status == "completed":
+    if existing is not None and existing.status in ("completed", "cancelled"):
         db.commit()
         return read_messages(db, conversation_id, username)
     if is_generating(conversation):
@@ -53,6 +54,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
         existing.error_message = None
     token = new_id()
     conversation.generation_token = token
+    conversation.generation_preview_json = None
     conversation.generating_at = now_utc()
     conversation.updated_at = now_utc()
     if conversation.title == "新对话":
@@ -66,12 +68,27 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
     context = recent_context(db, conversation_id, position)
     db.commit()
     try:
+        if on_started is not None:
+            on_started()
+        def check():
+            db.rollback()
+            current = owned_conversation(db, conversation_id, username)
+            if current.generation_token != token:
+                raise GenerationStopped()
         options = {"history": context} if context else {}
+        if on_progress is not None:
+            def publish(result):
+                check()
+                save_preview(db, conversation_id, username, token, result)
+                on_progress(result)
+            options["on_progress"] = publish
+            options["on_check"] = check
+        check()
         result = ask_course(db, course_id, username, question, lesson_id=lesson_id, **options)
         db.rollback()
         conversation = owned_conversation(db, conversation_id, username, lock=True)
         if conversation.generation_token != token:
-            raise HTTPException(409, "当前回答已中断，请刷新对话")
+            raise GenerationStopped()
         user_message = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == conversation_id,
             ChatMessage.request_id == request_id, ChatMessage.role == "user"))
         user_message.status = "completed"
@@ -79,9 +96,13 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
         db.add(ChatMessage(conversation_id=conversation_id, request_id=request_id, position=position + 1,
             role="assistant", content=result["answer"], citations_json=json.dumps(result["citations"], ensure_ascii=False)))
         conversation.generation_token = None
+        conversation.generation_preview_json = None
         conversation.generating_at = None
         conversation.updated_at = now_utc()
         db.commit()
+    except GenerationStopped:
+        db.rollback()
+        return read_messages(db, conversation_id, username)
     except Exception as exc:
         detail = exc.detail if isinstance(exc, HTTPException) and isinstance(exc.detail, str) else "回答失败，请稍后重试"
         _finish_failed(db, conversation_id, request_id, token, detail)

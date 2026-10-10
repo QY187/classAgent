@@ -271,6 +271,7 @@ class ChatConversation(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200), default="新对话")
     generation_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    generation_preview_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     generating_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
@@ -282,7 +283,7 @@ class ChatMessage(Base):
         UniqueConstraint("conversation_id", "position", name="uq_chat_message_position"),
         UniqueConstraint("conversation_id", "request_id", "role", name="uq_chat_message_request_role"),
         CheckConstraint("role IN ('user', 'assistant')", name="ck_chat_message_role"),
-        CheckConstraint("status IN ('pending', 'completed', 'failed')", name="ck_chat_message_status"),
+        CheckConstraint("status IN ('pending', 'completed', 'failed', 'cancelled')", name="ck_chat_message_status"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
