@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from ...core.db import get_db
 from ...core.deps import get_current_user
 from . import service
-from .schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit, WrongQuestionRetry
+from .schemas import QuizGenerate, QuizSubmit, WrongQuestionRetry
 
 
 router = APIRouter(tags=["quizzes"])
@@ -34,12 +34,6 @@ def list_quizzes(course_id: str, username: str = Depends(get_current_user), db: 
 @router.get("/quizzes/{quiz_id}")
 def get_quiz(quiz_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return service.get_quiz(db, quiz_id, username)
-
-
-@router.patch("/quizzes/{quiz_id}/questions/{question_id}")
-def update_question(quiz_id: str, question_id: str, payload: QuizQuestionUpdate,
-                    username: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    return service.update_question(db, quiz_id, question_id, payload, username)
 
 
 @router.post("/quizzes/{quiz_id}/publish")

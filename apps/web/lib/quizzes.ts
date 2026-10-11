@@ -3,14 +3,15 @@ export type QuizQuestion = {
   kind: "single_choice" | "true_false";
   stem: string;
   options: string[];
-  correct_option?: number;
-  explanation?: string;
+};
+
+export type QuizSource = {
   source_lesson_id: string | null;
   source_start_ms: number;
   source_excerpt: string;
 };
 
-export type WrongQuestion = Pick<QuizQuestion, "id" | "kind" | "stem" | "options" | "source_lesson_id" | "source_start_ms"> & {
+export type WrongQuestion = QuizQuestion & Pick<QuizSource, "source_lesson_id" | "source_start_ms"> & {
   course_id: string;
   course_name: string;
   quiz_id: string;
@@ -55,9 +56,9 @@ export type QuizAttempt = QuizAttemptItem & {
   quiz_id: string;
   course_id: string;
   title: string;
-  questions: (QuizQuestion & { selected_option: number; correct_option: number; is_correct: boolean; explanation: string; source_segment_id: string | null })[];
+  questions: (QuizQuestion & QuizSource & { selected_option: number; correct_option: number; is_correct: boolean; explanation: string; source_segment_id: string | null })[];
 };
 
-export function quizSourceUrl(question: Pick<QuizQuestion, "source_lesson_id" | "source_start_ms">): string | null {
+export function quizSourceUrl(question: Pick<QuizSource, "source_lesson_id" | "source_start_ms">): string | null {
   return question.source_lesson_id ? `/lessons/${question.source_lesson_id}/transcript?t=${question.source_start_ms}` : null;
 }

@@ -67,7 +67,7 @@ function QuizLibrary() {
     <section className="page-hero page-hero-compact"><span className="page-hero-icon">◇</span><div className="page-hero-copy"><div className="eyebrow">{course?.name || "课程"}</div><h1>课堂小测</h1><p>从课堂文字记录出题，每道题都能回到原文核对。</p></div><div className="page-hero-actions"><Link className="button button-primary" href={`/wrong-questions?course=${courseId}`}>查看本课程错题</Link><Link className="button button-secondary" href={`/courses/${courseId}`}>返回课程</Link></div></section>
     {error && <p className="notice" role="alert">{error}</p>}
     <section className="panel quiz-generate-panel">
-      <div className="panel-header"><div><h2>生成一组题</h2><span>生成后先检查题目、答案与来源，再开始答题。</span></div></div>
+      <div className="panel-header"><div><h2>生成一组题</h2><span>生成后直接答题，提交后查看答案、解析与课堂依据。</span></div></div>
       <div className="panel-body quiz-generate-body">
         <label className="field-label quiz-setting-count">出题范围<select className="field" value={scope} onChange={(event) => setScope(event.target.value)} disabled={busy || loading}><option value="all">整门课程</option><option value="selected">指定课次</option></select></label>
         <label className="field-label quiz-setting-count">题目数量<select className="field" value={count} onChange={(event) => setCount(Number(event.target.value))} disabled={busy}>{[5, 10, 15].map((value) => <option value={value} key={value}>{value} 道</option>)}</select></label>
@@ -78,7 +78,7 @@ function QuizLibrary() {
         <p className="quiz-settings-hint">目标题数可选，实际题数以通过课堂来源核对的题目为准。</p>
       </div>
     </section>
-    <section className="panel"><div className="panel-header"><h2>历史小测</h2><span>{quizzes.length} 组</span></div><div className="panel-body">{loading ? <p role="status">正在加载…</p> : quizzes.length ? <div className="quiz-list">{quizzes.map((quiz) => <Link className="quiz-list-row" href={`/quizzes/${quiz.id}`} key={quiz.id}><div><strong>{quiz.title}</strong><span>{quiz.question_count} 道题 · {scopeLabel(quiz)} · {new Date(quiz.created_at).toLocaleDateString("zh-CN")}</span></div><span className="quiz-status">{quiz.status === "draft" ? "待核对" : "开始答题"} →</span></Link>)}</div> : <div className="empty-state"><strong>还没有课堂小测</strong><p>选择范围后生成第一组题。</p></div>}</div></section>
+    <section className="panel"><div className="panel-header"><h2>历史小测</h2><span>{quizzes.length} 组</span></div><div className="panel-body">{loading ? <p role="status">正在加载…</p> : quizzes.length ? <div className="quiz-list">{quizzes.map((quiz) => <Link className="quiz-list-row" href={`/quizzes/${quiz.id}`} key={quiz.id}><div><strong>{quiz.title}</strong><span>{quiz.question_count} 道题 · {scopeLabel(quiz)} · {new Date(quiz.created_at).toLocaleDateString("zh-CN")}</span></div><span className="quiz-status">开始答题 →</span></Link>)}</div> : <div className="empty-state"><strong>还没有课堂小测</strong><p>选择范围后生成第一组题。</p></div>}</div></section>
   </main>;
 }
 

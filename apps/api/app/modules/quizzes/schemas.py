@@ -20,13 +20,6 @@ class QuizGenerate(BaseModel):
         return self
 
 
-class QuizQuestionUpdate(BaseModel):
-    stem: str = Field(min_length=1, max_length=500)
-    options: list[str] = Field(min_length=2, max_length=4)
-    correct_option: int = Field(ge=0, le=3)
-    explanation: str = Field(min_length=1, max_length=2000)
-
-
 class QuizSubmit(BaseModel):
     answers: dict[str, int]
 

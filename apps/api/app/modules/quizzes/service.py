@@ -10,7 +10,7 @@ from ...core.config import get_settings
 from ...core.ownership import user_id_for_username
 from ...shared.models import Course, Lesson, Quiz, QuizAnswer, QuizAttempt, QuizQuestion, QuizQuestionRetry, ReviewCard, TranscriptSegment
 from ..summaries.service import _parse_json
-from .schemas import QuizGenerate, QuizQuestionUpdate, QuizSubmit, WrongQuestionRetry
+from .schemas import QuizGenerate, QuizSubmit, WrongQuestionRetry
 
 
 def _owned_course(db: Session, course_id: str, username: str) -> Course:
@@ -125,16 +125,13 @@ def _generate_questions(segments: list[TranscriptSegment], count: int, question_
     return valid
 
 
-def serialize_quiz(quiz: Quiz, reveal_answers: bool = False) -> dict:
+def serialize_quiz(quiz: Quiz) -> dict:
     return {
         "id": quiz.id, "course_id": quiz.course_id, "lesson_id": quiz.lesson_id,
         "lesson_ids": _quiz_lesson_ids(quiz),
         "title": quiz.title, "status": quiz.status, "created_at": quiz.created_at,
         "questions": [{
             "id": q.id, "kind": q.kind, "stem": q.stem, "options": json.loads(q.options_json),
-            "source_lesson_id": q.source_lesson_id, "source_start_ms": q.source_start_ms,
-            "source_excerpt": q.source_excerpt,
-            **({"correct_option": q.correct_option, "explanation": q.explanation} if reveal_answers else {}),
         } for q in quiz.questions],
     }
 
@@ -159,7 +156,7 @@ def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: 
     scope_title = lesson.title if lesson else f"{course.name} · 指定{len(selected_lessons)}节课" if selected_lessons else course.name
     quiz = Quiz(course_id=course_id, lesson_id=lesson.id if lesson else None,
                 lesson_ids_json=json.dumps(lesson_ids) if lesson_ids else None,
-                title=f"{scope_title[:185]} · 课堂小测", status="draft")
+                title=f"{scope_title[:185]} · 课堂小测", status="ready")
     for position, item in enumerate(generated, 1):
         source = item["source"]
         quiz.questions.append(QuizQuestion(
@@ -171,7 +168,7 @@ def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: 
     db.add(quiz)
     db.commit()
     db.refresh(quiz)
-    return serialize_quiz(quiz, reveal_answers=True)
+    return serialize_quiz(quiz)
 
 
 def list_quizzes(db: Session, course_id: str, username: str) -> list[dict]:
@@ -183,29 +180,7 @@ def list_quizzes(db: Session, course_id: str, username: str) -> list[dict]:
 
 def get_quiz(db: Session, quiz_id: str, username: str) -> dict:
     quiz = _owned_quiz(db, quiz_id, username)
-    return serialize_quiz(quiz, reveal_answers=quiz.status == "draft")
-
-
-def update_question(db: Session, quiz_id: str, question_id: str, payload: QuizQuestionUpdate, username: str) -> dict:
-    quiz = _owned_quiz(db, quiz_id, username)
-    if quiz.status != "draft":
-        raise HTTPException(status_code=409, detail="小测开始答题后不能修改题目")
-    question = next((item for item in quiz.questions if item.id == question_id), None)
-    if question is None:
-        raise HTTPException(status_code=404, detail="题目不存在")
-    options = [item.strip() for item in payload.options]
-    if len(options) != (2 if question.kind == "true_false" else 4) or any(not item for item in options) or len(set(options)) != len(options):
-        raise HTTPException(status_code=400, detail="选项数量或内容不正确")
-    if question.kind == "true_false" and options != ["正确", "错误"]:
-        raise HTTPException(status_code=400, detail="判断题的选项必须是正确、错误")
-    if payload.correct_option >= len(options) or not payload.stem.strip() or not payload.explanation.strip():
-        raise HTTPException(status_code=400, detail="请填写题目、解析和有效答案")
-    question.stem = payload.stem.strip()
-    question.options_json = json.dumps(options, ensure_ascii=False)
-    question.correct_option = payload.correct_option
-    question.explanation = payload.explanation.strip()
-    db.commit()
-    return serialize_quiz(quiz, reveal_answers=True)
+    return serialize_quiz(quiz)
 
 
 def publish_quiz(db: Session, quiz_id: str, username: str) -> dict:
@@ -237,8 +212,8 @@ def serialize_attempt(db: Session, attempt: QuizAttempt) -> dict:
 
 def submit_quiz(db: Session, quiz_id: str, payload: QuizSubmit, username: str) -> dict:
     quiz = _owned_quiz(db, quiz_id, username)
-    if quiz.status != "ready":
-        raise HTTPException(status_code=409, detail="请先核对并开始小测")
+    if quiz.status not in {"ready", "draft"} or not quiz.questions:
+        raise HTTPException(status_code=409, detail="小测暂不可作答")
     questions = quiz.questions
     if set(payload.answers) != {question.id for question in questions}:
         raise HTTPException(status_code=400, detail="请回答全部题目后提交")
@@ -246,6 +221,8 @@ def submit_quiz(db: Session, quiz_id: str, payload: QuizSubmit, username: str) -
         selected = payload.answers[question.id]
         if type(selected) is not int or not 0 <= selected < len(json.loads(question.options_json)):
             raise HTTPException(status_code=400, detail="答案选项无效")
+    # 存量草稿完成有效作答后转为可作答状态，不改变原题或历史成绩。
+    quiz.status = "ready"
     user_id = user_id_for_username(db, username)
     attempt = QuizAttempt(quiz_id=quiz_id, user_id=user_id,
                           correct_count=sum(payload.answers[q.id] == q.correct_option for q in questions),
