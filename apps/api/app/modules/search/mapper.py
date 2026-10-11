@@ -17,23 +17,24 @@ def _snippet(text: str, query: str, width: int = 36) -> str:
     return f"{prefix}{text[start:end]}{suffix}"
 
 
-def search_all(db: Session, query: str, owner_username: str, course_id: str | None = None, kind: str = "all") -> dict:
+def search_all(db: Session, query: str, owner_username: str, course_id: str | None = None, kind: str = "all", *, lesson_id: str | None = None) -> dict:
     pattern = f"%{query}%"
     owned = Course.owner_id == user_id_for_username(db, owner_username)
     scope = [owned, *([Course.id == course_id] if course_id else [])]
+    lesson_scope = [*scope, *([Lesson.id == lesson_id] if lesson_id else [])]
     courses = db.scalars(
         select(Course).where(*scope, Course.name.ilike(pattern)).order_by(Course.created_at.desc()).limit(20)
     ).all() if kind in ("all", "courses") else []
     lessons = db.scalars(
         select(Lesson).join(Course, Lesson.course_id == Course.id)
-        .where(*scope, Lesson.title.ilike(pattern)).order_by(Lesson.created_at.desc()).limit(20)
+        .where(*lesson_scope, Lesson.title.ilike(pattern)).order_by(Lesson.created_at.desc()).limit(20)
     ).all() if kind in ("all", "lessons") else []
 
     transcript_rows = db.execute(
         select(TranscriptSegment, Lesson, Course)
         .join(Lesson, TranscriptSegment.lesson_id == Lesson.id)
         .join(Course, Lesson.course_id == Course.id)
-        .where(*scope, TranscriptSegment.text.ilike(pattern))
+        .where(*lesson_scope, TranscriptSegment.text.ilike(pattern))
         .order_by(Lesson.created_at.desc(), TranscriptSegment.start_ms)
         .limit(30)
     ).all() if kind in ("all", "transcript") else []
@@ -42,7 +43,7 @@ def search_all(db: Session, query: str, owner_username: str, course_id: str | No
         select(LessonSummary, Lesson, Course)
         .join(Lesson, LessonSummary.lesson_id == Lesson.id)
         .join(Course, Lesson.course_id == Course.id)
-        .where(*scope, LessonSummary.content.ilike(pattern))
+        .where(*lesson_scope, LessonSummary.content.ilike(pattern))
         .limit(15)
     ).all() if kind in ("all", "summaries") else []
 
@@ -50,7 +51,7 @@ def search_all(db: Session, query: str, owner_username: str, course_id: str | No
         select(ReviewCard, Lesson, Course)
         .join(Lesson, ReviewCard.lesson_id == Lesson.id)
         .join(Course, Lesson.course_id == Course.id)
-        .where(*scope, ReviewCard.title.ilike(pattern) | ReviewCard.body.ilike(pattern))
+        .where(*lesson_scope, ReviewCard.title.ilike(pattern) | ReviewCard.body.ilike(pattern))
         .order_by(ReviewCard.created_at.desc())
         .limit(30)
     ).all() if kind in ("all", "review_cards") else []
