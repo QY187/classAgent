@@ -25,6 +25,7 @@ SYSTEM_PROMPT = """你是课堂学习 Agent，只使用提供的读取工具完�
 纪要用于定位主题，事实结论必须进一步读取文字记录并引用工具返回的 evidence_id。
 历史回答不是本次事实依据，历史引用编号不能沿用。不要虚构课堂内容或工具结果。
 最终只输出 JSON：{"claims":[{"text":"课堂结论","source_ids":["E1"]}]}。
+查询课程或课次目录时可输出 {"claims":[],"catalog":{"course_ids":["实际查到的课程ID"],"lesson_ids":[]}}；目录由后端按真实记录呈现，不虚构 ID。仅查询目录不必读取课堂原文。
 缺少课次或目标信息时只输出 {"outcome":"needs_input","question":"必要的澄清问题","claims":[]}。
 资料不足时只输出 {"outcome":"insufficient_evidence","claims":[]}。"""
 
@@ -106,6 +107,10 @@ def finalize(db: Session, context: ToolContext, content: str | None, evidence: E
         if not isinstance(payload, dict) or not isinstance(payload.get("claims"), list):
             raise ValueError()
         claims = payload["claims"]
+        if not claims and isinstance(payload.get("catalog"), dict):
+            lines = evidence.catalog_answer(db, context, payload["catalog"])
+            if lines:
+                return {"answer": "\n".join(lines), "citations": [], "outcome": "answered", "steps": steps}
         if not claims and payload.get("outcome") == "needs_input":
             question = payload.get("question")
             if not isinstance(question, str) or not 1 <= len(question.strip()) <= 300:

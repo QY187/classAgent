@@ -34,7 +34,7 @@ def owned_conversation(db: Session, identity: str, username: str, lock=False):
         raise HTTPException(404, "对话不存在")
     if conversation.lesson_id is not None:
         owned_lesson(db, conversation.lesson_id, username, lock)
-    else:
+    elif conversation.course_id is not None:
         owned_course(db, conversation.course_id, username, lock)
     query = select(ChatConversation).where(ChatConversation.id == identity).execution_options(populate_existing=True)
     conversation = db.scalar(query.with_for_update() if lock else query)

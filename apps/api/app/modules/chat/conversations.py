@@ -9,7 +9,7 @@ from .generation import is_generating
 
 def conversation_read(item: ChatConversation) -> dict:
     return {"id": item.id, "lesson_id": item.lesson_id, "course_id": item.course_id,
-            "scope": "lesson" if item.lesson_id else "course", "title": item.title,
+            "scope": "lesson" if item.lesson_id else "course" if item.course_id else "global", "title": item.title,
             "created_at": item.created_at, "updated_at": item.updated_at, "generating": is_generating(item)}
 
 
@@ -25,6 +25,19 @@ def create_course_conversation(db: Session, course_id: str, username: str) -> di
     item = ChatConversation(course_id=course_id, user_id=user_id_for_username(db, username))
     db.add(item); db.commit(); db.refresh(item)
     return conversation_read(item)
+
+
+def create_global_conversation(db: Session, username: str) -> dict:
+    item = ChatConversation(user_id=user_id_for_username(db, username))
+    db.add(item); db.commit(); db.refresh(item)
+    return conversation_read(item)
+
+
+def list_global_conversations(db: Session, username: str) -> list[dict]:
+    return [conversation_read(item) for item in db.scalars(select(ChatConversation).where(
+        ChatConversation.user_id == user_id_for_username(db, username),
+        ChatConversation.course_id.is_(None), ChatConversation.lesson_id.is_(None)
+    ).order_by(ChatConversation.updated_at.desc(), ChatConversation.id))]
 
 
 def list_course_conversations(db: Session, course_id: str, username: str) -> list[dict]:

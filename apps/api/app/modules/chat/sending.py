@@ -5,6 +5,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_utc
 from ..rag.service import ask_course
+from ..agent.loop import run_agent
+from ..agent.tools import ToolContext
 from .access import owned_conversation
 from .messages import read_messages
 from .generation import is_generating, GenerationStopped
@@ -84,7 +86,12 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
             options["on_progress"] = publish
             options["on_check"] = check
         check()
-        result = ask_course(db, course_id, username, question, lesson_id=lesson_id, **options)
+        if course_id is None:
+            result = run_agent(db, ToolContext(username), question, history=context, on_check=check)
+            if on_progress is not None:
+                publish(result)
+        else:
+            result = ask_course(db, course_id, username, question, lesson_id=lesson_id, **options)
         db.rollback()
         conversation = owned_conversation(db, conversation_id, username, lock=True)
         if conversation.generation_token != token:

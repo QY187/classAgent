@@ -17,6 +17,16 @@ from .search import search_conversations
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
+@router.post("/conversations", status_code=201)
+def create_global_conversation(username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return conversations.create_global_conversation(db, username)
+
+
+@router.get("/conversations")
+def list_global_conversations(username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return conversations.list_global_conversations(db, username)
+
+
 @router.post("/courses/{course_id}/conversations", status_code=201)
 def create_course_conversation(course_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return conversations.create_course_conversation(db, course_id, username)

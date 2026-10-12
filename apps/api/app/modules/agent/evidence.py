@@ -13,9 +13,17 @@ from .tools import ToolContext, check_lesson
 class EvidenceStore:
     def __init__(self):
         self.entries = {}
+        self.course_ids = set()
+        self.lesson_ids = set()
 
     def collect(self, db: Session, context: ToolContext, name: str, result: dict):
-        if not result["ok"] or name not in {"get_transcript", "search_course"}:
+        if not result["ok"]:
+            return
+        if name in {"list_courses", "list_lessons"}:
+            target = self.course_ids if name == "list_courses" else self.lesson_ids
+            target.update(row["id"] for row in result["data"]["items"])
+            return
+        if name not in {"get_transcript", "search_course"}:
             return
         data = result["data"]
         for row in data.get("items", []):
@@ -48,3 +56,25 @@ class EvidenceStore:
                 end_ms=segment.end_ms, content=entry["content"], source_segment_ids=json.dumps([segment.id]))
             lessons[lesson.id] = lesson
         return ground_claims(claims, evidence, lessons)
+
+    def catalog_answer(self, db: Session, context: ToolContext, catalog: dict) -> list[str]:
+        from .tools import check_course
+        lines = []
+        for key, allowed in (("course_ids", self.course_ids), ("lesson_ids", self.lesson_ids)):
+            ids = catalog.get(key, [])
+            if not isinstance(ids, list):
+                continue
+            for identity in dict.fromkeys(value for value in ids[:50] if isinstance(value, str)):
+                if identity not in allowed:
+                    continue
+                try:
+                    if key == "course_ids":
+                        course = check_course(db, context, identity)
+                        lines.append(f"课程：{course.name}" + (f" · {course.semester}" if course.semester else ""))
+                    else:
+                        lesson = check_lesson(db, context, identity)
+                        course = check_course(db, context, lesson.course_id)
+                        lines.append(f"课次：{lesson.title} · {course.name}" + (f" · {lesson.lesson_date}" if lesson.lesson_date else ""))
+                except HTTPException:
+                    continue
+        return lines

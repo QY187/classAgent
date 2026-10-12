@@ -264,7 +264,7 @@ class PendingFileDeletion(Base):
 
 class ChatConversation(Base):
     __tablename__ = "chat_conversations"
-    __table_args__ = (CheckConstraint("(lesson_id IS NOT NULL AND course_id IS NULL) OR (lesson_id IS NULL AND course_id IS NOT NULL)", name="ck_chat_conversation_scope"),)
+    __table_args__ = (CheckConstraint("lesson_id IS NULL OR course_id IS NULL", name="ck_chat_conversation_scope"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     lesson_id: Mapped[str | None] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), index=True, nullable=True)
