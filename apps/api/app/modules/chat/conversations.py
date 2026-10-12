@@ -1,8 +1,8 @@
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from ...core.ownership import user_id_for_username
-from ...shared.models import ChatConversation
+from ...shared.models import ChatConversation, Lesson
 from .access import owned_lesson, owned_course, owned_conversation
 from .generation import is_generating
 
@@ -40,10 +40,13 @@ def list_global_conversations(db: Session, username: str) -> list[dict]:
     ).order_by(ChatConversation.updated_at.desc(), ChatConversation.id))]
 
 
-def list_course_conversations(db: Session, course_id: str, username: str) -> list[dict]:
+def list_course_conversations(db: Session, course_id: str, username: str, include_lessons: bool = False) -> list[dict]:
     owned_course(db, course_id, username)
+    scope = ChatConversation.course_id == course_id
+    if include_lessons:
+        scope = or_(scope, ChatConversation.lesson_id.in_(select(Lesson.id).where(Lesson.course_id == course_id)))
     return [conversation_read(item) for item in db.scalars(select(ChatConversation).where(
-        ChatConversation.course_id == course_id, ChatConversation.user_id == user_id_for_username(db, username)
+        scope, ChatConversation.user_id == user_id_for_username(db, username)
     ).order_by(ChatConversation.updated_at.desc(), ChatConversation.id))]
 
 

@@ -47,3 +47,19 @@ class CourseChatTest(unittest.TestCase):
             self.assertEqual(len(list_course_conversations(db, "c", "owner")), 1)
             db.execute(delete(Course.__table__).where(Course.__table__.c.id == "c")); db.commit()
             self.assertEqual(list(db.scalars(select(ChatMessage).execution_options(include_deleted=True))), [])
+
+    def test_combined_course_history_preserves_scope_and_visibility(self):
+        with Session(self.engine) as db:
+            course_chat = create_course_conversation(db, "c", "owner")
+            lesson_chat = create_conversation(db, "l", "owner")
+            db.add(Course(id="c2", owner_id="u", name="其他课程")); db.flush()
+            db.add(Lesson(id="l2", course_id="c2", title="其他课次")); db.commit()
+            create_conversation(db, "l2", "owner")
+            combined = list_course_conversations(db, "c", "owner", include_lessons=True)
+            self.assertEqual({item["id"] for item in combined}, {course_chat["id"], lesson_chat["id"]})
+            self.assertEqual({item["scope"] for item in combined}, {"course", "lesson"})
+            db.get(Lesson, "l").deleted_at = now_utc(); db.commit()
+            self.assertEqual([item["id"] for item in list_course_conversations(db, "c", "owner", True)], [course_chat["id"]])
+            db.add(User(id="other", username="other", password_hash="x")); db.commit()
+            with self.assertRaises(HTTPException):
+                list_course_conversations(db, "c", "other", True)

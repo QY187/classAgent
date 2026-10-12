@@ -14,7 +14,7 @@ export default function ChatConversationList({ targetId, scope, selectedId, onSe
   const endpoint = scope === "global" ? "/chat/conversations" : `/chat/${scope === "course" ? "courses" : "lessons"}/${targetId}/conversations`;
   useEffect(() => {
     const controller = new AbortController(); setError("");
-    request<Conversation[]>(endpoint, { signal: controller.signal }).then((items) => { if (!controller.signal.aborted) setItems(items); })
+    request<Conversation[]>(scope === "course" ? `${endpoint}?include_lessons=true` : endpoint, { signal: controller.signal }).then((items) => { if (!controller.signal.aborted) setItems(items); })
       .catch((err) => { if (!controller.signal.aborted) setError(errorMessage(err)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();

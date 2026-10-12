@@ -33,8 +33,8 @@ def create_course_conversation(course_id: str, username: str = Depends(get_curre
 
 
 @router.get("/courses/{course_id}/conversations")
-def list_course_conversations(course_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    return conversations.list_course_conversations(db, course_id, username)
+def list_course_conversations(course_id: str, include_lessons: bool = False, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return conversations.list_course_conversations(db, course_id, username, include_lessons=include_lessons)
 
 
 @router.get("/search")
