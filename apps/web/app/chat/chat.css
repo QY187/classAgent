@@ -14,7 +14,9 @@
 .chat-course-toggle { width: 100%; display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: inherit; text-align: left; padding: 0; font-weight: inherit; }
 .chat-course-toggle:hover .chat-course-title { color: var(--blue); }
 .chat-course-toggle[aria-current="true"] { color: var(--blue); background: #e9edff; border-radius: 8px; outline: 6px solid #e9edff; }
-.chat-course-toggle .chat-tree-chevron { font-size: 13px; flex: none; }
+.chat-course-toggle .chat-tree-chevron { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 16px; flex: none; }
+.chat-course-toggle .chat-tree-chevron svg { width: 14px; height: 14px; transition: transform .15s; }
+.chat-course-toggle[aria-expanded="true"] .chat-tree-chevron svg { transform: rotate(90deg); }
 .chat-lesson { margin: 4px 0 4px 20px; border-left: 1px solid #e2e7f1; padding-left: 4px; }
 .chat-lesson summary { cursor: pointer; display: flex; gap: 12px; justify-content: space-between; padding: 11px 10px; border-radius: 8px; font-weight: 600; font-size: 13px; list-style: none; }
 .chat-lesson summary::-webkit-details-marker { display: none; }
@@ -102,6 +104,16 @@
 .chat-conversations.global .chat-new-conversation { background: var(--blue-soft); border: 1px solid #e0e5ff; border-radius: 10px; margin-bottom: 8px; }
 .chat-courses-label { display: flex; align-items: center; justify-content: space-between; padding: 0 12px 12px; gap: 8px; }
 .chat-add-course { background: none; border: 0; color: var(--blue); font-size: 12px; cursor: pointer; padding: 5px; }
+.chat-heading-action { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 5px; border: 0; border-radius: 8px; color: #7b8494; background: transparent; cursor: pointer; transition: color .15s, background .15s; }
+.chat-heading-action svg { width: 20px; height: 20px; }
+.chat-heading-action:hover { color: var(--blue); background: var(--blue-soft); }
+.chat-heading-action:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.chat-heading-action:disabled { opacity: .45; cursor: default; }
+.chat-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 8px 8px; }
+.chat-global-section .chat-section-heading h2 { display: flex; align-items: center; gap: 10px; padding: 0; }
+.chat-course-group .chat-course-heading { margin: 16px 8px 6px; }
+.chat-course-group .chat-course-heading h2 { flex: 1; min-width: 0; margin: 0; color: inherit; font-size: inherit; }
+.chat-conversations.with-heading { padding-left: 0; }
 .chat-course-picker { width: min(480px, calc(100vw - 32px)); max-height: 85dvh; padding: 0; }
 .chat-course-picker::backdrop { background: rgba(16, 27, 52, .4); }
 .chat-course-options { max-height: 220px; overflow-y: auto; margin: 12px 0 24px; }

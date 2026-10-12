@@ -19,7 +19,7 @@ export default function ChatCoursePicker({ courses, onSelected }: { courses: Cha
     } catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
-  return <><button className="chat-add-course" onClick={() => { setError(""); dialog.current?.showModal(); }}>＋ 添加课程</button>
+  return <><button type="button" className="chat-heading-action" aria-label="添加课程" title="添加课程" onClick={() => { setError(""); dialog.current?.showModal(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v3"/><path d="M3 7v12a2 2 0 0 0 2 2h8M16 17h6m-3-3v6"/></svg></button>
     <dialog className="chat-course-picker panel" ref={dialog} aria-labelledby="chat-course-picker-title">
       <div className="panel-header"><h2 id="chat-course-picker-title">添加课程</h2><button className="button button-quiet" disabled={busy} onClick={() => dialog.current?.close()}>关闭</button></div>
       <div className="panel-body"><label className="field-label">选择已有课程<input className="field" type="search" placeholder="搜索已有课程" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
