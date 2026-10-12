@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import type { Conversation } from "../../lib/chat";
+import type { ChatCourse, Conversation } from "../../lib/chat";
 import ChatLessonTree from "./ChatLessonTree";
 import ChatConversationList from "./ChatConversationList";
 import ChatThread from "./ChatThread";
@@ -23,11 +23,16 @@ export default function ChatWorkspace() {
     restore(); window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, []);
+  function courseSelected(course: ChatCourse) {
+    setSelectedId(null); setSelectedLessonId(null); setSelectedCourseId(course.id); changed();
+    window.history.pushState(null, "", `/chat?course=${encodeURIComponent(course.id)}`);
+  }
   function select(item: Conversation) {
     setSelectedId(item.id); setSelectedLessonId(item.lesson_id); setSelectedCourseId(item.course_id);
     window.history.pushState(null, "", `/chat?conversation=${encodeURIComponent(item.id)}`);
   }
-  return <main className="chat-workspace"><ChatLessonTree selectedLessonId={selectedLessonId} selectedCourseId={selectedCourseId} onSelect={select} revision={revision}
+  return <main className="chat-workspace"><ChatLessonTree selectedLessonId={selectedLessonId} selectedCourseId={selectedCourseId} onSelect={select} revision={revision} onCourseSelected={courseSelected}
+    renderGlobal={() => <ChatConversationList targetId="" scope="global" selectedId={selectedId} onSelect={select} revision={revision} />}
     renderCourse={(course) => <ChatConversationList targetId={course.id} scope="course" selectedId={selectedId} onSelect={select} revision={revision} />}
-    renderLesson={(lesson) => <ChatConversationList targetId={lesson.id} scope="lesson" selectedId={selectedId} onSelect={select} revision={revision} />} /><section className="chat-main">{selectedId ? <ChatThread key={selectedId} conversationId={selectedId} onLoaded={loaded} onChanged={changed} onDeleted={deleted} /> : <div className="chat-welcome"><span className="chat-welcome-icon">◌</span><h2>想聊整门课程，还是某一节课？</h2><p>展开左侧课程，可以新建课程对话；展开课次，可以新建课次对话。</p></div>}</section></main>;
+    renderLesson={(lesson) => <ChatConversationList targetId={lesson.id} scope="lesson" selectedId={selectedId} onSelect={select} revision={revision} />} /><section className="chat-main">{selectedId ? <ChatThread key={selectedId} conversationId={selectedId} onLoaded={loaded} onChanged={changed} onDeleted={deleted} /> : <div className="chat-welcome"><span className="chat-welcome-icon">◌</span><h2>{selectedCourseId ? "开始这门课程的对话" : "今天想了解什么？"}</h2><p>{selectedCourseId ? "在左侧课程下新建对话，也可以展开课次单独提问。" : "主对话可以查询所有课程；选择课程或课次后，可专注对应的课堂内容。"}</p>{!selectedCourseId && <ChatConversationList targetId="" scope="global" createOnly selectedId={null} onSelect={select} revision={revision} />}</div>}</section></main>;
 }

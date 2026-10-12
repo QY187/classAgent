@@ -3,18 +3,18 @@ import { useEffect, useState } from "react";
 import { errorMessage, request } from "../../lib/api";
 import type { Conversation } from "../../lib/chat";
 
-export default function ChatConversationList({ targetId, scope, selectedId, onSelect, revision }: {
-  targetId: string; scope: "course" | "lesson"; selectedId: string | null; onSelect: (item: Conversation) => void; revision: number;
+export default function ChatConversationList({ targetId, scope, selectedId, onSelect, revision, createOnly = false }: {
+  targetId: string; scope: Conversation["scope"]; selectedId: string | null; onSelect: (item: Conversation) => void; revision: number; createOnly?: boolean;
 }) {
   const [items, setItems] = useState<Conversation[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [retry, setRetry] = useState(0);
-  const endpoint = `/chat/${scope === "course" ? "courses" : "lessons"}/${targetId}/conversations`;
+  const endpoint = scope === "global" ? "/chat/conversations" : `/chat/${scope === "course" ? "courses" : "lessons"}/${targetId}/conversations`;
   useEffect(() => {
     const controller = new AbortController(); setError("");
-    request<Conversation[]>(endpoint, { signal: controller.signal }).then(setItems)
+    request<Conversation[]>(endpoint, { signal: controller.signal }).then((items) => { if (!controller.signal.aborted) setItems(items); })
       .catch((err) => { if (!controller.signal.aborted) setError(errorMessage(err)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -28,8 +28,8 @@ export default function ChatConversationList({ targetId, scope, selectedId, onSe
     } catch (err) { setError(errorMessage(err)); }
     finally { setCreating(false); }
   }
-  return <div className={`chat-conversations ${scope}`}><button className="chat-new-conversation" disabled={creating || loading} onClick={create}>{creating ? "正在创建…" : scope === "course" ? "＋ 新建课程对话" : "＋ 新建课次对话"}</button>
+  return <div className={`chat-conversations ${scope}`}><button className="chat-new-conversation" disabled={creating || loading} onClick={create}>{creating ? "正在创建…" : scope === "global" ? "＋ 新对话" : scope === "course" ? "＋ 新建课程对话" : "＋ 新建课次对话"}</button>
     {error && <div className="chat-tree-hint"><p role="alert">{error}</p><button className="button button-quiet" onClick={() => setRetry((value) => value + 1)}>重试</button></div>}
-    {loading ? <p className="chat-tree-hint">读取对话…</p> : items.length ? items.map((item) => <button key={item.id} className={`chat-conversation-link${item.id === selectedId ? " active" : ""}`} aria-current={item.id === selectedId ? "true" : undefined} title={item.title} onClick={() => onSelect(item)}><span aria-hidden="true">◌</span><span>{item.title}</span></button>) : !error && <p className="chat-tree-hint">还没有对话</p>}
+    {!createOnly && (loading ? <p className="chat-tree-hint">读取对话…</p> : items.length ? items.map((item) => <button key={item.id} className={`chat-conversation-link${item.id === selectedId ? " active" : ""}`} aria-current={item.id === selectedId ? "true" : undefined} title={item.title} onClick={() => onSelect(item)}><span aria-hidden="true">◌</span><span>{item.title}</span></button>) : !error && <p className="chat-tree-hint">还没有对话</p>)}
   </div>;
 }
