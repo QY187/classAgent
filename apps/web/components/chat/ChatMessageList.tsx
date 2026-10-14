@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import ChatAgentSteps from "./ChatAgentSteps";
+import ChatQuizCard from "./ChatQuizCard";
 import Link from "next/link";
 import type { ChatMessage } from "../../lib/chat";
 
@@ -11,5 +12,5 @@ export default function ChatMessageList({ messages, generating, username }: { me
     {message.status === "cancelled" && <p className="chat-message-status">{message.role === "assistant" ? "已停止生成 · 回答未完成" : "已停止生成"}</p>}
     {message.status === "pending" && !message.steps?.length && <p className="chat-message-status" role="status">{generating ? message.role === "assistant" ? "正在继续生成，完成后自动保存…" : "正在查找课堂依据并整理回答…" : "上次回答已中断，可以重试。"}</p>}
     {message.citations.length > 0 && <details className="chat-evidence"><summary>查看回答依据 · {message.citations.length} 条引用</summary><div>{message.citations.map((citation) => <Link className="chat-citation" key={citation.id} href={`/lessons/${citation.lesson_id}/transcript?t=${citation.start_ms}`}><span className="chat-citation-number">[{citation.id}]</span><span><strong>{citation.lesson_title} · {time(citation.start_ms)}</strong><p>{citation.snippet}</p></span><span aria-hidden="true">↗</span></Link>)}</div></details>}
-  </article>{message.role === "user" && !!message.steps?.length && <ChatAgentSteps steps={message.steps} status={message.status} generating={generating} />}</Fragment>)}</>;
+  </article>{message.role === "user" && !!message.steps?.length && <ChatAgentSteps steps={message.steps} status={message.status} generating={generating} />}{message.artifacts?.filter((artifact) => artifact.kind === "quiz").map((quiz) => <ChatQuizCard key={quiz.id} quiz={quiz} />)}</Fragment>)}</>;
 }

@@ -11,6 +11,7 @@ LABELS = {
     "search_course": "搜索课堂内容",
     "get_transcript": "读取课堂原文",
     "get_summary": "读取课堂纪要",
+    "generate_quiz": "生成课堂小测",
 }
 ERRORS = {
     "unknown_tool": "不支持该操作",

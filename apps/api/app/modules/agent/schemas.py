@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
-from typing import Annotated
+from typing import Annotated, Literal
 
 
 Identity = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=36)]
@@ -38,3 +38,10 @@ class SearchArguments(ToolArguments):
     query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
     lesson_id: Identity | None = None
     limit: int = Field(default=10, ge=1, le=30)
+
+
+class QuizArguments(ToolArguments):
+    course_id: Identity
+    lesson_ids: list[Identity] | None = Field(default=None, min_length=1, max_length=50)
+    count: int = Field(default=5, ge=3, le=15)
+    question_type: Literal["mixed", "single_choice", "true_false"] = "mixed"

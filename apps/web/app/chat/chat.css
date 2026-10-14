@@ -124,6 +124,16 @@
 .chat-agent-steps li.completed > span { color: #0d967d; }
 .chat-agent-steps li.failed { color: #b35b55; }
 .chat-agent-steps li.running { color: var(--blue); }
+.chat-quiz-card { display: flex; align-items: center; gap: 14px; padding: 18px; margin: 0 0 22px; border: 1px solid #e2e7fb; border-radius: 14px; background: linear-gradient(110deg, #f7f8ff, #fff); max-width: 680px; }
+.chat-quiz-icon { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: var(--blue); background: var(--blue-soft); }
+.chat-quiz-icon svg { width: 24px; height: 24px; }
+.chat-quiz-info { flex: 1; min-width: 0; }
+.chat-quiz-info > span { font-size: 11px; color: var(--blue); }
+.chat-quiz-info h3 { margin: 5px 0; font-size: 14px; overflow-wrap: anywhere; }
+.chat-quiz-info p { margin: 0 0 5px; font-size: 12px; color: var(--muted); }
+.chat-quiz-info small { font-size: 11px; color: var(--muted); }
+.chat-quiz-card .button { flex: none; font-size: 12px; padding: 10px 13px; white-space: nowrap; }
+@media (max-width: 640px) { .chat-quiz-card { flex-wrap: wrap; } .chat-quiz-card .button { margin-left: 54px; } }
 .chat-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 8px 8px; }
 .chat-global-section .chat-section-heading h2 { display: flex; align-items: center; gap: 10px; padding: 0; }
 .chat-course-group .chat-course-heading { margin: 16px 8px 6px; }

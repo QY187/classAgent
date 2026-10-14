@@ -117,7 +117,7 @@ class QuizTest(unittest.TestCase):
             prepare_quiz_scope(old_engine); prepare_quiz_scope(old_engine)
             self.assertIn("lesson_ids_json", {column["name"] for column in inspect(old_engine).get_columns("quizzes")})
             with old_engine.connect() as connection:
-                self.assertEqual(tuple(connection.execute(text("SELECT * FROM quizzes")).one()), ("old", "l1", None))
+                self.assertEqual(tuple(connection.execute(text("SELECT id, lesson_id, lesson_ids_json, agent_request_key FROM quizzes")).one()), ("old", "l1", None, None))
         finally:
             old_engine.dispose()
 

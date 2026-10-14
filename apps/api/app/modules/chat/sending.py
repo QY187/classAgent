@@ -13,6 +13,7 @@ from .generation import is_generating, GenerationStopped
 from .context import recent_context
 from .previews import save_preview
 from .agent_progress import save_agent_step
+from .quiz_actions import wants_quiz, generate_for_message
 
 
 def _finish_failed(db: Session, conversation_id: str, request_id: str, token: str, error: str):
@@ -71,6 +72,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
     position = existing.position
     context = recent_context(db, conversation_id, position)
     db.commit()
+    question_id = existing.id
     try:
         if on_started is not None:
             on_started()
@@ -93,7 +95,8 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
                 progress = save_agent_step(db, conversation_id, username, request_id, token, raw)
                 if on_step is not None:
                     on_step(progress)
-            result = run_agent(db, ToolContext(username), question, history=context, on_check=check, on_step=publish_step)
+            generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args)) if wants_quiz(question, context) else None
+            result = run_agent(db, ToolContext(username, generate_quiz=generate), question, history=context, on_check=check, on_step=publish_step)
             if on_progress is not None:
                 publish(result)
         else:

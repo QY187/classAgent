@@ -1,5 +1,6 @@
 """把现有业务封装为读取工具，不执行模型生成的代码。"""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Callable
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -18,6 +19,18 @@ class ToolContext:
     username: str
     course_id: str | None = None
     lesson_id: str | None = None
+    generate_quiz: Callable | None = field(default=None, compare=False, repr=False)
+
+
+def generate_quiz(db, context, args):
+    if context.generate_quiz is None:
+        raise HTTPException(403, "当前问题没有授权生成小测")
+    check_course(db, context, args.course_id)
+    for lesson_id in args.lesson_ids or []:
+        lesson = check_lesson(db, context, lesson_id)
+        if lesson.course_id != args.course_id:
+            raise HTTPException(404, "课次不存在")
+    return context.generate_quiz(args)
 
 
 def check_course(db: Session, context: ToolContext, course_id: str):

@@ -140,8 +140,14 @@ def _quiz_lesson_ids(quiz: Quiz) -> list[str]:
     return json.loads(quiz.lesson_ids_json) if quiz.lesson_ids_json else ([quiz.lesson_id] if quiz.lesson_id else [])
 
 
-def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: str) -> dict:
+def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: str, *, agent_request_key: str | None = None, before_save=None) -> dict:
     course = _owned_course(db, course_id, username)
+    if agent_request_key:
+        existing = db.scalar(select(Quiz).where(Quiz.agent_request_key == agent_request_key).execution_options(include_deleted=True))
+        if existing is not None:
+            if existing.course_id != course_id or visible_get(db, Quiz, existing.id) is None:
+                raise HTTPException(409, "本条请求已有小测，请发起新问题")
+            return serialize_quiz(existing)
     lesson_ids = payload.lesson_ids or ([payload.lesson_id] if payload.lesson_id else None)
     selected_lessons = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id, Lesson.id.in_(lesson_ids))).all()) if lesson_ids else []
     if lesson_ids and len(selected_lessons) != len(lesson_ids):
@@ -152,11 +158,22 @@ def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: 
     if len(segments) < 3:
         raise HTTPException(status_code=400, detail="文字记录不足，至少需要 3 段内容才能生成小测")
     generated = _generate_questions(segments, payload.count, payload.question_type)
+    if before_save is not None:
+        before_save()
+    # 生成期间资料可能被删除或回收，写入前重新核对。
+    if agent_request_key:
+        course = _owned_course(db, course_id, username)
+        if lesson_ids and len(list(db.scalars(select(Lesson.id).where(Lesson.course_id == course_id, Lesson.id.in_(lesson_ids))))) != len(lesson_ids):
+            raise HTTPException(400, "出题范围已变更，请重新选择")
+        for item in generated:
+            source = visible_get(db, TranscriptSegment, item["source"].id)
+            if source is None or item["evidence"] not in source.text:
+                raise HTTPException(400, "课堂原文已变更，请重新生成")
     lesson = selected_lessons[0] if len(selected_lessons) == 1 else None
     scope_title = lesson.title if lesson else f"{course.name} · 指定{len(selected_lessons)}节课" if selected_lessons else course.name
     quiz = Quiz(course_id=course_id, lesson_id=lesson.id if lesson else None,
                 lesson_ids_json=json.dumps(lesson_ids) if lesson_ids else None,
-                title=f"{scope_title[:185]} · 课堂小测", status="ready")
+                title=f"{scope_title[:185]} · 课堂小测", status="ready", agent_request_key=agent_request_key)
     for position, item in enumerate(generated, 1):
         source = item["source"]
         quiz.questions.append(QuizQuestion(
