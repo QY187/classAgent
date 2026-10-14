@@ -1,6 +1,7 @@
 """对话小测动作：授权、幂等和生成后的安全结果。"""
 import re
 import json
+from fastapi import HTTPException
 from sqlalchemy import select
 from ...shared.models import Quiz, Course
 from ..quizzes.schemas import QuizGenerate
@@ -36,6 +37,8 @@ def generate_for_message(db, conversation_id, username, question_id, token, args
         conversation = owned_conversation(db, conversation_id, username, lock=True)
         if conversation.generation_token != token:
             raise GenerationStopped()
+        if conversation.course_id is not None and args.course_id != conversation.course_id:
+            raise HTTPException(404, "课程不存在或当前对话不可访问")
     before_save()
     db.commit()  # 不在模型生成期间持有对话锁。
     result = generate_quiz(db, args.course_id, QuizGenerate(lesson_ids=args.lesson_ids, count=args.count,

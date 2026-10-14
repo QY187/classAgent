@@ -169,6 +169,9 @@ def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: 
             source = visible_get(db, TranscriptSegment, item["source"].id)
             if source is None or item["evidence"] not in source.text:
                 raise HTTPException(400, "课堂原文已变更，请重新生成")
+            source_lesson = visible_get(db, Lesson, source.lesson_id)
+            if source_lesson is None or source_lesson.course_id != course_id or (lesson_ids and source.lesson_id not in lesson_ids):
+                raise HTTPException(400, "出题范围已变更，请重新选择")
     lesson = selected_lessons[0] if len(selected_lessons) == 1 else None
     scope_title = lesson.title if lesson else f"{course.name} · 指定{len(selected_lessons)}节课" if selected_lessons else course.name
     quiz = Quiz(course_id=course_id, lesson_id=lesson.id if lesson else None,

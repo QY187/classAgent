@@ -9,18 +9,19 @@ from app.modules.chat.conversations import create_conversation, create_course_co
 from app.modules.chat.messages import read_messages
 from app.modules.chat.search import search_conversations
 from app.modules.chat.sending import send_message
+from app.modules.agent.tools import ToolContext
 
 
 class CourseChatTest(unittest.TestCase):
     setUp = fixtures.RecycleVisibilityTest.setUp
     tearDown = fixtures.RecycleVisibilityTest.tearDown
 
-    @patch("app.modules.chat.sending.ask_course", return_value={"answer":"课程答案", "citations":[]})
-    def test_course_send_has_no_lesson_restriction(self, ask):
+    @patch("app.modules.chat.sending.run_agent", return_value={"answer":"课程答案", "citations":[]})
+    def test_course_send_binds_agent_to_course_without_lesson_restriction(self, agent):
         with Session(self.engine) as db:
             chat = create_course_conversation(db, "c", "owner")
             result = send_message(db, chat["id"], "owner", "整门课程讲了什么", "r")
-            ask.assert_called_once_with(db, "c", "owner", "整门课程讲了什么", lesson_id=None)
+            self.assertEqual(agent.call_args.args, (db, ToolContext("owner", course_id="c"), "整门课程讲了什么"))
             self.assertEqual(result["messages"][1]["content"], "课程答案")
 
     def test_course_and_lesson_lists_are_independent(self):

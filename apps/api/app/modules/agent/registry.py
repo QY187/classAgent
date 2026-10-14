@@ -25,7 +25,7 @@ _definitions = (
     ToolDefinition("get_transcript", "分页读取课堂文字记录，包含片段编号和时间点。truncated 表示该片段文本被截短。", TranscriptArguments, tools.get_transcript),
     ToolDefinition("get_summary", "读取已有纪要及状态，按字符分页；available 为 false 时不可作为课堂依据。", SummaryArguments, tools.get_summary),
     ToolDefinition("search_course", "按关键词搜索课堂文字记录，返回原文片段和时间点；不是语义检索，未命中不代表课堂没有相关内容。", SearchArguments, tools.search_course),
-    ToolDefinition("generate_quiz", "用户明确要求生成小测时使用，先查询课程和课次以确认范围；范围不明确先询问。生成后即可答题，不返回答案。同一问题只生成一组。", QuizArguments, tools.generate_quiz, writes=True),
+    ToolDefinition("generate_quiz", "用户明确要求生成小测时使用。使用对话已绑定的课程或先查询课程，生成前查询课次；范围不明确先询问。未限定课次时使用整门课程。生成后即可答题，不返回答案。同一问题只生成一组。", QuizArguments, tools.generate_quiz, writes=True),
 )
 TOOLS = MappingProxyType({tool.name: tool for tool in _definitions})
 

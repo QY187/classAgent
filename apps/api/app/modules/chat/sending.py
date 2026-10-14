@@ -1,4 +1,4 @@
-"""消息发送、幂等请求和失败恢复；模型检索由独立 RAG 服务承担。"""
+"""消息发送、幂等请求和失败恢复；按对话范围绑定 Agent 或历史课次检索。"""
 import json
 from fastapi import HTTPException
 from sqlalchemy import func, select, update
@@ -90,13 +90,13 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
             options["on_progress"] = publish
             options["on_check"] = check
         check()
-        if course_id is None:
+        if lesson_id is None:
             def publish_step(raw):
                 progress = save_agent_step(db, conversation_id, username, request_id, token, raw)
                 if on_step is not None:
                     on_step(progress)
             generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args)) if wants_quiz(question, context) else None
-            result = run_agent(db, ToolContext(username, generate_quiz=generate), question, history=context, on_check=check, on_step=publish_step)
+            result = run_agent(db, ToolContext(username, course_id=course_id, generate_quiz=generate), question, history=context, on_check=check, on_step=publish_step)
             if on_progress is not None:
                 publish(result)
         else:

@@ -19,6 +19,7 @@ ERRORS = {
     "not_found": "资料不存在或当前范围不可访问",
     "unauthenticated": "请重新登录",
     "result_too_large": "读取结果过长，需要缩小范围",
+    "generation_failed": "小测生成失败，请查看回答说明",
 }
 
 
