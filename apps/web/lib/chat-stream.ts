@@ -1,10 +1,10 @@
 import { authorizedResponse } from "./api";
-import type { ChatHistory, ChatCitation } from "./chat";
+import type { ChatHistory, ChatCitation, AgentStep } from "./chat";
 
 export type AnswerPreview = { answer: string; citations: ChatCitation[] };
 
 export async function streamAnswer(conversationId: string, content: string, requestId: string,
-  onPreview: (preview: AnswerPreview) => void, options?: { signal?: AbortSignal; onReady?: () => void }): Promise<ChatHistory> {
+  onPreview: (preview: AnswerPreview) => void, options?: { signal?: AbortSignal; onReady?: () => void; onSteps?: (steps: AgentStep[]) => void }): Promise<ChatHistory> {
   const response = await authorizedResponse(`/chat/conversations/${conversationId}/ask/stream`, {
     method: "POST", headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({ content, request_id: requestId }),
@@ -30,6 +30,7 @@ export async function streamAnswer(conversationId: string, content: string, requ
         const payload = JSON.parse(data);
         if (event === "status" && payload.ready === true) options?.onReady?.();
         if (event === "answer") onPreview(payload as AnswerPreview);
+        if (event === "step" && payload.request_id === requestId && Array.isArray(payload.steps)) options?.onSteps?.(payload.steps);
         if (event === "error") throw new Error(payload.detail || "回答失败，请重试。");
         if (event === "done") return payload as ChatHistory;
       }

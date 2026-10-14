@@ -21,6 +21,7 @@ async def message_events(conversation_id, username, content, request_id):
             with SessionLocal() as db:
                 result = send_message(db, conversation_id, username, content, request_id,
                                       on_progress=lambda data: queue.put(("answer", data)),
+                                      on_step=lambda data: queue.put(("step", data)),
                                       on_started=lambda: queue.put(("status", {"ready": True})))
             queue.put(("done", result))
         except Exception as exc:

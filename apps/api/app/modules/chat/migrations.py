@@ -23,6 +23,9 @@ def prepare_chat_cancellation(engine) -> None:
 def prepare_chat_scope(engine) -> None:
     """保留课程和课次对话，并允许两种归属均为空的主对话。"""
     inspector = inspect(engine)
+    if inspector.has_table("chat_messages") and "agent_steps_json" not in {item["name"] for item in inspector.get_columns("chat_messages")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE chat_messages ADD COLUMN agent_steps_json TEXT NOT NULL DEFAULT '[]'"))
     if not inspector.has_table("chat_conversations"):
         return
     columns = {column["name"]: column for column in inspector.get_columns("chat_conversations")}

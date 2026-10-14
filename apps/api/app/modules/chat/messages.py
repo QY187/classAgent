@@ -9,7 +9,8 @@ from .conversations import conversation_read
 def message_read(item: ChatMessage) -> dict:
     return {"id": item.id, "request_id": item.request_id, "position": item.position, "role": item.role,
             "content": item.content, "status": item.status, "citations": json.loads(item.citations_json),
-            "error_message": item.error_message, "created_at": item.created_at}
+            "error_message": item.error_message, "created_at": item.created_at,
+            "steps": json.loads(item.agent_steps_json)}
 
 
 def read_messages(db: Session, conversation_id: str, username: str) -> dict:

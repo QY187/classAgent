@@ -59,13 +59,14 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
     if (last?.request_id !== requestId) setHistory({ ...history, conversation: { ...history.conversation, generating: true }, messages: [...history.messages, {
       id: requestId, request_id: requestId, position: (last?.position || 0) + 1, role: "user", content, status: "pending", citations: [], error_message: null, created_at: new Date().toISOString(),
     }] });
-    else setHistory({ ...history, conversation: { ...history.conversation, generating: true }, messages: history.messages.map((item) => item.request_id === requestId && item.role === "user" ? { ...item, status: "pending", error_message: null } : item) });
+    else setHistory({ ...history, conversation: { ...history.conversation, generating: true }, messages: history.messages.map((item) => item.request_id === requestId && item.role === "user" ? { ...item, status: "pending", error_message: null, steps: [] } : item) });
     try {
       const result = await streamAnswer(conversationId, content, requestId, (value) => {
         if (mounted.current && activeRun.current === run && !run.stopped) setPreview(value);
       }, {
         signal: AbortSignal.any([run.controller.signal, AbortSignal.timeout(180000)]),
         onReady: () => { if (mounted.current && activeRun.current === run && !run.stopped) { setReadyRequestId(requestId); onChanged(); } },
+        onSteps: (steps) => { if (mounted.current && activeRun.current === run && !run.stopped) setHistory((current) => current ? { ...current, messages: current.messages.map((message) => message.role === "user" && message.request_id === requestId ? { ...message, steps } : message) } : current); },
       });
       if (mounted.current && activeRun.current === run && !run.stopped) { setPreview(null); setHistory(result); onLoaded(result.conversation); onChanged(); }
       return true;

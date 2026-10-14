@@ -295,5 +295,6 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="completed")
     citations_json: Mapped[str] = mapped_column(Text, default="[]")
+    agent_steps_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

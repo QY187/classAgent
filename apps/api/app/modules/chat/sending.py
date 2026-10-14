@@ -12,6 +12,7 @@ from .messages import read_messages
 from .generation import is_generating, GenerationStopped
 from .context import recent_context
 from .previews import save_preview
+from .agent_progress import save_agent_step
 
 
 def _finish_failed(db: Session, conversation_id: str, request_id: str, token: str, error: str):
@@ -27,7 +28,7 @@ def _finish_failed(db: Session, conversation_id: str, request_id: str, token: st
     db.commit()
 
 
-def send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None) -> dict:
+def send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None, on_step=None) -> dict:
     question = content.strip()
     if not 2 <= len(question) <= 1000:
         raise HTTPException(422, "请输入 2 到 1000 字的问题")
@@ -54,6 +55,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
     else:
         existing.status = "pending"
         existing.error_message = None
+        existing.agent_steps_json = "[]"
     token = new_id()
     conversation.generation_token = token
     conversation.generation_preview_json = None
@@ -87,7 +89,11 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
             options["on_check"] = check
         check()
         if course_id is None:
-            result = run_agent(db, ToolContext(username), question, history=context, on_check=check)
+            def publish_step(raw):
+                progress = save_agent_step(db, conversation_id, username, request_id, token, raw)
+                if on_step is not None:
+                    on_step(progress)
+            result = run_agent(db, ToolContext(username), question, history=context, on_check=check, on_step=publish_step)
             if on_progress is not None:
                 publish(result)
         else:
