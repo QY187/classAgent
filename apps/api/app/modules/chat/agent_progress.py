@@ -14,6 +14,7 @@ LABELS = {
     "generate_quiz": "生成课堂小测",
     "list_knowledge_points": "查询知识点状态",
     "list_wrong_questions": "查询错题本",
+    "list_quiz_attempts": "查询小测成绩",
     "generate_practice_quiz": "生成薄弱点练习",
 }
 ERRORS = {

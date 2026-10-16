@@ -54,6 +54,12 @@ class WrongQuestionListArguments(LearningListArguments):
     status: Literal["all", "pending", "mastered"] = "all"
 
 
+class QuizAttemptListArguments(PageArguments):
+    course_id: Identity | None = None
+    quiz_id: Identity | None = None
+    query: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = ""
+
+
 class QuizArguments(ToolArguments):
     course_id: Identity
     lesson_ids: list[Identity] | None = Field(default=None, min_length=1, max_length=50)

@@ -3,7 +3,7 @@ import json
 
 import httpx
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
@@ -281,6 +281,43 @@ def list_attempts(db: Session, quiz_id: str, username: str) -> list[dict]:
                           .order_by(QuizAttempt.created_at.desc())).all()
     return [{"id": attempt.id, "correct_count": attempt.correct_count, "total_count": attempt.total_count,
              "created_at": attempt.created_at} for attempt in attempts]
+
+
+def list_user_attempts(db: Session, username: str, *, course_id: str | None = None,
+                       quiz_id: str | None = None, lesson_id: str | None = None,
+                       query: str = "", offset: int = 0, limit: int = 20) -> dict:
+    """查询自己的已提交成绩；计数与分页使用同一权限和筛选条件。"""
+    user_id = user_id_for_username(db, username)
+    if course_id:
+        _owned_course(db, course_id, username)
+    if quiz_id:
+        quiz = _owned_quiz(db, quiz_id, username)
+        if course_id and quiz.course_id != course_id:
+            raise HTTPException(404, "小测不存在")
+    if lesson_id:
+        lesson = visible_get(db, Lesson, lesson_id)
+        if lesson is None or (course_id and lesson.course_id != course_id):
+            raise HTTPException(404, "课次不存在")
+        _owned_course(db, lesson.course_id, username)
+    filters = [QuizAttempt.user_id == user_id, Course.owner_id == user_id]
+    if course_id:
+        filters.append(Quiz.course_id == course_id)
+    if quiz_id:
+        filters.append(Quiz.id == quiz_id)
+    if lesson_id:
+        # 课次范围只包含该课次的小测，不混入多课次小测的成绩和题目。
+        filters.append(Quiz.lesson_id == lesson_id)
+    if query:
+        filters.append(Quiz.title.contains(query, autoescape=True))
+    base = select(QuizAttempt, Quiz, Course).join(Quiz, QuizAttempt.quiz_id == Quiz.id).join(Course, Quiz.course_id == Course.id).where(*filters)
+    total = db.scalar(select(func.count()).select_from(base.subquery()))
+    rows = db.execute(base.order_by(QuizAttempt.created_at.desc(), QuizAttempt.id.desc()).offset(offset).limit(limit)).all()
+    items = [{"id": attempt.id, "quiz_id": quiz.id, "title": quiz.title,
+              "course_id": course.id, "course_name": course.name, "correct_count": attempt.correct_count,
+              "total_count": attempt.total_count, "created_at": attempt.created_at}
+             for attempt, quiz, course in rows]
+    end = offset + len(items)
+    return {"items": items, "total": total, "next_offset": end if end < total else None}
 
 
 def get_attempt(db: Session, attempt_id: str, username: str) -> dict:
