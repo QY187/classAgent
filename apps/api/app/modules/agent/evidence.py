@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from ...shared.models import TranscriptSegment
 from ..rag.service import ground_claims
 from .tools import ToolContext, check_lesson
+from .learning import LearningStore
 
 
 class EvidenceStore:
@@ -15,10 +16,12 @@ class EvidenceStore:
         self.entries = {}
         self.course_ids = set()
         self.lesson_ids = set()
+        self.learning = LearningStore()
 
     def collect(self, db: Session, context: ToolContext, name: str, result: dict):
         if not result["ok"]:
             return
+        self.learning.collect(name, result)
         if name in {"list_courses", "list_lessons"}:
             target = self.course_ids if name == "list_courses" else self.lesson_ids
             target.update(row["id"] for row in result["data"]["items"])

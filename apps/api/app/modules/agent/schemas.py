@@ -40,6 +40,16 @@ class SearchArguments(ToolArguments):
     limit: int = Field(default=10, ge=1, le=30)
 
 
+class LearningListArguments(PageArguments):
+    course_id: Identity | None = None
+    lesson_id: Identity | None = None
+    query: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = ""
+
+
+class KnowledgeListArguments(LearningListArguments):
+    status: Literal["all", "new", "review", "mastered"] = "all"
+
+
 class QuizArguments(ToolArguments):
     course_id: Identity
     lesson_ids: list[Identity] | None = Field(default=None, min_length=1, max_length=50)

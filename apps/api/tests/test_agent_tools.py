@@ -46,7 +46,7 @@ class AgentToolTest(unittest.TestCase):
 
     def test_schema_registry_and_strict_parameter_validation(self):
         schemas = tool_schemas()
-        self.assertEqual(len(schemas), 5)
+        self.assertEqual(len(schemas), 6)
         for schema in schemas:
             self.assertFalse(schema["function"]["parameters"]["additionalProperties"])
             self.assertNotIn("username", schema["function"]["parameters"]["properties"])
