@@ -50,6 +50,10 @@ class KnowledgeListArguments(LearningListArguments):
     status: Literal["all", "new", "review", "mastered"] = "all"
 
 
+class WrongQuestionListArguments(LearningListArguments):
+    status: Literal["all", "pending", "mastered"] = "all"
+
+
 class QuizArguments(ToolArguments):
     course_id: Identity
     lesson_ids: list[Identity] | None = Field(default=None, min_length=1, max_length=50)
