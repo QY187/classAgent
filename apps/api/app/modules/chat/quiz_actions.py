@@ -6,6 +6,8 @@ from sqlalchemy import select
 from ...shared.models import Quiz, Course
 from ..quizzes.schemas import QuizGenerate
 from ..quizzes.service import generate_quiz
+from ..agent.schemas import PracticeQuizArguments
+from ..quizzes.practice import PracticeSelection
 
 
 def wants_quiz(question, history=None):
@@ -20,6 +22,18 @@ def wants_quiz(question, history=None):
         if history[-1].get("role") == "assistant" and history[-1].get("content", "").rstrip().endswith(("？", "?")):
             previous = next((item for item in reversed(history) if item.get("role") == "user"), None)
             return bool(previous and wants_quiz(previous.get("content", "")))
+    return False
+
+
+def wants_practice_quiz(question, history=None):
+    if not wants_quiz(question, history):
+        return False
+    if re.search(r"(薄弱|错题|待巩固|需要复习|没掌握|未掌握)", question):
+        return True
+    # 只在回答范围澄清时继承练习方式，普通新出题请求不沿用历史方式。
+    if not wants_quiz(question) and history:
+        previous = next((item for item in reversed(history) if item.get("role") == "user"), None)
+        return bool(previous and wants_practice_quiz(previous.get("content", "")))
     return False
 
 
@@ -41,7 +55,9 @@ def generate_for_message(db, conversation_id, username, question_id, token, args
             raise HTTPException(404, "课程不存在或当前对话不可访问")
     before_save()
     db.commit()  # 不在模型生成期间持有对话锁。
-    result = generate_quiz(db, args.course_id, QuizGenerate(lesson_ids=args.lesson_ids, count=args.count,
-        question_type=args.question_type), username, agent_request_key=question_id, before_save=before_save)
+    practice = isinstance(args, PracticeQuizArguments)
+    selection = PracticeSelection(tuple(args.knowledge_point_ids), tuple(args.wrong_question_ids)) if practice else None
+    result = generate_quiz(db, args.course_id, QuizGenerate(lesson_ids=None if practice else args.lesson_ids, count=args.count,
+        question_type=args.question_type), username, agent_request_key=question_id, before_save=before_save, practice=selection)
     quiz = db.scalar(select(Quiz).where(Quiz.id == result["id"]))
     return quiz_card(db, quiz)

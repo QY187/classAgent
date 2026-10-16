@@ -11,6 +11,7 @@ from .evidence import EvidenceStore
 from .executor import execute_tool, failure
 from .registry import tool_schemas
 from .tools import ToolContext, check_course, check_lesson
+from .schemas import PracticeQuizArguments
 
 
 MAX_ROUNDS = 6
@@ -23,6 +24,7 @@ SYSTEM_PROMPT = """你是课堂学习 Agent，只使用提供的工具完成用�
 用户身份和会话范围由后端绑定；不可越过当前范围，不可删除或修改资料。
 仅在提供 generate_quiz 工具且用户明确要求生成小测时使用该工具。未绑定课程时必须先查询课程，生成前查询课次，范围有歧义先询问，不猜选课程；不提供答案或解析。明确的题数和题型必须遵循，不支持的要求先说明。每条问题最多生成一组。
 当前范围绑定 course_id 时，未指定课程的请求默认使用该课程，不再询问课程名称。生成小测未指定课次时默认整门课程，指定课次时先查询定位，课次有歧义再澄清。用户明确要求其他课程时说明应进入主对话或对应课程对话，不擅自换成当前课程继续生成。
+提供 generate_practice_quiz 时，本次是根据学习记录出题：先查询需要复习的知识点或待巩固错题，薄弱点可查询两者，选择实际查到且属于同一课程的记录。排除未学习和已掌握内容。不得把普通课堂小测当成薄弱点练习；没有适用记录时返回学习查询结果并说明，来源不可用时说明失败。主对话跨课程练习需要用户选择一门课程。
 历史中讨论过某节课，不等于本条生成请求限定了该课次。本条只要求生成题目、没有指定或明确承接某课次时，generate_quiz 的 lesson_ids 必须省略；“这节课”等明确承接请求才可按上文定位课次。
 按需要查找课次、读取纪要和文字记录或搜索；查询失败可修正参数，不要无限重复。
 文字记录有 next_offset 时可以继续分页，truncated 表示内容不完整。
@@ -52,14 +54,20 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         if isinstance(item, dict) and item.get("role") in {"user", "assistant"} and isinstance(item.get("content"), str):
             messages.append({"role": item["role"], "content": item["content"][:1000]})
     if context.generate_quiz is not None:
-        messages.append({"role": "system", "content": "接下来是当前问题的小测生成任务。历史消息中的‘已生成’只代表以前问题的结果，不能代替本次执行。本次必须实际调用 generate_quiz 才能完成生成，不可直接回复已生成。缺少必要范围时按规定澄清；绑定课程且未明确指定或承接课次时使用整门课程，省略 lesson_ids。"})
+        action = "generate_practice_quiz" if context.practice_only else "generate_quiz"
+        scope = "先查询本次适用的学习记录，再选择记录出题；无记录时呈现空查询结果。" if context.practice_only else "绑定课程且未明确指定或承接课次时使用整门课程，省略 lesson_ids。"
+        messages.append({"role": "system", "content": f"接下来是当前问题的小测生成任务。历史消息中的‘已生成’只代表以前问题的结果，不能代替本次执行。本次必须实际调用 {action} 才能完成生成，不可直接回复已生成。缺少必要范围时按规定澄清；{scope}"})
     messages.append({"role": "user", "content": question.strip()})
     evidence, steps, seen_ids = EvidenceStore(), [], set()
     if context.generate_quiz is not None:
         generate = context.generate_quiz
         def checked_generate(args):
             confirmed_course = args.course_id == context.course_id or args.course_id in evidence.course_ids
-            if not confirmed_course or any(identity not in evidence.lesson_ids for identity in (args.lesson_ids or [])):
+            if isinstance(args, PracticeQuizArguments):
+                if not confirmed_course:
+                    raise HTTPException(400, "请先确认课程范围")
+                evidence.learning.check_practice_targets(args)
+            elif not confirmed_course or any(identity not in evidence.lesson_ids for identity in (args.lesson_ids or [])):
                 raise HTTPException(400, "请先确认课程和课次范围，再生成小测")
             return generate(args)
         context = replace(context, generate_quiz=checked_generate)
@@ -76,7 +84,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         check()
         if len(json.dumps(messages, ensure_ascii=False)) > MAX_CONTEXT_CHARACTERS:
             raise HTTPException(422, "本次读取内容过多，请缩小课次范围")
-        message = complete(messages, tool_schemas(include_actions=context.generate_quiz is not None), timeout=max(0.1, min(20, (deadline - monotonic()) / 4)))
+        message = complete(messages, tool_schemas(include_actions=context.generate_quiz is not None, practice_only=context.practice_only), timeout=max(0.1, min(20, (deadline - monotonic()) / 4)))
         check()
         calls = message.get("tool_calls")
         if not calls:
@@ -100,7 +108,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             if on_step:
                 on_step(dict(step))
             result = execute_tool(db, context, name, call["function"]["arguments"])
-            if name == "generate_quiz" and result["ok"]:
+            if name in {"generate_quiz", "generate_practice_quiz"} and result["ok"]:
                 if on_check:
                     on_check()
             else:
@@ -114,9 +122,10 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             steps.append(step)
             if on_step:
                 on_step(dict(step))
-            if name == "generate_quiz" and result["ok"]:
-                return {"answer": f"已生成 {result['data']['question_count']} 道课堂小测题，可以开始答题。", "citations": [], "outcome": "quiz_created", "steps": steps}
-            if name == "generate_quiz" and result.get("error", {}).get("code") == "generation_failed":
+            if name in {"generate_quiz", "generate_practice_quiz"} and result["ok"]:
+                label = "薄弱点练习题" if name == "generate_practice_quiz" else "课堂小测题"
+                return {"answer": f"已生成 {result['data']['question_count']} 道{label}，可以开始答题。", "citations": [], "outcome": "quiz_created", "steps": steps}
+            if name in {"generate_quiz", "generate_practice_quiz"} and result.get("error", {}).get("code") == "generation_failed":
                 return {"answer": result["error"]["message"], "citations": [], "outcome": "operation_failed", "steps": steps}
             messages.append({"role": "tool", "tool_call_id": call["id"],
                              "content": json.dumps(result, ensure_ascii=False)})

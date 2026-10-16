@@ -51,6 +51,9 @@ class AgentKnowledgeTest(unittest.TestCase):
             for args in ({"status": "due"}, {"username": "other"}, {"limit": True}):
                 self.assertEqual(execute_tool(db, ToolContext("owner"), "list_knowledge_points", args)["error"]["code"], "invalid_arguments")
             self.assertEqual(execute_tool(db, ToolContext("owner"), "list_knowledge_points", {"course_id": "c", "lesson_id": "l2"})["error"]["code"], "not_found")
+            db.get(Lesson, "l").course_id = "c2"; db.commit()
+            self.assertEqual(execute_tool(db, ToolContext("owner", "c"), "list_knowledge_points", {})["data"]["total"], 0)
+            db.get(Lesson, "l").course_id = "c"; db.commit()
             db.get(Lesson, "l").deleted_at = now_utc(); db.commit()
             self.assertEqual(execute_tool(db, ToolContext("owner", "c"), "list_knowledge_points", {})["data"]["total"], 0)
 

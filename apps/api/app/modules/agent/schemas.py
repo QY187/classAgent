@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from typing import Annotated, Literal
 
 
@@ -59,3 +59,19 @@ class QuizArguments(ToolArguments):
     lesson_ids: list[Identity] | None = Field(default=None, min_length=1, max_length=50)
     count: int = Field(default=5, ge=3, le=15)
     question_type: Literal["mixed", "single_choice", "true_false"] = "mixed"
+
+
+class PracticeQuizArguments(ToolArguments):
+    course_id: Identity
+    knowledge_point_ids: list[Identity] = Field(default_factory=list, max_length=20)
+    wrong_question_ids: list[Identity] = Field(default_factory=list, max_length=20)
+    count: int = Field(default=5, ge=3, le=15)
+    question_type: Literal["mixed", "single_choice", "true_false"] = "mixed"
+
+    @model_validator(mode="after")
+    def require_targets(self):
+        self.knowledge_point_ids = list(dict.fromkeys(self.knowledge_point_ids))
+        self.wrong_question_ids = list(dict.fromkeys(self.wrong_question_ids))
+        if not self.knowledge_point_ids and not self.wrong_question_ids:
+            raise ValueError("需要选择至少一个学习记录")
+        return self

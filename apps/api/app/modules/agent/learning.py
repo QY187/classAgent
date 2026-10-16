@@ -32,6 +32,17 @@ def list_knowledge_points(db, context, args):
     rows = [row for row in rows if (not course_id or row["course_id"] == course_id)
             and (args.status == "all" or row["status"] == args.status)
             and args.query.casefold() in (row["title"] + "\n" + row["body"]).casefold()]
+    scoped = []
+    for row in rows:
+        try:
+            lesson = check_lesson(db, context, row["lesson_id"])
+        except HTTPException as error:
+            if error.status_code != 404:
+                raise
+            continue
+        if row["course_id"] == lesson.course_id:
+            scoped.append(row)
+    rows = scoped
     items = [{key: row[key] for key in ("id", "course_id", "course_name", "lesson_id", "lesson_title",
               "title", "status", "source_segment_id", "source_start_ms")}
              | {"body": row["body"][:600]} for row in rows]
@@ -65,6 +76,8 @@ READERS = {"list_knowledge_points": (KnowledgeListArguments, list_knowledge_poin
 class LearningStore:
     def __init__(self):
         self.queries = {}
+        self.knowledge_ids = set()
+        self.wrong_ids = set()
 
     def collect(self, name, result):
         if name not in READERS or not result["ok"]:
@@ -72,6 +85,12 @@ class LearningStore:
         key = f"L{len(self.queries) + 1}"
         self.queries[key] = (name, READERS[name][0].model_validate(result["data"]["filters"]))
         result["data"]["learning_query_id"] = key
+        target = self.knowledge_ids if name == "list_knowledge_points" else self.wrong_ids
+        target.update(row["id"] for row in result["data"]["items"])
+
+    def check_practice_targets(self, args):
+        if set(args.knowledge_point_ids) - self.knowledge_ids or set(args.wrong_question_ids) - self.wrong_ids:
+            raise HTTPException(400, "请先查询本次要练习的知识点或错题")
 
     def answer(self, db, context, selection):
         keys = selection.get("query_ids")
@@ -93,7 +112,7 @@ class LearningStore:
                 heading += f"，搜索：{args.query}"
             lines.append(heading)
             origin = "状态由你手动标记。" if knowledge else "状态按最近的小测作答或错题重练结果确定。"
-            lines.append(origin + "、".join(f"{label} {data['status_counts'].get(status, 0)} {unit}" for status, label in statuses.items()))
+            lines.append(origin + "当前筛选：" + "、".join(f"{label} {data['status_counts'].get(status, 0)} {unit}" for status, label in statuses.items()))
             for row in data["items"]:
                 if knowledge:
                     lines.append(f"• {row['title']} · {statuses[row['status']]} · {row['course_name']} / {row['lesson_title']}")

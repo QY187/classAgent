@@ -34,7 +34,7 @@ def execute_tool(db: Session, context: ToolContext, name: str, arguments: dict |
         return {"tool": name, "ok": True, "data": tool.handler(db, context, payload),
                 "content_trust": "untrusted_classroom_data"}
     except HTTPException as exc:
-        if name == "generate_quiz" and exc.status_code in {400, 409, 502, 503}:
+        if name in {"generate_quiz", "generate_practice_quiz"} and exc.status_code in {400, 409, 502, 503}:
             return failure(name, "generation_failed", exc.detail if isinstance(exc.detail, str) else "小测生成失败，请重试")
         code = "unauthenticated" if exc.status_code == 401 else "not_found" if exc.status_code == 404 else "unavailable"
         return failure(name, code, "请重新登录" if code == "unauthenticated" else "资料不存在或当前范围不可访问" if code == "not_found" else "工具暂不可用")
