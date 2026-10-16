@@ -60,6 +60,11 @@ class QuizAttemptListArguments(PageArguments):
     query: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = ""
 
 
+class QuizAttemptArguments(PageArguments):
+    attempt_id: Identity
+    limit: int = Field(default=5, ge=1, le=15)
+
+
 class QuizArguments(ToolArguments):
     course_id: Identity
     lesson_ids: list[Identity] | None = Field(default=None, min_length=1, max_length=50)
