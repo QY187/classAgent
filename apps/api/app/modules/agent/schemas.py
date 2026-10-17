@@ -23,6 +23,10 @@ class LessonListArguments(PageArguments):
     query: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = ""
 
 
+class CourseProgressArguments(PageArguments):
+    course_id: Identity | None = None
+
+
 class TranscriptArguments(PageArguments):
     lesson_id: Identity
 

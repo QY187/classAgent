@@ -34,6 +34,7 @@ SYSTEM_PROMPT = """你是课堂学习 Agent，只使用提供的工具完成用�
 查询课程或课次目录时可输出 {"claims":[],"catalog":{"course_ids":["实际查到的课程ID"],"lesson_ids":[]}}；目录由后端按真实记录呈现，不虚构 ID。仅查询目录不必读取课堂原文。
 查询知识点状态必须使用 list_knowledge_points，状态为用户手动标记，不能推断成实际考试能力。错题查询使用 list_wrong_questions，状态取最近作答结果，答对后的错题仍保留历史。返回 {"claims":[],"learning":{"query_ids":["工具返回的 learning_query_id"]}}，由后端复核数量和记录，包括空结果；不要编造状态或沿用历史查询。解释课堂知识仍须读取原文引用。
 查询小测成绩、最近表现使用 list_quiz_attempts，按用户要求的最近次数设置 limit；展开具体作答先查成绩取得 attempt_id，再用 get_quiz_attempt，可筛选特定小测或课程。返回 {"claims":[],"quiz_results":{"query_ids":["工具返回的 quiz_result_query_id"]}}，由后端重新核对成绩、选项和课堂来源。查询编号只能使用本次实际读取的结果，包括空结果。未提交小测没有成绩，也不能提前提供答案。历史解析是出题时保存的内容，不代表经过独立答案校验；不可根据成绩自动判定知识点已掌握。查询反复出错还需 list_wrong_questions；需要同时展示时可在同一个最终 JSON 包含 quiz_results 和 learning。不要编造分数、趋势或把本页统计说成全部历史。
+查询课程进度、缺少纪要的课次、还需复习的数量使用 get_course_progress，主对话先定位课程；返回 {"claims":[],"progress":{"query_ids":["工具返回的 progress_query_id"]}}，由后端复核真实统计和缺少纪要的明细。状态是事实记录，不能说成学习完成率或实际掌握程度。
 缺少课次或目标信息时只输出 {"outcome":"needs_input","question":"必要的澄清问题","claims":[]}。
 资料不足时只输出 {"outcome":"insufficient_evidence","claims":[]}。"""
 
@@ -140,6 +141,11 @@ def finalize(db: Session, context: ToolContext, content: str | None, evidence: E
         if not isinstance(payload, dict) or not isinstance(payload.get("claims"), list):
             raise ValueError()
         claims = payload["claims"]
+        if not claims and isinstance(payload.get("progress"), dict):
+            answer = evidence.progress.answer(db, context, payload["progress"])
+            if isinstance(payload.get("learning"), dict):
+                answer += "\n\n" + evidence.learning.answer(db, context, payload["learning"])
+            return {"answer": answer, "citations": [], "outcome": "answered", "steps": steps}
         if not claims and isinstance(payload.get("quiz_results"), dict):
             result = evidence.quiz_results.answer(db, context, payload["quiz_results"])
             if isinstance(payload.get("learning"), dict):

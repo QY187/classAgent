@@ -103,6 +103,23 @@ def update_course(db: Session, course_id: str, payload: CourseUpdate, owner_user
     return course
 
 
+def list_lessons_missing_summary(db: Session, course_id: str, owner_username: str) -> list[dict]:
+    course = mapper.find_course(db, course_id)
+    if course is None or course.owner_id != user_id_for_username(db, owner_username):
+        raise HTTPException(404, "课程不存在")
+    summaries = {row.lesson_id: row for row in db.scalars(
+        select(LessonSummary).join(Lesson, Lesson.id == LessonSummary.lesson_id)
+        .where(Lesson.course_id == course_id))}
+    rows = []
+    for lesson in mapper.find_lessons(db, course_id):
+        summary = summaries.get(lesson.id)
+        if summary and summary.status in {"completed", "edited"} and summary.content:
+            continue
+        rows.append({"id": lesson.id, "title": lesson.title, "lesson_date": lesson.lesson_date,
+                     "summary_status": summary.status if summary else "missing"})
+    return rows
+
+
 def create_lesson(db: Session, course_id: str, payload: LessonCreate, owner_username: str) -> Lesson:
     course = db.scalar(select(Course).where(Course.id == course_id).with_for_update())
     if course is None or course.owner_id != user_id_for_username(db, owner_username):

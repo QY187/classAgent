@@ -8,6 +8,7 @@ from ...shared.models import ChatMessage
 LABELS = {
     "list_courses": "查询课程",
     "list_lessons": "查询课次",
+    "get_course_progress": "查询课程进度",
     "search_course": "搜索课堂内容",
     "get_transcript": "读取课堂原文",
     "get_summary": "读取课堂纪要",
