@@ -8,6 +8,8 @@ from . import quiz_results
 from . import progress
 from .schemas import CourseProgressArguments, CreateCourseArguments, CreateLessonArguments
 from . import course_actions
+from . import knowledge_actions
+from .schemas import KnowledgeStatusArguments
 from .schemas import QuizAttemptArguments, QuizAttemptListArguments
 from .schemas import KnowledgeListArguments, WrongQuestionListArguments, PracticeQuizArguments
 from .schemas import ToolArguments, CourseListArguments, LessonListArguments, TranscriptArguments, SummaryArguments, SearchArguments, QuizArguments
@@ -32,6 +34,7 @@ _definitions = (
     ToolDefinition("get_course_progress", "查询一门课程的真实进度：课次、文字记录、可用纪要、手动标记的知识点状态，并分页列出缺少可用纪要的课次及其状态。省略 course_id 使用当前课程，主对话先定位一门课程。纪要排队、失败或过期不算完成；知识点状态不代表考试能力。", CourseProgressArguments, progress.get_course_progress),
     ToolDefinition("create_course", "仅用户明确要求创建课程时可用，仅在主对话执行。name 必须是用户明确指定的新课程名称，不猜名称或学期。每条问题最多创建一门；同名已有课程先澄清，失败重试不会重复创建。", CreateCourseArguments, course_actions.create_course, writes=True),
     ToolDefinition("create_lesson", "仅明确要求添加课次时可用。先查询课程和课次以核对归属及同名；title 必须是用户指定的标题，未指定日期则 lesson_date 留空，不猜日期。主对话先定位唯一课程，或使用本条问题刚创建课程的 ID。每条问题最多添加一节，同名课次先澄清。", CreateLessonArguments, course_actions.create_lesson, writes=True),
+    ToolDefinition("update_knowledge_status", "仅用户明确要求将某个知识点标记为指定状态时可用。必须先用 list_knowledge_points 查找并确认唯一目标，再使用本次查到的 knowledge_point_id。new 未学习、review 需要复习、mastered 已掌握。不依据成绩推断或批量修改，同名或范围有歧义先澄清；每条问题最多修改一个知识点。", KnowledgeStatusArguments, knowledge_actions.update_knowledge_status, writes=True),
     ToolDefinition("get_transcript", "分页读取课堂文字记录，包含片段编号和时间点。truncated 表示该片段文本被截短。", TranscriptArguments, tools.get_transcript),
     ToolDefinition("get_summary", "读取已有纪要及状态，按字符分页；available 为 false 时不可作为课堂依据。", SummaryArguments, tools.get_summary),
     ToolDefinition("search_course", "按关键词搜索课堂文字记录，返回原文片段和时间点；不是语义检索，未命中不代表课堂没有相关内容。", SearchArguments, tools.search_course),

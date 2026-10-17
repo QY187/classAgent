@@ -135,12 +135,15 @@ def update_card(db: Session, card_id: str, payload: CardUpdate, username: str) -
     return serialize(card)
 
 
-def review_card(db: Session, card_id: str, payload: CardReview, username: str) -> dict:
+def review_card(db: Session, card_id: str, payload: CardReview, username: str, *, commit: bool = True) -> dict:
     card = _owned_card(db, card_id, username)
     card.status = payload.status
     card.last_reviewed_at = now_utc()
-    db.commit()
-    db.refresh(card)
+    if commit:
+        db.commit()
+        db.refresh(card)
+    else:
+        db.flush()
     return serialize(card)
 
 

@@ -10,7 +10,7 @@ from .access import owned_course
 
 
 def explicit_request(question):
-    if re.search(r"不要|不需要|不用|取消|别(?:帮|给|创建|新建|添加|新增|标记)|原文(?:说|中|里)|老师(?:说|要求)|引用", question):
+    if re.search(r"不要|不需要|不用|取消|(?:^|[，,。；;\s]|请)别(?:帮|给|创建|新建|添加|新增|标记)|原文(?:说|中|里)|老师(?:说|要求)|引用", question):
         return False
     if re.search(r"怎么|如何|是否|能否|能不能|(?:可以|能).*吗|[？?]", question):
         return False

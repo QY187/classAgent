@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ...shared.models import ChatMessage, Quiz, AgentAction
 from .course_actions import visible_action
 from .lesson_actions import visible_action as visible_lesson_action
+from .knowledge_actions import visible_action as visible_knowledge_action
 from .quiz_actions import quiz_card
 from .access import owned_conversation
 from .conversations import conversation_read
@@ -23,7 +24,8 @@ def read_messages(db: Session, conversation_id: str, username: str) -> dict:
     artifacts = {quiz.agent_request_key: quiz_card(db, quiz) for quiz in quizzes}
     action_artifacts = {}
     for receipt in db.scalars(select(AgentAction).where(AgentAction.message_id.in_([item.id for item in items if item.role == "user"])).order_by(AgentAction.created_at, AgentAction.id)):
-        reader = {"create_course": visible_action, "create_lesson": visible_lesson_action}.get(receipt.tool)
+        reader = {"create_course": visible_action, "create_lesson": visible_lesson_action,
+                  "update_knowledge_status": visible_knowledge_action}.get(receipt.tool)
         result = reader(db, json.loads(receipt.result_json), username) if reader else None
         if result:
             action_artifacts.setdefault(receipt.message_id, []).append(result)

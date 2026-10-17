@@ -46,6 +46,11 @@ class CreateLessonArguments(ToolArguments):
         return value
 
 
+class KnowledgeStatusArguments(ToolArguments):
+    knowledge_point_id: Identity
+    status: Literal["new", "review", "mastered"]
+
+
 class TranscriptArguments(PageArguments):
     lesson_id: Identity
 

@@ -1,0 +1,102 @@
+"""知识点状态只由当前用户的明确命令改变；名称与状态双重校验。"""
+import re
+from fastapi import HTTPException
+from sqlalchemy import select
+from ...shared.models import ReviewCard
+from ..review_cards import service as cards
+from ..review_cards.schemas import CardReview
+from ..agent.learning import CARD_STATUSES
+from .course_actions import explicit_request, clean_name
+from .action_records import perform_for_message
+from .access import owned_course, owned_lesson
+
+
+def status_request(question):
+    if not explicit_request(question):
+        return None
+    prefix = r"^(?:请|帮我|给我|麻烦你|麻烦|然后|再|你|\s)*"
+    patterns = (prefix + r"(?:把|将)(.{1,250}?)(?:标记|设置|设定|改)(?:为|成)(未学习|需要复习|已掌握)(?:吧|一下|[！!\s])*$",
+                prefix + r"(?:标记|设置)(.{1,250}?)(?:为|成)(未学习|需要复习|已掌握)(?:吧|一下|[！!\s])*$")
+    for clause in re.split(r"[，,。；;\n]", question):
+        for pattern in patterns:
+            match = re.match(pattern, clause.strip())
+            if match:
+                title = clean_name(match[1]).removesuffix("知识点").strip()
+                if not title or re.search(r"全部|所有|这些|它们", title):
+                    return None
+                return {"title": title, "status": next(key for key, label in CARD_STATUSES.items() if label == match[2])}
+    return None
+
+
+def candidate_cards(db, username, scope, requested):
+    rows = []
+    for row in cards.list_cards(db, username):
+        if scope and row["course_id"] != scope:
+            continue
+        lesson = owned_lesson(db, row["lesson_id"], username)
+        if lesson.course_id != row["course_id"]:
+            continue
+        title = requested
+        named = re.match(r"^(.{1,200}?)课程(?:中|里|下)?(?:的)?(.+)$", title)
+        if named:
+            if clean_name(named[1]) != row["course_name"] and not (scope and clean_name(named[1]) in {"当前", "这门"}):
+                continue
+            title = named[2]
+        if "的" in title and title.startswith(row["lesson_title"] + "的"):
+            title = title[len(row["lesson_title"]) + 1:]
+        if title.casefold() == row["title"].casefold() or title.casefold() in row["title"].casefold():
+            rows.append((row, title.casefold() == row["title"].casefold()))
+    exact = [row for row, match in rows if match]
+    return exact or [row for row, _ in rows]
+
+
+def actions_for_message(db, conversation_id, username, message_id, token, question):
+    intent = status_request(question)
+    if not intent:
+        return {}
+    def update(args):
+        def validate(db, conversation, message, previous):
+            if message.content != question or args.status != intent["status"]:
+                raise HTTPException(400, "只按你明确指定的状态修改知识点")
+            if conversation.lesson_id:
+                raise HTTPException(403, "请在课程对话或主对话修改知识点状态")
+            matches = candidate_cards(db, username, conversation.course_id, intent["title"])
+            if not matches:
+                raise HTTPException(400, "没有找到对应知识点，请核对名称和课程范围")
+            if len(matches) != 1:
+                raise HTTPException(400, "找到多个同名知识点，请明确课程或课次后再标记")
+            if matches[0]["id"] != args.knowledge_point_id:
+                raise HTTPException(400, "不能修改指令目标以外的知识点")
+            row = matches[0]
+            owned_course(db, row["course_id"], username, lock=True)
+            card = db.scalar(select(ReviewCard).where(ReviewCard.id == args.knowledge_point_id)
+                             .with_for_update().execution_options(populate_existing=True))
+            if card is None or card.course_id != owned_lesson(db, card.lesson_id, username).course_id:
+                raise HTTPException(404, "知识点不存在")
+            if previous and card.status != args.status:
+                raise HTTPException(409, "该请求已执行后状态再次变化，请发送新的修改指令")
+        def write(db):
+            card = db.scalar(select(ReviewCard).where(ReviewCard.id == args.knowledge_point_id))
+            old = card.status
+            if old != args.status:
+                result = cards.review_card(db, card.id, CardReview(status=args.status), username, commit=False)
+            else:
+                result = cards.serialize(card)
+            label = CARD_STATUSES[args.status]
+            text = f"已将知识点“{result['title']}”标记为{label}。" if old != args.status else f"知识点“{result['title']}”已经是{label}，无需修改。"
+            return {"kind": "action", "operation": "update_knowledge_status", "target": "knowledge_point",
+                    "id": result["id"], "title": result["title"], "course_id": result["course_id"],
+                    "lesson_id": result["lesson_id"], "old_status": old, "status": args.status, "message": text}
+        return perform_for_message(db, conversation_id, username, message_id, token, "update_knowledge_status", args.model_dump(), write, validate)
+    return {"update_knowledge_status": update}
+
+
+def visible_action(db, result, username):
+    card = db.scalar(select(ReviewCard).where(ReviewCard.id == result["id"]))
+    if card is None:
+        return None
+    try:
+        lesson = owned_lesson(db, card.lesson_id, username)
+        return result if card.course_id == lesson.course_id == result["course_id"] else None
+    except HTTPException:
+        return None
