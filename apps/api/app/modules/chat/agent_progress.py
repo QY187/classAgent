@@ -10,6 +10,7 @@ LABELS = {
     "list_lessons": "查询课次",
     "get_course_progress": "查询课程进度",
     "create_course": "创建课程",
+    "create_lesson": "添加课次",
     "search_course": "搜索课堂内容",
     "get_transcript": "读取课堂原文",
     "get_summary": "读取课堂纪要",

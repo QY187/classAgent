@@ -120,12 +120,12 @@ def list_lessons_missing_summary(db: Session, course_id: str, owner_username: st
     return rows
 
 
-def create_lesson(db: Session, course_id: str, payload: LessonCreate, owner_username: str) -> Lesson:
+def create_lesson(db: Session, course_id: str, payload: LessonCreate, owner_username: str, *, commit: bool = True) -> Lesson:
     course = db.scalar(select(Course).where(Course.id == course_id).with_for_update())
     if course is None or course.owner_id != user_id_for_username(db, owner_username):
         raise HTTPException(status_code=404, detail="课程不存在")
     first_order = db.scalar(select(func.min(Lesson.sort_order)).where(Lesson.course_id == course_id))
-    return mapper.save_lesson(db, Lesson(course_id=course_id, title=payload.title, lesson_date=payload.lesson_date, sort_order=(first_order - 1) if first_order is not None else 0))
+    return mapper.save_lesson(db, Lesson(course_id=course_id, title=payload.title, lesson_date=payload.lesson_date, sort_order=(first_order - 1) if first_order is not None else 0), commit=commit)
 
 
 def reorder_lessons(db: Session, course_id: str, lesson_ids: list[str], expected_ids: list[str], owner_username: str) -> list[Lesson]:

@@ -25,10 +25,13 @@ def find_courses(db: Session, owner_id: str) -> list[Course]:
     ))
 
 
-def save_lesson(db: Session, lesson: Lesson) -> Lesson:
+def save_lesson(db: Session, lesson: Lesson, *, commit: bool = True) -> Lesson:
     db.add(lesson)
-    db.commit()
-    db.refresh(lesson)
+    if commit:
+        db.commit()
+        db.refresh(lesson)
+    else:
+        db.flush()
     return lesson
 
 

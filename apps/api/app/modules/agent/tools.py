@@ -22,6 +22,7 @@ class ToolContext:
     generate_quiz: Callable | None = field(default=None, compare=False, repr=False)
     practice_only: bool = False
     actions: dict[str, Callable] = field(default_factory=dict, compare=False, repr=False)
+    action_hints: dict = field(default_factory=dict, compare=False, repr=False)
 
 
 def generate_quiz(db, context, args):

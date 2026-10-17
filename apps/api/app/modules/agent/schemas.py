@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator, field_validator
 from typing import Annotated, Literal
 
 
@@ -29,6 +29,21 @@ class CourseProgressArguments(PageArguments):
 
 class CreateCourseArguments(ToolArguments):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
+class CreateLessonArguments(ToolArguments):
+    course_id: Identity
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    lesson_date: Annotated[str, StringConstraints(min_length=10, max_length=10)] | None = None
+
+    @field_validator("lesson_date")
+    @classmethod
+    def valid_date(cls, value):
+        if value is not None:
+            from datetime import date
+            if date.fromisoformat(value).isoformat() != value:
+                raise ValueError("日期应为 YYYY-MM-DD")
+        return value
 
 
 class TranscriptArguments(PageArguments):
