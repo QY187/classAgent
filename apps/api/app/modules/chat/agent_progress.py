@@ -9,6 +9,7 @@ LABELS = {
     "list_courses": "查询课程",
     "list_lessons": "查询课次",
     "get_course_progress": "查询课程进度",
+    "create_course": "创建课程",
     "search_course": "搜索课堂内容",
     "get_transcript": "读取课堂原文",
     "get_summary": "读取课堂纪要",
@@ -20,6 +21,7 @@ LABELS = {
     "generate_practice_quiz": "生成薄弱点练习",
 }
 ERRORS = {
+    "action_rejected": "操作未执行，请查看回答说明",
     "unknown_tool": "不支持该操作",
     "invalid_arguments": "查询条件不符合要求",
     "not_found": "资料不存在或当前范围不可访问",

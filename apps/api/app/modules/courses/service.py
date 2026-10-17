@@ -10,8 +10,8 @@ from ...shared.schemas import CourseCreate, CourseUpdate, LessonCreate, LessonUp
 from . import mapper
 
 
-def create_course(db: Session, payload: CourseCreate, owner_username: str) -> Course:
-    return mapper.save_course(db, Course(owner_id=user_id_for_username(db, owner_username), owner_username=owner_username, name=payload.name, semester=payload.semester))
+def create_course(db: Session, payload: CourseCreate, owner_username: str, *, commit: bool = True) -> Course:
+    return mapper.save_course(db, Course(owner_id=user_id_for_username(db, owner_username), owner_username=owner_username, name=payload.name, semester=payload.semester), commit=commit)
 
 
 def list_courses(db: Session, owner_username: str) -> list[Course]:

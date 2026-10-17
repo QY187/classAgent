@@ -5,10 +5,13 @@ from sqlalchemy.orm import Session
 from ...shared.models import Course, Lesson
 
 
-def save_course(db: Session, course: Course) -> Course:
+def save_course(db: Session, course: Course, *, commit: bool = True) -> Course:
     db.add(course)
-    db.commit()
-    db.refresh(course)
+    if commit:
+        db.commit()
+        db.refresh(course)
+    else:
+        db.flush()
     return course
 
 

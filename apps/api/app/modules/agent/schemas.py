@@ -27,6 +27,10 @@ class CourseProgressArguments(PageArguments):
     course_id: Identity | None = None
 
 
+class CreateCourseArguments(ToolArguments):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
 class TranscriptArguments(PageArguments):
     lesson_id: Identity
 

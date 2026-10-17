@@ -12,11 +12,16 @@ def execute_action(db, context, name, args):
 class ActionStore:
     def __init__(self):
         self.results = {}
+        self.errors = {}
 
     def collect(self, context, name, result):
-        if name not in context.actions or not result["ok"]:
+        if name not in context.actions:
+            return
+        if not result["ok"]:
+            self.errors[name] = result["error"]["message"]
             return
         self.results[name] = result["data"]
+        self.errors.pop(name, None)
 
     def answer(self):
         # 只使用动作执行器的真实回执，不采纳模型对写入结果的描述。

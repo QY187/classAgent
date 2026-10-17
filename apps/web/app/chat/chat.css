@@ -125,6 +125,10 @@
 .chat-agent-steps li.failed { color: #b35b55; }
 .chat-agent-steps li.running { color: var(--blue); }
 .chat-quiz-card { display: flex; align-items: center; gap: 14px; padding: 18px; margin: 0 0 22px; border: 1px solid #e2e7fb; border-radius: 14px; background: linear-gradient(110deg, #f7f8ff, #fff); max-width: 680px; }
+.chat-action-result { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; margin: 0 0 22px; border: 1px solid #e2e7fb; border-radius: 14px; background: #f7f8ff; max-width: 680px; }
+.chat-action-result p { margin: 0; overflow-wrap: anywhere; }
+.chat-action-result .button { flex: none; }
+@media (max-width: 640px) { .chat-action-result { flex-wrap: wrap; } }
 .chat-quiz-icon { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: var(--blue); background: var(--blue-soft); }
 .chat-quiz-icon svg { width: 24px; height: 24px; }
 .chat-quiz-info { flex: 1; min-width: 0; }

@@ -68,7 +68,7 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
         onReady: () => { if (mounted.current && activeRun.current === run && !run.stopped) { setReadyRequestId(requestId); onChanged(); } },
         onSteps: (steps) => { if (mounted.current && activeRun.current === run && !run.stopped) setHistory((current) => current ? { ...current, messages: current.messages.map((message) => message.role === "user" && message.request_id === requestId ? { ...message, steps } : message) } : current); },
       });
-      if (mounted.current && activeRun.current === run && !run.stopped) { setPreview(null); setHistory(result); onLoaded(result.conversation); onChanged(); }
+      if (mounted.current && activeRun.current === run && !run.stopped) { setPreview(null); setHistory(result); onLoaded(result.conversation); onChanged(); window.dispatchEvent(new Event("classagent:courses-updated")); }
       return true;
     } catch (err) {
       if (run.stopped) return true;
