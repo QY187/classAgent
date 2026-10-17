@@ -42,6 +42,7 @@ _definitions = (
 TOOLS = MappingProxyType({tool.name: tool for tool in _definitions})
 
 
-def tool_schemas(include_actions: bool = False, practice_only: bool = False) -> list[dict]:
+def tool_schemas(include_actions: bool = False, practice_only: bool = False, allowed_actions=()) -> list[dict]:
     action = "generate_practice_quiz" if practice_only else "generate_quiz"
-    return [tool.model_schema() for tool in TOOLS.values() if not tool.writes or (include_actions and tool.name == action)]
+    return [tool.model_schema() for tool in TOOLS.values() if not tool.writes or
+            (include_actions and tool.name == action) or tool.name in allowed_actions]

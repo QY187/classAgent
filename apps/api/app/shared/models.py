@@ -299,3 +299,15 @@ class ChatMessage(Base):
     agent_steps_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class AgentAction(Base):
+    __tablename__ = "agent_actions"
+    __table_args__ = (UniqueConstraint("message_id", "tool", name="uq_agent_action_message_tool"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    message_id: Mapped[str] = mapped_column(ForeignKey("chat_messages.id", ondelete="CASCADE"), index=True)
+    tool: Mapped[str] = mapped_column(String(80))
+    arguments_json: Mapped[str] = mapped_column(Text)
+    result_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

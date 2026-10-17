@@ -12,6 +12,7 @@ from .executor import execute_tool, failure
 from .registry import tool_schemas
 from .tools import ToolContext, check_course, check_lesson
 from .schemas import PracticeQuizArguments
+from .actions import ActionStore
 
 
 MAX_ROUNDS = 6
@@ -61,6 +62,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         messages.append({"role": "system", "content": f"接下来是当前问题的小测生成任务。历史消息中的‘已生成’只代表以前问题的结果，不能代替本次执行。本次必须实际调用 {action} 才能完成生成，不可直接回复已生成。缺少必要范围时按规定澄清；{scope}"})
     messages.append({"role": "user", "content": question.strip()})
     evidence, steps, seen_ids = EvidenceStore(), [], set()
+    actions = ActionStore()
     if context.generate_quiz is not None:
         generate = context.generate_quiz
         def checked_generate(args):
@@ -86,10 +88,12 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         check()
         if len(json.dumps(messages, ensure_ascii=False)) > MAX_CONTEXT_CHARACTERS:
             raise HTTPException(422, "本次读取内容过多，请缩小课次范围")
-        message = complete(messages, tool_schemas(include_actions=context.generate_quiz is not None, practice_only=context.practice_only), timeout=max(0.1, min(20, (deadline - monotonic()) / 4)))
+        message = complete(messages, tool_schemas(include_actions=context.generate_quiz is not None, practice_only=context.practice_only, allowed_actions=context.actions), timeout=max(0.1, min(20, (deadline - monotonic()) / 4)))
         check()
         calls = message.get("tool_calls")
         if not calls:
+            if actions.results:
+                return {"answer": actions.answer(), "citations": [], "outcome": "actions_completed", "steps": steps}
             return finalize(db, context, message.get("content"), evidence, steps)
         if not isinstance(calls, list) or not calls or calls_used + len(calls) > MAX_CALLS:
             raise HTTPException(502, "Agent 工具调用次数超过限制，请缩小问题范围")
@@ -118,6 +122,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             if len(json.dumps(result, ensure_ascii=False)) > 64000:
                 result = failure(name, "result_too_large", "读取结果过长，请减小 limit 分页读取")
             evidence.collect(db, context, name, result)
+            actions.collect(context, name, result)
             step["status"] = "completed" if result["ok"] else "failed"
             if not result["ok"]:
                 step["error_code"] = result["error"]["code"]
