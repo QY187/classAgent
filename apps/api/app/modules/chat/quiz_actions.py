@@ -8,6 +8,7 @@ from ..quizzes.schemas import QuizGenerate
 from ..quizzes.service import generate_quiz
 from ..agent.schemas import PracticeQuizArguments
 from ..quizzes.practice import PracticeSelection
+from .intents import quiz_request
 
 
 def wants_quiz(question, history=None):
@@ -15,7 +16,7 @@ def wants_quiz(question, history=None):
         return False
     if re.search(r"(怎么|如何|是否|能不能|能否|可以.*吗)", question) and not re.search(r"(请|帮我|给我)", question):
         return False
-    if re.search(r"(生成|出|创建|做|来|给).{0,30}(小测|测试|题)|(小测|测试|题).{0,20}(生成|出|创建)", question):
+    if quiz_request(question):
         return True
     # 用户补充上一条生成请求的范围时沿用授权；普通追问不能开启写工具。
     if history and len(question) <= 80 and re.search(r"(课程|讲|课|道|选择|判断|单选|混合)", question) and not re.search(r"(什么|为什么|如何|怎么|解释|取消)", question):

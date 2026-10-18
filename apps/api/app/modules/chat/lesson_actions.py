@@ -8,22 +8,38 @@ from ..courses import service as courses
 from .action_records import perform_for_message
 from .access import owned_course, owned_lesson
 from .course_actions import explicit_request, clean_name, requested_course
+from .intents import follows_clarification, request_text
 
 
 PREFIX = r"(?:请|帮我|给我|麻烦你|麻烦|然后|再|我想要|我想|你|\s)*"
 
 
-def action_hint(question):
-    requested, title = lesson_request(question)
-    match = re.search(r"(?:日期|时间)(?:为|是|[：:])?\s*(\d{4}-\d{2}-\d{2})", question)
+def resolve_lesson_request(question, history):
+    if lesson_request(question)[0]:
+        return question
+    if follows_clarification(question, history) and question.strip() and not re.search(r"什么|为什么|解释|查询|看看|生成|修改|标记", question):
+        previous = next((item.get("content", "") for item in reversed(history) if item.get("role") == "user"), "")
+        previous_requested, previous_title = lesson_request(previous)
+        if previous_requested and not previous_title:
+            supplement = question.strip().rstrip("？?。！!").strip()
+            prefix = re.split(r"添加|新增|创建|新建", previous, maxsplit=1)[0]
+            return f"{prefix}添加{supplement}"
+    return question
+
+
+def action_hint(question, history=None):
+    authorization = resolve_lesson_request(question, history)
+    requested, title = lesson_request(authorization)
+    match = re.search(r"(?:日期|时间)(?:为|是|[：:])?\s*(\d{4}-\d{2}-\d{2})", authorization)
     return {"title": title, "lesson_date": match[1] if match else None,
             "instruction": "标题已明确时不要再次询问；未指定日期时留空。先查询确定目标课程，然后执行添加。"} if requested else {}
 
 
 def lesson_request(question):
-    if not explicit_request(question):
-        return False, None
+    question = request_text(question)
     for clause in re.split(r"[，,。；;\n]", question):
+        if not explicit_request(clause):
+            continue
         match = re.match(r"^" + PREFIX + r"(?:(?:在|给|为).{1,200}?(?:课程|课)(?:下|中|里|的)?(?:\s|再)*)?(?:添加|新增|创建|新建)(.*)$", clause.strip())
         if not match:
             continue
@@ -45,13 +61,15 @@ def named_courses(db, username, question):
             re.search(r"(?:在|给|为)\s*[“\"]?" + re.escape(row.name) + r"[”\"]?(?:下|中|里|的)?(?:添加|新增|创建|新建)", question)]
 
 
-def actions_for_message(db, conversation_id, username, message_id, token, question):
+def actions_for_message(db, conversation_id, username, message_id, token, question, history=None):
+    raw_question = question
+    question = resolve_lesson_request(question, history)
     requested, title = lesson_request(question)
     if not requested:
         return {}
     def create(args):
         def validate(db, conversation, message, previous):
-            if message.content != question or not title or args.title != title:
+            if message.content != raw_question or not title or args.title != title:
                 raise HTTPException(400, "请明确要添加的课次标题，不猜测或改写标题")
             if conversation.lesson_id:
                 raise HTTPException(403, "请在课程对话或主对话添加课次")

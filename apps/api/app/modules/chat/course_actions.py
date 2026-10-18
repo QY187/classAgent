@@ -7,14 +7,7 @@ from ...shared.schemas import CourseCreate
 from ..courses import service as courses
 from .action_records import perform_for_message
 from .access import owned_course
-
-
-def explicit_request(question):
-    if re.search(r"不要|不需要|不用|取消|(?:^|[，,。；;\s]|请)别(?:帮|给|创建|新建|添加|新增|标记)|原文(?:说|中|里)|老师(?:说|要求)|引用", question):
-        return False
-    if re.search(r"怎么|如何|是否|能否|能不能|(?:可以|能).*吗|[？?]", question):
-        return False
-    return True
+from .intents import explicit_request, follows_clarification, request_text
 
 
 def clean_name(value):
@@ -24,6 +17,7 @@ def clean_name(value):
 def course_name(question):
     if not explicit_request(question):
         return None
+    question = request_text(question)
     match = re.search(r"(?:创建|新建|添加|新增)(?:一[个门])?(?:名为|名字叫|叫|名称为)?([^，,。；;\n]{0,210}?)课程", question)
     if match:
         return clean_name(match[1]) or None
@@ -35,13 +29,24 @@ def requested_course(question):
     return explicit_request(question) and bool(re.match(r"^(?:请|帮我|给我|麻烦你|麻烦|然后|再|我想要|我想|我希望|你|一下|\s)*(?:创建|新建|添加|新增)[^，,。；;\n]{0,210}?课程", question))
 
 
+def action_hint(question, history=None):
+    authorization = resolve_course_request(question, history)
+    return {"name": course_name(authorization),
+        "instruction": "当前用户已明确要求创建；名称给定时按指定名称执行，不因礼貌问尾再次确认。名称未给定时先询问。"}
+
+
 def resolve_course_request(question, history):
     if requested_course(question):
         return question
-    if history and len(question) <= 200 and explicit_request(question) and not re.search(r"什么|为什么|解释|查询|看看|生成|创建|添加|修改|标记", question):
+    if follows_clarification(question, history) and explicit_request(question) and not re.search(r"什么|为什么|解释|查询|看看|生成|创建|添加|修改|标记", question):
         previous = next((item["content"] for item in reversed(history) if item.get("role") == "user"), "")
-        if history[-1].get("role") == "assistant" and history[-1].get("content", "").rstrip().endswith(("?", "？")) and requested_course(previous) and not course_name(previous):
-            return f"创建{clean_name(question).removesuffix('课程')}课程"
+        previous_is_create = requested_course(previous) or (
+            bool(re.match(r"^(?:请|帮我|给我|麻烦你|麻烦|我想要|我希望|你|一下|\s)*(?:创建|新建|添加|新增)课程", previous))
+            and not re.search(r"不要|不需要|不用|取消|别|原文|老师说|引用", previous)
+        )
+        if previous_is_create and not course_name(previous):
+            supplement = clean_name(question).rstrip("？?。！!").strip()
+            return f"创建{supplement.removesuffix('课程')}课程"
     return question
 
 

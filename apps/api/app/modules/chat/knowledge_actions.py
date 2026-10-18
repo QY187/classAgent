@@ -7,13 +7,27 @@ from ..review_cards import service as cards
 from ..review_cards.schemas import CardReview
 from ..agent.learning import CARD_STATUSES
 from .course_actions import explicit_request, clean_name
+from .intents import follows_clarification, request_text
 from .action_records import perform_for_message
 from .access import owned_course, owned_lesson
 
 
-def status_request(question):
+def _status_target(question):
+    match = re.search(r"(?:把|将)(.{1,250}?)(?:标记|设置|设定|改)(?:为|成)", question)
+    return clean_name(match[1]) if match else None
+
+
+def status_request(question, history=None):
     if not explicit_request(question):
-        return None
+        if not follows_clarification(question, history):
+            return None
+        previous = next((item.get("content", "") for item in reversed(history) if item.get("role") == "user"), "")
+        target = _status_target(previous)
+        answer = question.strip().rstrip("？?。！!").strip()
+        if not target or answer not in CARD_STATUSES.values():
+            return None
+        question = f"把{target}标记为{answer}"
+    question = request_text(question)
     prefix = r"^(?:请|帮我|给我|麻烦你|麻烦|然后|再|你|\s)*"
     patterns = (prefix + r"(?:把|将)(.{1,250}?)(?:标记|设置|设定|改)(?:为|成)(未学习|需要复习|已掌握)(?:吧|一下|[！!\s])*$",
                 prefix + r"(?:标记|设置)(.{1,250}?)(?:为|成)(未学习|需要复习|已掌握)(?:吧|一下|[！!\s])*$")
@@ -25,6 +39,12 @@ def status_request(question):
                 if not title or re.search(r"全部|所有|这些|它们", title):
                     return None
                 return {"title": title, "status": next(key for key, label in CARD_STATUSES.items() if label == match[2])}
+    answer = question.strip().rstrip("？?。！!").strip()
+    if follows_clarification(question, history) and answer in CARD_STATUSES.values():
+        previous = next((item.get("content", "") for item in reversed(history) if item.get("role") == "user"), "")
+        target = _status_target(previous)
+        if target:
+            return status_request(f"把{target}标记为{answer}")
     return None
 
 
@@ -50,13 +70,14 @@ def candidate_cards(db, username, scope, requested):
     return exact or [row for row, _ in rows]
 
 
-def actions_for_message(db, conversation_id, username, message_id, token, question):
-    intent = status_request(question)
+def actions_for_message(db, conversation_id, username, message_id, token, question, history=None):
+    raw_question = question
+    intent = status_request(question, history)
     if not intent:
         return {}
     def update(args):
         def validate(db, conversation, message, previous):
-            if message.content != question or args.status != intent["status"]:
+            if message.content != raw_question or args.status != intent["status"]:
                 raise HTTPException(400, "只按你明确指定的状态修改知识点")
             if conversation.lesson_id:
                 raise HTTPException(403, "请在课程对话或主对话修改知识点状态")
