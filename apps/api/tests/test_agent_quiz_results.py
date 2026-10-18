@@ -150,8 +150,11 @@ class AgentQuizResultsTest(unittest.TestCase):
             with self.assertRaises(HTTPException):
                 finalize(db, context, result_answer("invented")["content"], evidence, [])
             db.get(Course, "c").deleted_at = now_utc(); db.commit()
-            with self.assertRaises(HTTPException):
-                finalize(db, context, result_answer("Q1")["content"], evidence, [])
+            unavailable = finalize(db, context, result_answer("Q1")["content"], evidence, [])
+            self.assertEqual(unavailable["outcome"], "operation_failed")
+            self.assertEqual(unavailable["citations"], [])
+            self.assertIn("小测成绩当前无法核对", unavailable["answer"])
+            self.assertNotIn("你的选择", unavailable["answer"])
 
     @patch("app.modules.agent.loop.complete")
     def test_global_and_course_chat_save_score_details_steps_and_classroom_citations(self, model):

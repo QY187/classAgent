@@ -13,6 +13,8 @@ from .registry import tool_schemas
 from .tools import ToolContext, check_course, check_lesson
 from .schemas import PracticeQuizArguments
 from .actions import ActionStore
+from .responses import parse_response, InvalidFinalResponse, FINAL_RESPONSE_INSTRUCTION, REPAIR_INSTRUCTION
+from .answers import compose_answer
 
 
 MAX_ROUNDS = 6
@@ -63,6 +65,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         action = "generate_practice_quiz" if context.practice_only else "generate_quiz"
         scope = "先查询本次适用的学习记录，再选择记录出题；无记录时呈现空查询结果。" if context.practice_only else "绑定课程且未明确指定或承接课次时使用整门课程，省略 lesson_ids。"
         messages.append({"role": "system", "content": f"接下来是当前问题的小测生成任务。历史消息中的‘已生成’只代表以前问题的结果，不能代替本次执行。本次必须实际调用 {action} 才能完成生成，不可直接回复已生成。缺少必要范围时按规定澄清；{scope}"})
+    messages.append({"role": "system", "content": FINAL_RESPONSE_INSTRUCTION})
     messages.append({"role": "user", "content": question.strip()})
     evidence, steps, seen_ids = EvidenceStore(), [], set()
     actions = ActionStore()
@@ -92,6 +95,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         messages.insert(1, {"role": "system", "content": "本次已授权的写工具：" + ", ".join(context.actions) + "。必须实际执行才能声称完成；历史中的成功结果不能代替本次执行。只允许用户明确指定的目标与参数。后端识别的当前指令参数：" + json.dumps({name: value for name, value in context.action_hints.items() if name in context.actions}, ensure_ascii=False)})
     deadline = monotonic() + MAX_SECONDS
     calls_used = 0
+    repaired = False
 
     def check():
         if on_check:
@@ -99,7 +103,10 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         if monotonic() >= deadline:
             raise HTTPException(504, "Agent 执行超时，请稍后重试")
 
-    for _ in range(MAX_ROUNDS):
+    # 格式修复可额外占一轮，工具次数和总时限仍遵循原预算。
+    for round_index in range(MAX_ROUNDS + 1):
+        if round_index == MAX_ROUNDS and not repaired:
+            break
         check()
         if len(json.dumps(messages, ensure_ascii=False)) > MAX_CONTEXT_CHARACTERS:
             raise HTTPException(422, "本次读取内容过多，请缩小课次范围")
@@ -116,7 +123,15 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 return {"answer": answer, "citations": [], "outcome": "actions_completed", "steps": steps}
             if actions.errors:
                 return {"answer": "；".join(actions.errors.values()), "citations": [], "outcome": "operation_failed", "steps": steps}
-            return finalize(db, context, message.get("content"), evidence, steps)
+            try:
+                return finalize(db, context, message.get("content"), evidence, steps)
+            except InvalidFinalResponse:
+                if repaired:
+                    raise
+                repaired = True
+                messages.append(message)
+                messages.append({"role": "system", "content": REPAIR_INSTRUCTION})
+                continue
         if not isinstance(calls, list) or not calls or calls_used + len(calls) > MAX_CALLS:
             raise HTTPException(502, "Agent 工具调用次数超过限制，请缩小问题范围")
         # 整批校验协议，避免执行半批后才发现响应无效。
@@ -166,32 +181,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
 
 def finalize(db: Session, context: ToolContext, content: str | None, evidence: EvidenceStore, steps: list) -> dict:
     try:
-        payload = json.loads(content or "")
-        if not isinstance(payload, dict) or not isinstance(payload.get("claims"), list):
-            raise ValueError()
-        claims = payload["claims"]
-        if not claims and isinstance(payload.get("progress"), dict):
-            answer = evidence.progress.answer(db, context, payload["progress"])
-            if isinstance(payload.get("learning"), dict):
-                answer += "\n\n" + evidence.learning.answer(db, context, payload["learning"])
-            return {"answer": answer, "citations": [], "outcome": "answered", "steps": steps}
-        if not claims and isinstance(payload.get("quiz_results"), dict):
-            result = evidence.quiz_results.answer(db, context, payload["quiz_results"])
-            if isinstance(payload.get("learning"), dict):
-                result["answer"] += "\n\n" + evidence.learning.answer(db, context, payload["learning"])
-            return {**result, "outcome": "answered", "steps": steps}
-        if not claims and isinstance(payload.get("learning"), dict):
-            return {"answer": evidence.learning.answer(db, context, payload["learning"]), "citations": [], "outcome": "answered", "steps": steps}
-        if not claims and isinstance(payload.get("catalog"), dict):
-            lines = evidence.catalog_answer(db, context, payload["catalog"])
-            if lines:
-                return {"answer": "\n".join(lines), "citations": [], "outcome": "answered", "steps": steps}
-        if not claims and payload.get("outcome") == "needs_input":
-            question = payload.get("question")
-            if not isinstance(question, str) or not 1 <= len(question.strip()) <= 300:
-                raise ValueError()
-            return {"answer": question.strip(), "citations": [], "outcome": "needs_input", "steps": steps}
-        result = evidence.answer(db, context, claims)
-        return {**result, "outcome": "answered" if result["citations"] else "insufficient_evidence", "steps": steps}
+        payload = parse_response(content)
+        return compose_answer(db, context, payload, evidence, steps)
     except (ValueError, TypeError, AttributeError) as exc:
-        raise HTTPException(502, "Agent 未返回可核对的回答，请重试") from exc
+        raise InvalidFinalResponse() from exc

@@ -101,7 +101,7 @@ def ask_course(db: Session, course_id: str, username: str, question: str, *, les
     return ground_claims(claims, evidence, lessons)
 
 
-def ground_claims(claims: object, evidence: dict, lessons: dict) -> dict:
+def ground_claims(claims: object, evidence: dict, lessons: dict, *, citation_offset: int = 0) -> dict:
     lines, citations = [], []
     if not isinstance(claims, list):
         claims = []
@@ -115,7 +115,7 @@ def ground_claims(claims: object, evidence: dict, lessons: dict) -> dict:
         links = []
         for key in valid[:3]:
             item = evidence[key]
-            citation_id = len(citations) + 1
+            citation_id = len(citations) + 1 + citation_offset
             citations.append({
                 "id": citation_id, "lesson_id": item.lesson_id,
                 "lesson_title": lessons[item.lesson_id].title,

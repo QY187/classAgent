@@ -80,8 +80,56 @@ class AgentLoopTest(unittest.TestCase):
         self.assertEqual(result["outcome"], "needs_input")
         for content in ("普通无来源回答", '{"claims":"invalid"}', '{"claims":[],"outcome":"needs_input"}'):
             with self.assertRaises(HTTPException) as invalid:
-                self.run_model([{"content": content}])
+                self.run_model([{"content": content}, {"content": content}])
             self.assertEqual(invalid.exception.status_code, 502)
+
+    def test_plain_clarification_is_repaired_once(self):
+        result, model = self.run_model([{"content": "你指哪一节课？"},
+            {"content": json.dumps({"claims": [], "outcome": "needs_input", "question": "你指哪一节课？"})}])
+        self.assertEqual(result["answer"], "你指哪一节课？")
+        self.assertEqual(model.call_count, 2)
+        self.assertIn("修复一次", model.call_args.args[0][-1]["content"])
+
+    def test_repair_can_read_evidence_without_trusting_plain_answer(self):
+        result, model = self.run_model([{"content": "二叉树最多两个孩子。"},
+            tool("get_transcript", {"lesson_id": "l"}), final()])
+        self.assertEqual(model.call_count, 3)
+        self.assertEqual(result["outcome"], "answered")
+        self.assertEqual(result["citations"][0]["segment_ids"], ["s"])
+
+    def test_repair_does_not_make_fabricated_reference_valid(self):
+        result, _ = self.run_model([{"content": "普通无来源回答"}, final(["invented"])])
+        self.assertEqual(result["outcome"], "insufficient_evidence")
+        self.assertEqual(result["citations"], [])
+
+    def test_invalid_claim_shape_and_mixed_clarification_are_repaired(self):
+        for payload in ({"claims": [{"text": "结论", "source_ids": "E1"}]},
+            {"claims": [{"text": "结论", "source_ids": ["E1"]}], "outcome": "needs_input", "question": "哪节课？"},
+            {"claims": [], "question": "哪节课？"}):
+            result, model = self.run_model([{"content": json.dumps(payload)},
+                {"content": '{"claims":[],"outcome":"insufficient_evidence"}'}])
+            self.assertEqual(model.call_count, 2)
+            self.assertEqual(result["outcome"], "insufficient_evidence")
+
+    def test_cancel_during_repair_does_not_call_model_again(self):
+        calls = 0
+        def check():
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                raise RuntimeError("cancelled")
+        with patch("app.modules.agent.loop.complete", return_value={"content": "不合格式"}) as model:
+            with self.assertRaisesRegex(RuntimeError, "cancelled"):
+                run_agent(self.db, self.context, "查询课堂", on_check=check)
+            self.assertEqual(model.call_count, 1)
+
+    def test_repair_is_available_on_last_normal_round(self):
+        responses = [tool("list_courses", {}, f"call{i}") for i in range(5)]
+        responses += [{"content": "你指哪节课？"},
+            {"content": '{"claims":[],"outcome":"needs_input","question":"你指哪节课？"}'}]
+        result, model = self.run_model(responses)
+        self.assertEqual(model.call_count, 7)
+        self.assertEqual(result["outcome"], "needs_input")
 
     def test_round_and_batch_limits_prevent_unbounded_execution(self):
         with self.assertRaises(HTTPException) as limit:

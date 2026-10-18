@@ -48,7 +48,7 @@ class EvidenceStore:
                                  "lesson_id": lesson.id, "content": content}
             row["evidence_id"] = key
 
-    def answer(self, db: Session, context: ToolContext, claims: list) -> dict:
+    def answer(self, db: Session, context: ToolContext, claims: list, *, citation_offset: int = 0) -> dict:
         evidence, lessons = {}, {}
         for key, entry in self.entries.items():
             segment = db.scalar(select(TranscriptSegment).where(TranscriptSegment.id == entry["segment_id"])
@@ -64,7 +64,7 @@ class EvidenceStore:
             evidence[key] = SimpleNamespace(lesson_id=lesson.id, start_ms=segment.start_ms,
                 end_ms=segment.end_ms, content=entry["content"], source_segment_ids=json.dumps([segment.id]))
             lessons[lesson.id] = lesson
-        return ground_claims(claims, evidence, lessons)
+        return ground_claims(claims, evidence, lessons, citation_offset=citation_offset)
 
     def catalog_answer(self, db: Session, context: ToolContext, catalog: dict) -> list[str]:
         from .tools import check_course

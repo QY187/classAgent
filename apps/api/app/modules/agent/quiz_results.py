@@ -102,7 +102,7 @@ class QuizResultStore:
         self.queries[key] = (name, READERS[name][0].model_validate(result["data"]["filters"]))
         result["data"]["quiz_result_query_id"] = key
 
-    def answer(self, db, context, selection):
+    def answer(self, db, context, selection, *, citation_offset=0):
         keys = selection.get("query_ids")
         if not isinstance(keys, list) or not 1 <= len(keys) <= 8 or any(not isinstance(key, str) or key not in self.queries for key in keys):
             raise ValueError("未读取的小测成绩")
@@ -138,7 +138,7 @@ class QuizResultStore:
                                  + f"\n历史解析：{row['explanation']}")
                     if row["source_status"] == "available":
                         source = row["source"]
-                        citation_id = len(citations) + 1
+                        citation_id = len(citations) + 1 + citation_offset
                         citations.append({"id": citation_id, "lesson_id": source["lesson_id"], "lesson_title": source["lesson_title"],
                             "start_ms": source["start_ms"], "end_ms": source["end_ms"], "snippet": source["excerpt"], "segment_ids": [source["segment_id"]]})
                         lines.append(f"课堂来源：{source['lesson_title']} [{citation_id}]")

@@ -182,7 +182,8 @@ class CourseQuizTest(unittest.TestCase):
             latest = read_messages(db, chat["id"], "owner")["messages"][-1]
             self.assertEqual(latest["status"], "failed")
             self.assertEqual(latest["artifacts"], [])
-            self.assertIn("不能代替本次执行", model.call_args.args[0][-2]["content"])
+            self.assertTrue(any("不能代替本次执行" in item.get("content", "")
+                for item in model.call_args.args[0] if item["role"] == "system"))
             model.side_effect = self.responses()[1:]
             second = send_message(db, chat["id"], "owner", "生成3道判断题", "next")
             second_quiz = second["messages"][-2]["artifacts"][0]
