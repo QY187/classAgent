@@ -6,7 +6,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { apiUrl, request } from "../lib/api";
 import { clearSession, getRefreshToken, getStoredUser, isAuthenticated, redirectToLogin, type AuthUser } from "../lib/auth";
 import SearchBox from "./SearchBox";
-import UserAvatar from "./UserAvatar";
+import SidebarAccount from "./SidebarAccount";
+import SidebarIcon from "./SidebarIcon";
 
 type Course = { id: string; name: string };
 type LessonInfo = { course_id: string; title: string };
@@ -101,12 +102,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <div className="nav-label">我的空间</div>
         <nav className="nav" aria-label="主导航">
-          <Link className={`nav-item ${libraryActive && !activeCourseId ? "active" : ""}`} href="/" aria-label="课程库" title="课程库"><span className="nav-icon" aria-hidden="true">▦</span><span>课程库</span></Link>
-          <Link className={`nav-item ${searchActive ? "active" : ""}`} href="/search" aria-label="全局搜索" title="全局搜索"><span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg></span><span>全局搜索</span></Link>
-          <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review" aria-label="知识点清单" title="知识点清单"><span className="nav-icon" aria-hidden="true">◷</span><span>知识点清单</span></Link>
-          <Link className={`nav-item ${chatActive ? "active" : ""}`} href="/chat" aria-label="问答工作台" title="问答工作台"><span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 3V11.5A8.5 8.5 0 0 1 9.5 3h3a8.5 8.5 0 0 1 8.5 8.5Z" /><path d="M7 9h8M7 13h5" /></svg></span><span>问答工作台</span></Link>
-          <Link className={`nav-item ${wrongBookActive ? "active" : ""}`} href="/wrong-questions" aria-label="错题本" title="错题本"><span className="nav-icon" aria-hidden="true">▤</span><span>错题本</span></Link>
-          <Link className={`nav-item ${recycleActive ? "active" : ""}`} href="/recycle-bin" aria-label="回收站" title="回收站"><span className="nav-icon" aria-hidden="true">↺</span><span>回收站</span></Link>
+          <Link className={`nav-item ${libraryActive && !activeCourseId ? "active" : ""}`} href="/" aria-label="课程库" title="课程库"><span className="nav-icon"><SidebarIcon name="library" /></span><span>课程库</span></Link>
+          <Link className={`nav-item ${searchActive ? "active" : ""}`} href="/search" aria-label="全局搜索" title="全局搜索"><span className="nav-icon"><SidebarIcon name="search" /></span><span>全局搜索</span></Link>
+          <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review" aria-label="知识点清单" title="知识点清单"><span className="nav-icon"><SidebarIcon name="knowledge" /></span><span>知识点清单</span></Link>
+          <Link className={`nav-item ${chatActive ? "active" : ""}`} href="/chat" aria-label="问答工作台" title="问答工作台"><span className="nav-icon"><SidebarIcon name="chat" /></span><span>问答工作台</span></Link>
+          <Link className={`nav-item ${wrongBookActive ? "active" : ""}`} href="/wrong-questions" aria-label="错题本" title="错题本"><span className="nav-icon"><SidebarIcon name="notebook" /></span><span>错题本</span></Link>
+          <Link className={`nav-item ${recycleActive ? "active" : ""}`} href="/recycle-bin" aria-label="回收站" title="回收站"><span className="nav-icon"><SidebarIcon name="trash" /></span><span>回收站</span></Link>
         </nav>
         <div className="side-section">
           <div className="nav-label">我的课程</div>
@@ -114,7 +115,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             {courses.length === 0 && <div className="side-course-empty">还没有课程</div>}
             {courses.slice(0, 8).map((course) => (
               <Link key={course.id} href={`/courses/${course.id}`} className={`side-course ${activeCourseId === course.id ? "active" : ""}`} title={course.name}>
-                <span className="side-course-dot" aria-hidden="true" />
+                <span className="side-course-icon"><SidebarIcon name="folder" /></span>
                 <span className="side-course-name">{course.name}</span>
               </Link>
             ))}
@@ -122,9 +123,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <div className="side-footer">
-          <nav aria-label="账户设置"><Link className={`nav-item ${settingsActive ? "active" : ""}`} href="/settings" aria-label="个人设置" title="个人设置"><span className="nav-icon" aria-hidden="true">⚙</span><span>个人设置</span></Link></nav>
-          {user && <div className="side-user" title={user.username}><UserAvatar username={user.username} hasAvatar={user.has_avatar} /><span className="side-user-name">{user.username}</span></div>}
-          <button className="button button-secondary side-logout" type="button" onClick={logout} aria-label="退出登录" title="退出登录"><span className="side-logout-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h10" /></svg></span><span className="side-logout-label">退出登录</span></button>
+          <SidebarAccount user={user} pathname={pathname} collapsed={sidebarCollapsed} onLogout={logout} />
         </div>
       </aside>
       <div className="main-area">
