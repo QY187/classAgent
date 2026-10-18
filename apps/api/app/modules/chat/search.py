@@ -12,8 +12,8 @@ def search_conversations(db: Session, username: str, query: str) -> list[dict]:
     owner = user_id_for_username(db, username)
     rows = db.execute(select(ChatConversation, Lesson.title, Course.name)
         .outerjoin(Lesson, ChatConversation.lesson_id == Lesson.id).outerjoin(Course, func.coalesce(ChatConversation.course_id, Lesson.course_id) == Course.id)
-        .where(ChatConversation.user_id == owner, or_(Course.owner_id == owner,
+        .where(ChatConversation.is_archived.is_(False), ChatConversation.user_id == owner, or_(Course.owner_id == owner,
             (ChatConversation.course_id.is_(None) & ChatConversation.lesson_id.is_(None))),
             or_(ChatConversation.title.icontains(query, autoescape=True), Lesson.title.icontains(query, autoescape=True), Course.name.icontains(query, autoescape=True)))
-        .order_by(ChatConversation.updated_at.desc(), ChatConversation.id).limit(100))
+        .order_by(ChatConversation.is_pinned.desc(), ChatConversation.updated_at.desc(), ChatConversation.id).limit(100))
     return [{**conversation_read(item), "lesson_title": lesson_title, "course_name": course_name or "主对话"} for item, lesson_title, course_name in rows]

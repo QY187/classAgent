@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 from uuid import UUID
 from fastapi.responses import StreamingResponse
 from .access import owned_conversation
@@ -13,6 +13,7 @@ from .sending import send_message
 from .tree import lesson_tree
 from .deletion import delete_conversation
 from .search import search_conversations
+from .archive import list_archived, set_archived
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -59,6 +60,29 @@ class SendMessage(BaseModel):
 
 class RenameConversation(BaseModel):
     title: str = Field(min_length=1, max_length=200)
+
+
+class ArchiveConversation(BaseModel):
+    is_archived: StrictBool
+
+
+@router.get("/archived")
+def archived(username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return list_archived(db, username)
+
+
+@router.patch("/conversations/{conversation_id}/archive")
+def archive(conversation_id: str, body: ArchiveConversation, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return set_archived(db, conversation_id, username, body.is_archived)
+
+
+class PinConversation(BaseModel):
+    is_pinned: StrictBool
+
+
+@router.patch("/conversations/{conversation_id}/pin")
+def pin(conversation_id: str, body: PinConversation, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return conversations.set_conversation_pin(db, conversation_id, username, body.is_pinned)
 
 
 class StopGeneration(BaseModel):

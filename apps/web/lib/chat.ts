@@ -1,6 +1,6 @@
 export type ChatLesson = { id: string; title: string; course_id: string; course_name: string };
 export type ChatCourse = { id: string; name: string };
-export type Conversation = { id: string; lesson_id: string | null; course_id: string | null; scope: "global" | "course" | "lesson"; title: string; created_at: string; updated_at: string; generating: boolean };
+export type Conversation = { id: string; lesson_id: string | null; course_id: string | null; scope: "global" | "course" | "lesson"; title: string; is_pinned: boolean; is_archived: boolean; created_at: string; updated_at: string; generating: boolean };
 export type ChatCitation = { id: number; lesson_id: string; lesson_title: string; start_ms: number; snippet: string };
 export type AgentStep = { id: string; label: string; status: "running" | "completed" | "failed"; error?: string };
 export type QuizArtifact = { kind: "quiz"; id: string; title: string; course_id: string; course_name: string; question_count: number; lesson_ids: string[] };

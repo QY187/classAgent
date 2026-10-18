@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import { errorMessage, request } from "../../lib/api";
+import ChatArchivePanel from "./ChatArchivePanel";
 import ChatCoursePicker from "./ChatCoursePicker";
 import type { ChatCourse, ChatLesson, ChatSearchResult, Conversation } from "../../lib/chat";
 
-export default function ChatLessonTree({ renderCourse, selectedLessonId, selectedCourseId, onSelect, revision, renderGlobal, onCourseSelected }: {
+export default function ChatLessonTree({ renderCourse, selectedLessonId, selectedCourseId, onSelect, revision, renderGlobal, onCourseSelected, onRestored }: {
+  onRestored: (item: Conversation) => void;
   renderGlobal: (heading: (action: ReactNode) => ReactNode) => ReactNode; onCourseSelected: (course: ChatCourse) => void;
   renderCourse: (course: ChatCourse, heading: (action: ReactNode) => ReactNode, collapsed: boolean) => ReactNode;
   selectedLessonId: string | null; selectedCourseId: string | null; onSelect: (item: Conversation) => void; revision: number;
@@ -53,5 +55,6 @@ export default function ChatLessonTree({ renderCourse, selectedLessonId, selecte
     {loading && !courseItems.length ? <p className="chat-tree-hint" role="status">正在读取课程…</p> : error ? <div className="chat-tree-hint"><p role="alert">{error}</p><button className="button button-secondary" onClick={() => setRetry((value) => value + 1)}>重新加载</button></div> : !courses.length ? <p className="chat-tree-hint">{courseItems.length ? "没有匹配的课程" : "还没有课程，可以点击“添加课程”创建。"}</p> : courses.map((course) => <section className="chat-course-group" key={course.id}>
       {renderCourse(course, (action) => <div className="chat-course-heading"><h2><button type="button" className="chat-course-toggle" aria-current={selectedCourseId === course.id ? "true" : undefined} aria-expanded={!collapsedCourses[course.id]} onClick={() => setCollapsedCourses((current) => ({ ...current, [course.id]: !current[course.id] }))}><span className="chat-course-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.5C9 3.7 5.5 3.4 3 4v15c2.5-.6 6-.3 9 1.5 3-1.8 6.5-2.1 9-1.5V4c-2.5-.6-6-.3-9 1.5Z" /><path d="M12 5.5v15" /></svg></span><span className="chat-tree-chevron" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m6 4 4 4-4 4" /></svg></span><span className="chat-course-title">{course.name}</span></button></h2>{action}</div>, !!collapsedCourses[course.id])}
     </section>)}
+    <ChatArchivePanel revision={revision} onSelect={onSelect} onRestored={onRestored} />
   </div></aside>;
 }

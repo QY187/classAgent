@@ -10,6 +10,7 @@ export default function ChatWorkspace() {
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const loaded = useCallback((item: Conversation) => { setSelectedLessonId(item.lesson_id); setSelectedCourseId(item.course_id); }, []);
+  const [threadRevision, setThreadRevision] = useState(0);
   const [revision, setRevision] = useState(0);
   const changed = useCallback(() => setRevision((value) => value + 1), []);
   const deleted = useCallback(() => { setSelectedId(null); window.history.replaceState(null, "", "/chat"); setRevision((value) => value + 1); }, []);
@@ -23,6 +24,10 @@ export default function ChatWorkspace() {
     restore(); window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, []);
+  function listDeleted(id: string) {
+    if (id === selectedId) deleted();
+    else changed();
+  }
   function courseSelected(course: ChatCourse) {
     setSelectedId(null); setSelectedLessonId(null); setSelectedCourseId(course.id); changed();
     window.history.pushState(null, "", `/chat?course=${encodeURIComponent(course.id)}`);
@@ -31,7 +36,7 @@ export default function ChatWorkspace() {
     setSelectedId(item.id); setSelectedLessonId(item.lesson_id); setSelectedCourseId(item.course_id);
     window.history.pushState(null, "", `/chat?conversation=${encodeURIComponent(item.id)}`);
   }
-  return <main className="chat-workspace"><ChatLessonTree selectedLessonId={selectedLessonId} selectedCourseId={selectedCourseId} onSelect={select} revision={revision} onCourseSelected={courseSelected}
-    renderGlobal={(heading) => <ChatConversationList targetId="" scope="global" selectedId={selectedId} onSelect={select} revision={revision} renderHeading={heading} />}
-    renderCourse={(course, heading, collapsed) => <ChatConversationList targetId={course.id} scope="course" selectedId={selectedId} onSelect={select} revision={revision} renderHeading={heading} collapsed={collapsed} />} /><section className="chat-main">{selectedId ? <ChatThread key={selectedId} conversationId={selectedId} onLoaded={loaded} onChanged={changed} onDeleted={deleted} /> : <div className="chat-welcome"><span className="chat-welcome-icon">◌</span><h2>{selectedCourseId ? "开始这门课程的对话" : "今天想了解什么？"}</h2><p>{selectedCourseId ? "点击课程名称右侧的新建图标，围绕整门课程提问。" : "主对话可以查询所有课程；选择课程后，可专注这门课程的课堂内容。"}</p>{!selectedCourseId && <ChatConversationList targetId="" scope="global" createOnly selectedId={null} onSelect={select} revision={revision} />}</div>}</section></main>;
+  return <main className="chat-workspace"><ChatLessonTree selectedLessonId={selectedLessonId} selectedCourseId={selectedCourseId} onSelect={select} revision={revision} onCourseSelected={courseSelected} onRestored={(item) => { if (item.id === selectedId) setThreadRevision(v => v + 1); changed(); }}
+    renderGlobal={(heading) => <ChatConversationList targetId="" scope="global" selectedId={selectedId} onSelect={select} revision={revision} onDeleted={listDeleted} onPinned={changed} onArchived={listDeleted} renderHeading={heading} />}
+    renderCourse={(course, heading, collapsed) => <ChatConversationList targetId={course.id} scope="course" selectedId={selectedId} onSelect={select} revision={revision} onDeleted={listDeleted} onPinned={changed} onArchived={listDeleted} renderHeading={heading} collapsed={collapsed} />} /><section className="chat-main">{selectedId ? <ChatThread key={`${selectedId}:${threadRevision}`} conversationId={selectedId} onLoaded={loaded} onChanged={changed} onDeleted={deleted} /> : <div className="chat-welcome"><span className="chat-welcome-icon">◌</span><h2>{selectedCourseId ? "开始这门课程的对话" : "今天想了解什么？"}</h2><p>{selectedCourseId ? "点击课程名称右侧的新建图标，围绕整门课程提问。" : "主对话可以查询所有课程；选择课程后，可专注这门课程的课堂内容。"}</p>{!selectedCourseId && <ChatConversationList targetId="" scope="global" createOnly selectedId={null} onSelect={select} revision={revision} />}</div>}</section></main>;
 }

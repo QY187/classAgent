@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import VECTOR
 
@@ -272,6 +272,8 @@ class ChatConversation(Base):
     course_id: Mapped[str | None] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True, nullable=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200), default="新对话")
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     generation_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
     generation_preview_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     generating_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

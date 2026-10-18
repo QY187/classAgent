@@ -41,3 +41,22 @@ def prepare_chat_scope(engine) -> None:
             if current:
                 connection.execute(text("ALTER TABLE chat_conversations DROP CONSTRAINT ck_chat_conversation_scope"))
             connection.execute(text("ALTER TABLE chat_conversations ADD CONSTRAINT ck_chat_conversation_scope CHECK (lesson_id IS NULL OR course_id IS NULL)"))
+
+
+def prepare_chat_pinning(engine) -> None:
+    """为存量对话补充置顶状态；旧对话默认不置顶，可重复执行。"""
+    inspector = inspect(engine)
+    if inspector.has_table("chat_conversations") and "is_pinned" not in {
+        item["name"] for item in inspector.get_columns("chat_conversations")
+    }:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE chat_conversations ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT FALSE"))
+
+
+def prepare_chat_archive(engine) -> None:
+    inspector = inspect(engine)
+    if inspector.has_table("chat_conversations") and "is_archived" not in {
+        item["name"] for item in inspector.get_columns("chat_conversations")
+    }:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE chat_conversations ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT FALSE"))

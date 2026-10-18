@@ -37,6 +37,8 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
     if not 2 <= len(question) <= 1000:
         raise HTTPException(422, "请输入 2 到 1000 字的问题")
     conversation = owned_conversation(db, conversation_id, username, lock=True)
+    if conversation.is_archived:
+        raise HTTPException(409, "请恢复归档对话后再提问")
     existing = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == conversation_id,
         ChatMessage.request_id == request_id, ChatMessage.role == "user"))
     if existing is not None and existing.content != question:
