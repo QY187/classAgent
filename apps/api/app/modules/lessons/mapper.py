@@ -24,7 +24,7 @@ def save_audio_job(db: Session, audio: AudioFile, job: ProcessingJob, lesson: Le
 
 
 def find_latest_job(db: Session, lesson_id: str) -> ProcessingJob | None:
-    return db.scalar(select(ProcessingJob).where(ProcessingJob.lesson_id == lesson_id).order_by(ProcessingJob.created_at.desc()))
+    return db.scalar(select(ProcessingJob).where(ProcessingJob.lesson_id == lesson_id).order_by(ProcessingJob.created_at.desc(), ProcessingJob.id.desc()))
 
 
 def find_transcript(db: Session, lesson_id: str) -> list[TranscriptSegment]:

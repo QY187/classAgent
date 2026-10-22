@@ -6,6 +6,9 @@ from .generation import GenerationStopped
 from ...shared.models import ChatMessage
 
 LABELS = {
+    "get_processing_detail": "查询课次处理详情",
+    "list_unanswered_quizzes": "查询未作答小测",
+    "list_pending_lessons": "查询待处理课次",
     "list_courses": "查询课程",
     "list_lessons": "查询课次",
     "get_course_progress": "查询课程进度",

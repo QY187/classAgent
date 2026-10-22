@@ -5,7 +5,8 @@ from typing import Callable
 from . import tools
 from . import learning
 from . import quiz_results
-from . import progress
+from . import progress, workflow_queries
+from .schemas import PendingLessonsArguments, UnansweredQuizArguments, ProcessingDetailArguments
 from .schemas import CourseProgressArguments, CreateCourseArguments, CreateLessonArguments
 from . import course_actions
 from . import knowledge_actions
@@ -29,6 +30,9 @@ class ToolDefinition:
 
 
 _definitions = (
+    ToolDefinition("get_processing_detail", "查询一节课当前处理阶段、最近转写任务进度、纪要状态和当前失败原因。先定位唯一课次，不推断预计完成时间；任务进度仅属于转写，不等于纪要进度。", ProcessingDetailArguments, workflow_queries.processing_detail),
+    ToolDefinition("list_unanswered_quizzes", "查询可答且本人尚未提交作答的小测，返回标题、题量和答题入口，不返回答案。支持课程、课次、标题搜索与分页；草稿不计入。主对话省略课程查询本人全部课程。", UnansweredQuizArguments, workflow_queries.unanswered_quizzes),
+    ToolDefinition("list_pending_lessons", "查询待处理课次及当前阶段、失败原因，支持分页。主对话省略课程查所有课程，课程对话仅查当前课程；包括等待上传和缺少纪要，不等同于失败课次。", PendingLessonsArguments, workflow_queries.pending_lessons),
     ToolDefinition("list_courses", "查询当前用户可见课程，支持名称搜索和分页。", CourseListArguments, tools.list_courses),
     ToolDefinition("list_lessons", "查询指定课程课次，按用户设定顺序返回，支持标题搜索和分页。", LessonListArguments, tools.list_lessons),
     ToolDefinition("get_course_progress", "查询一门课程的真实进度：课次、文字记录、可用纪要、手动标记的知识点状态，并分页列出缺少可用纪要的课次及其状态。省略 course_id 使用当前课程，主对话先定位一门课程。纪要排队、失败或过期不算完成；知识点状态不代表考试能力。", CourseProgressArguments, progress.get_course_progress),

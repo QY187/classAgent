@@ -23,6 +23,10 @@ class LessonListArguments(PageArguments):
     query: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = ""
 
 
+class PendingLessonsArguments(PageArguments):
+    course_id: Identity | None = None
+
+
 class CourseProgressArguments(PageArguments):
     course_id: Identity | None = None
 
@@ -49,6 +53,10 @@ class CreateLessonArguments(ToolArguments):
 class KnowledgeStatusArguments(ToolArguments):
     knowledge_point_id: Identity
     status: Literal["new", "review", "mastered"]
+
+
+class ProcessingDetailArguments(ToolArguments):
+    lesson_id: Identity
 
 
 class TranscriptArguments(PageArguments):
@@ -80,6 +88,10 @@ class KnowledgeListArguments(LearningListArguments):
 
 class WrongQuestionListArguments(LearningListArguments):
     status: Literal["all", "pending", "mastered"] = "all"
+
+
+class UnansweredQuizArguments(LearningListArguments):
+    pass
 
 
 class QuizAttemptListArguments(PageArguments):

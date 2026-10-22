@@ -1,23 +1,18 @@
 """课程库首页统计；只聚合当前用户可见的数据，不记录或推断学习时长。"""
 from datetime import timezone
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
-from ...shared.models import ChatConversation, ChatMessage, Course, Lesson, LessonSummary, Quiz, QuizAttempt, ReviewCard
+from ...shared.models import ChatConversation, ChatMessage, Course, Lesson, Quiz, QuizAttempt, ReviewCard
+from .pending import pending_condition
 
 
 def get_overview(db: Session, username: str) -> dict:
     owner = user_id_for_username(db, username)
-    ready_summary = exists(select(LessonSummary.id).where(
-        LessonSummary.lesson_id == Lesson.id,
-        LessonSummary.status.in_(("completed", "edited")),
-        LessonSummary.content.is_not(None), func.trim(LessonSummary.content) != "",
-    ))
     pending = db.scalar(select(func.count(Lesson.id)).join(Course).where(
-        Course.owner_id == owner,
-        (Lesson.status != "completed") | ~ready_summary,
+        Course.owner_id == owner, pending_condition(),
     )) or 0
 
     activities = []

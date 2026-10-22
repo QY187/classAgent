@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -7,6 +7,7 @@ from ...core.deps import get_current_user
 from ...shared.schemas import CourseCreate, CourseRead, CourseUpdate, LessonCreate, LessonRead, LessonUpdate
 from . import service
 from .overview import get_overview
+from .pending import list_pending_lessons
 
 
 router = APIRouter(tags=["courses"], dependencies=[Depends(get_current_user)])
@@ -15,6 +16,12 @@ router = APIRouter(tags=["courses"], dependencies=[Depends(get_current_user)])
 @router.get("/courses/overview")
 def overview(username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     return get_overview(db, username)
+
+
+@router.get("/courses/pending-lessons")
+def pending_lessons(offset: int = Query(default=0, ge=0, le=100000), limit: int = Query(default=20, ge=1, le=50),
+                    username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    return list_pending_lessons(db, username, offset, limit)
 
 
 class LessonOrderUpdate(BaseModel):

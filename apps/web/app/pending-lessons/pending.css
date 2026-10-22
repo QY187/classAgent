@@ -1,0 +1,17 @@
+.pending-list { display: grid; gap: 14px; }
+.pending-row { padding: 22px 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.pending-row-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.pending-row-heading > div { min-width: 0; }
+.pending-course { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.pending-row h2 { margin-top: 8px; font-size: 17px; overflow-wrap: anywhere; }
+.pending-badge { flex-shrink: 0; padding: 6px 10px; border-radius: 7px; color: #596881; background: #f0f2f6; font-size: 12px; }
+.pending-badge-failed { color: #a74040; background: #fcf0f0; }
+.pending-badge-queued, .pending-badge-transcribing, .pending-badge-generating { color: #5264b6; background: var(--blue-soft); }
+.pending-error { margin-top: 16px; padding: 12px 14px; border-radius: 9px; background: #fff7f7; color: #984c4c; font-size: 12px; }
+.pending-error p { margin: 6px 0 0; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pending-row-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 20px; }
+.pending-row-footer > span { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.pending-row-footer .button { flex-shrink: 0; }
+.pending-pagination { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 24px; }
+.pending-pagination > span { color: var(--muted); font-size: 12px; }
+@media (max-width: 600px) { .pending-row { padding: 18px; } .pending-row-heading { align-items: flex-start; flex-wrap: wrap; } .pending-row-footer { align-items: flex-start; flex-direction: column; gap: 12px; } }

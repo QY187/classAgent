@@ -26,8 +26,8 @@ export default function HomeOverview() {
   return <>
     <div className="stat-card">
       <div className="stat-label">待处理课次</div>
-      <div className="stat-value">{loading || error ? "—" : data?.pending_lessons}</div>
-      <div className="stat-note">{loading ? "正在统计…" : error ? retry : data?.pending_lessons === 0 ? "全部课次已完成转写与纪要" : "尚未完成转写或纪要的课次"}</div>
+      <div className="stat-value">{loading || error ? "—" : <Link className="pending-overview-link" href="/pending-lessons" aria-label={`查看${data?.pending_lessons ?? 0}节待处理课次`}>{data?.pending_lessons}<span aria-hidden="true">↗</span></Link>}</div>
+      <div className="stat-note">{loading ? "正在统计…" : error ? retry : data?.pending_lessons === 0 ? "全部课次已完成转写与纪要" : <Link href="/pending-lessons">查看具体课次与处理状态 →</Link>}</div>
     </div>
     <div className="stat-card">
       <div className="stat-label">最近学习</div>

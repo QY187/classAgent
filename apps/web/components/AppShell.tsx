@@ -32,7 +32,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const courseMatch = pathname.match(/^\/courses\/([^/]+)(?:\/.*)?$/);
   const lessonMatch = pathname.match(/^\/lessons\/([^/]+)(?:\/.*)?\/?$/);
   const activeCourseId = lessonMatch && lessonInfo ? lessonInfo.course_id : courseMatch?.[1];
-  const libraryActive = pathname === "/" || pathname.startsWith("/courses") || pathname.startsWith("/lessons");
+  const pendingActive = pathname === "/pending-lessons";
+  const libraryActive = pathname === "/" || pathname.startsWith("/courses") || pathname.startsWith("/lessons") || pendingActive;
   const reviewActive = pathname === "/review";
   const wrongBookActive = pathname === "/wrong-questions";
   const recycleActive = pathname === "/recycle-bin";
@@ -130,7 +131,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-controls="app-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"} title={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /><path d={sidebarCollapsed ? "m13 9 3 3-3 3" : "m16 9-3 3 3 3"} /></svg></button>
           <nav className="breadcrumb" aria-label="当前位置">
-            {courseMatch || lessonMatch || chatActive || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
+            {courseMatch || lessonMatch || chatActive || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive || pendingActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
+            {pendingActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">待处理课次</span></>}
             {chatActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">问答工作台</span></>}
             {recycleActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">回收站</span></>}
             {wrongBookActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">错题本</span></>}

@@ -11,6 +11,7 @@ from .tools import ToolContext, check_lesson
 from .learning import LearningStore
 from .quiz_results import QuizResultStore
 from .progress import ProgressStore
+from .workflow_queries import WorkflowQueryStore
 
 
 class EvidenceStore:
@@ -21,6 +22,7 @@ class EvidenceStore:
         self.learning = LearningStore()
         self.quiz_results = QuizResultStore()
         self.progress = ProgressStore()
+        self.workflow = WorkflowQueryStore()
 
     def collect(self, db: Session, context: ToolContext, name: str, result: dict):
         if not result["ok"]:
@@ -28,6 +30,7 @@ class EvidenceStore:
         self.learning.collect(name, result)
         self.quiz_results.collect(name, result)
         self.progress.collect(name, result)
+        self.workflow.collect(name, result)
         if name in {"list_courses", "list_lessons"}:
             target = self.course_ids if name == "list_courses" else self.lesson_ids
             target.update(row["id"] for row in result["data"]["items"])
