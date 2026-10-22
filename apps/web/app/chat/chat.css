@@ -125,7 +125,7 @@
 .chat-global-section h2 { display: flex; justify-content: space-between; padding: 0 8px 10px; }
 .chat-global-section h2 span { font-size: 10px; font-weight: 400; color: #8b97ad; padding: 3px 6px; background: #edf0f6; border-radius: 5px; }
 .chat-conversations.global { padding: 0; }
-.chat-conversations.global > div:last-child { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
+.chat-conversations.global > .chat-conversation-items { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
 .chat-conversations.global .chat-new-conversation { background: var(--blue-soft); border: 1px solid #e0e5ff; border-radius: 10px; margin-bottom: 8px; }
 .chat-courses-label { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 4px; gap: 8px; }
 .chat-add-course { background: none; border: 0; color: var(--blue); font-size: 12px; cursor: pointer; padding: 5px; }
@@ -210,3 +210,10 @@
 .chat-copy-manual { max-width: 680px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #fafbff; }
 .chat-copy-manual p { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
 .chat-copy-manual textarea { width: 100%; min-height: 100px; max-height: 220px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; font-size: 12px; }
+
+.chat-group-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 4px 0; background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; }
+.chat-group-toggle:hover { color: var(--blue); }
+.chat-group-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 5px; }
+.chat-group-chevron { flex: none; width: 14px; height: 14px; color: #8b97ad; transition: transform .15s; }
+.chat-group-toggle[aria-expanded="true"] .chat-group-chevron { transform: rotate(90deg); }
+.chat-global-section h2 .chat-group-title, .chat-courses-label h2 .chat-group-title { padding: 0; background: transparent; border-radius: 0; font: inherit; color: inherit; }

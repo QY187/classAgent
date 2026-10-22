@@ -7,7 +7,7 @@ import type { ChatCourse, ChatLesson, ChatSearchResult, Conversation } from "../
 
 export default function ChatLessonTree({ renderCourse, selectedLessonId, selectedCourseId, onSelect, revision, renderGlobal, onCourseSelected, onRestored }: {
   onRestored: (item: Conversation) => void;
-  renderGlobal: (heading: (action: ReactNode) => ReactNode) => ReactNode; onCourseSelected: (course: ChatCourse) => void;
+  renderGlobal: (heading: (action: ReactNode) => ReactNode, collapsed: boolean) => ReactNode; onCourseSelected: (course: ChatCourse) => void;
   renderCourse: (course: ChatCourse, heading: (action: ReactNode) => ReactNode, collapsed: boolean) => ReactNode;
   selectedLessonId: string | null; selectedCourseId: string | null; onSelect: (item: Conversation) => void; revision: number;
 }) {
@@ -18,6 +18,8 @@ export default function ChatLessonTree({ renderCourse, selectedLessonId, selecte
   const [query, setQuery] = useState("");
   const [retry, setRetry] = useState(0);
 
+  const [globalCollapsed, setGlobalCollapsed] = useState(false);
+  const [coursesCollapsed, setCoursesCollapsed] = useState(false);
   const [collapsedCourses, setCollapsedCourses] = useState<Record<string, boolean>>({});
   const [hits, setHits] = useState<ChatSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -50,11 +52,17 @@ export default function ChatLessonTree({ renderCourse, selectedLessonId, selecte
   const needle = query.trim().toLocaleLowerCase();
   const courses = courseItems.filter((course) => !needle || course.name.toLocaleLowerCase().includes(needle));
   return <aside className="chat-tree" aria-label="课程与对话"><header className="chat-tree-header"><h1>问答工作台</h1><p>主对话跨课程，课程内聚焦学习</p><div className="chat-tree-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></svg><input className="field" type="search" maxLength={200} aria-label="搜索课程或对话" placeholder="搜索课程或对话" value={query} onChange={(event) => setQuery(event.target.value)} /></div></header><div className="chat-tree-scroll">
-    <section className="chat-global-section">{renderGlobal((action) => <div className="chat-section-heading"><h2>主对话<span>全部课程</span></h2>{action}</div>)}</section><div className="chat-courses-label"><h2>课程</h2><ChatCoursePicker courses={courseItems} onSelected={onCourseSelected} /></div>
+    <section className="chat-global-section">{renderGlobal((action) => <div className="chat-section-heading"><h2><button type="button" className="chat-group-toggle" aria-label="主对话分组" aria-expanded={!globalCollapsed} onClick={() => setGlobalCollapsed(v => !v)}><GroupChevron /><span className="chat-group-title">主对话</span><span>全部课程</span></button></h2>{action}</div>, globalCollapsed)}</section><div className="chat-courses-label"><h2><button type="button" className="chat-group-toggle" aria-label="课程分组" aria-expanded={!coursesCollapsed} onClick={() => setCoursesCollapsed(v => !v)}><GroupChevron /><span className="chat-group-title">课程</span></button></h2><ChatCoursePicker courses={courseItems} onSelected={(course) => { setCoursesCollapsed(false); onCourseSelected(course); }} /></div>
     {query.trim() && <section className="chat-course-group"><h2>匹配的对话{hits.length === 100 ? " · 最近 100 条" : ""}</h2>{searching ? <p className="chat-tree-hint" role="status">正在搜索…</p> : searchError ? <p className="chat-tree-hint" role="alert">{searchError}</p> : hits.length ? hits.map((item) => <button className="chat-search-hit" key={item.id} onClick={() => onSelect(item)}><strong>{item.title}</strong><span>{item.scope === "global" ? "主对话 · 全部课程" : `${item.course_name} / ${item.lesson_title || "整门课程"}`}</span></button>) : <p className="chat-tree-hint">没有匹配的对话</p>}</section>}
+    <div hidden={coursesCollapsed}>
     {loading && !courseItems.length ? <p className="chat-tree-hint" role="status">正在读取课程…</p> : error ? <div className="chat-tree-hint"><p role="alert">{error}</p><button className="button button-secondary" onClick={() => setRetry((value) => value + 1)}>重新加载</button></div> : !courses.length ? <p className="chat-tree-hint">{courseItems.length ? "没有匹配的课程" : "还没有课程，可以点击“添加课程”创建。"}</p> : courses.map((course) => <section className="chat-course-group" key={course.id}>
       {renderCourse(course, (action) => <div className="chat-course-heading"><h2><button type="button" className="chat-course-toggle" aria-current={selectedCourseId === course.id ? "true" : undefined} aria-expanded={!collapsedCourses[course.id]} onClick={() => setCollapsedCourses((current) => ({ ...current, [course.id]: !current[course.id] }))}><span className="chat-course-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.5C9 3.7 5.5 3.4 3 4v15c2.5-.6 6-.3 9 1.5 3-1.8 6.5-2.1 9-1.5V4c-2.5-.6-6-.3-9 1.5Z" /><path d="M12 5.5v15" /></svg></span><span className="chat-tree-chevron" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m6 4 4 4-4 4" /></svg></span><span className="chat-course-title">{course.name}</span></button></h2>{action}</div>, !!collapsedCourses[course.id])}
     </section>)}
+    </div>
     <ChatArchivePanel revision={revision} onSelect={onSelect} onRestored={onRestored} />
   </div></aside>;
+}
+
+function GroupChevron() {
+  return <svg className="chat-group-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>;
 }
