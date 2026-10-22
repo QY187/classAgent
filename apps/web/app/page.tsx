@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { apiUrl, errorMessage, request } from "../lib/api";
+import HomeOverview from "../components/home-overview";
 
 type Course = { id: string; name: string; semester?: string | null; created_at: string };
 
@@ -59,8 +60,7 @@ export default function Home() {
       </section>
       <div className="stats-grid">
         <div className="stat-card"><div className="stat-label">课程总数</div><div className="stat-value">{courses.length}</div><div className="stat-note">持续积累你的学习资料</div></div>
-        <div className="stat-card"><div className="stat-label">待处理课次</div><div className="stat-value">—</div><div className="stat-note">课次统计即将开放</div></div>
-        <div className="stat-card"><div className="stat-label">最近学习</div><div className="stat-value">—</div><div className="stat-note">学习统计即将开放</div></div>
+        <HomeOverview />
       </div>
       <div className="section-head"><h2>最近课程</h2><span>{courses.length ? `${courses.length} 门课程` : "还没有课程"}</span></div>
       {message && <div className="notice" style={{ marginBottom: 16 }}>{message}</div>}

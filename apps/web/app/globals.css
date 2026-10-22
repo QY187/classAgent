@@ -190,6 +190,9 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .stat-label { color: var(--muted); font-size: 12px; font-weight: 600; position: relative; z-index: 1; }
 .stat-value { font-size: 32px; font-weight: 800; margin-top: 9px; letter-spacing: -.04em; position: relative; z-index: 1; }
 .stat-note { color: #9ba7b9; font-size: 11px; margin-top: 6px; position: relative; z-index: 1; }
+.overview-activity { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #687791; }
+.overview-activity:hover { color: #626cff; }
+.overview-retry { border: 0; padding: 0; background: transparent; color: #687791; cursor: pointer; font: inherit; }
 .section-head { display: flex; align-items: center; justify-content: space-between; margin: 30px 0 15px; }
 .section-head span { color: var(--muted); font-size: 12px; }
 .course-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }

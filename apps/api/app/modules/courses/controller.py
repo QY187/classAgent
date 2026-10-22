@@ -6,9 +6,15 @@ from ...core.db import get_db
 from ...core.deps import get_current_user
 from ...shared.schemas import CourseCreate, CourseRead, CourseUpdate, LessonCreate, LessonRead, LessonUpdate
 from . import service
+from .overview import get_overview
 
 
 router = APIRouter(tags=["courses"], dependencies=[Depends(get_current_user)])
+
+
+@router.get("/courses/overview")
+def overview(username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    return get_overview(db, username)
 
 
 class LessonOrderUpdate(BaseModel):
