@@ -1,6 +1,6 @@
-.chat-workspace { display: flex; height: calc(100dvh - 76px); min-height: 480px; background: #fff; }
-.chat-tree { width: 288px; flex: 0 0 288px; border-right: 1px solid var(--line); background: #f8f9fc; display: flex; flex-direction: column; min-height: 0; }
-.chat-tree-header { padding: 22px 18px 18px; background: linear-gradient(180deg, #fff, #f8f9fc); }
+.chat-workspace { display: flex; height: calc(100dvh - 76px); min-height: 480px; background: var(--surface); }
+.chat-tree { width: 288px; flex: 0 0 288px; border-right: 1px solid var(--line); background: var(--sidebar-surface); display: flex; flex-direction: column; min-height: 0; }
+.chat-tree-header { padding: 22px 18px 18px; background: var(--sidebar-surface); }
 .chat-tree-header h1 { font-size: 17px; font-weight: 700; margin: 0 0 7px; letter-spacing: .01em; }
 .chat-tree-header p { color: #8a94a6; font-size: 11px; margin: 0 0 18px; line-height: 1.6; }
 .chat-tree-search { position: relative; }
