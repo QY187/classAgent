@@ -28,6 +28,8 @@ def quiz_request(question):
     if not explicit_request(question):
         return False
     value = request_text(question)
+    if re.search(r"(?:题|小测).{0,8}(?:答案|解析|思路)|出题思路", value):
+        return False
     prefix = r"(?:请|帮我|给我|为我|麻烦你|麻烦|然后|再|我想要|我想|我希望|你|\s)*"
     for clause in re.split(r"[，,。；;\n]", value):
         # 根据/针对是资料范围，不能让普通讲解、已有题作答开启出题工具。

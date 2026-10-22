@@ -29,8 +29,8 @@ def status_request(question, history=None):
         question = f"把{target}标记为{answer}"
     question = request_text(question)
     prefix = r"^(?:请|帮我|给我|麻烦你|麻烦|然后|再|你|\s)*"
-    patterns = (prefix + r"(?:把|将)(.{1,250}?)(?:标记|设置|设定|改)(?:为|成)(未学习|需要复习|已掌握)(?:吧|一下|[！!\s])*$",
-                prefix + r"(?:标记|设置)(.{1,250}?)(?:为|成)(未学习|需要复习|已掌握)(?:吧|一下|[！!\s])*$")
+    patterns = (prefix + r"(?:把|将)(.{1,250}?)(?:标记|设置|设定|改|设)(?:为|成)(未学习|需要复习|已掌握)(?:吧|一下|[！!\s])*$",
+                prefix + r"(?:标记|设置|设)(.{1,250}?)(?:为|成)(未学习|需要复习|已掌握)(?:吧|一下|[！!\s])*$")
     for clause in re.split(r"[，,。；;\n]", question):
         for pattern in patterns:
             match = re.match(pattern, clause.strip())

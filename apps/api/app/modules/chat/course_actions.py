@@ -26,7 +26,8 @@ def course_name(question):
 
 
 def requested_course(question):
-    return explicit_request(question) and bool(re.match(r"^(?:请|帮我|给我|麻烦你|麻烦|然后|再|我想要|我想|我希望|你|一下|\s)*(?:创建|新建|添加|新增)[^，,。；;\n]{0,210}?课程", question))
+    question = request_text(question)
+    return explicit_request(question) and bool(re.match(r"^(?:请|帮我|给我|麻烦你|麻烦|然后|再|我想要|我想|我希望|你|一下|\s|[，,、])*(?:创建|新建|添加|新增)[^，,。；;\n]{0,210}?课程(?=$|[，,。；;\n]|再|然后)", question))
 
 
 def action_hint(question, history=None):
