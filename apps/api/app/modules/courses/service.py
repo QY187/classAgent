@@ -89,7 +89,7 @@ def get_course_progress(db: Session, course_id: str, owner_username: str) -> dic
     }
 
 
-def update_course(db: Session, course_id: str, payload: CourseUpdate, owner_username: str) -> Course:
+def update_course(db: Session, course_id: str, payload: CourseUpdate, owner_username: str, *, commit: bool = True) -> Course:
     course = mapper.find_course(db, course_id)
     if course is None or course.owner_id != user_id_for_username(db, owner_username):
         raise HTTPException(status_code=404, detail="课程不存在")
@@ -98,8 +98,11 @@ def update_course(db: Session, course_id: str, payload: CourseUpdate, owner_user
         raise HTTPException(status_code=400, detail="课程名称不能为空")
     course.name = name
     course.semester = payload.semester.strip() or None if payload.semester else None
-    db.commit()
-    db.refresh(course)
+    if commit:
+        db.commit()
+        db.refresh(course)
+    else:
+        db.flush()
     return course
 
 
@@ -152,7 +155,7 @@ def list_lessons(db: Session, course_id: str, owner_username: str) -> list[Lesso
     return mapper.find_lessons(db, course_id)
 
 
-def update_lesson(db: Session, lesson_id: str, payload: LessonUpdate, owner_username: str) -> Lesson:
+def update_lesson(db: Session, lesson_id: str, payload: LessonUpdate, owner_username: str, *, commit: bool = True) -> Lesson:
     lesson = visible_get(db, Lesson, lesson_id)
     if lesson is None:
         raise HTTPException(status_code=404, detail="课次不存在")
@@ -164,8 +167,11 @@ def update_lesson(db: Session, lesson_id: str, payload: LessonUpdate, owner_user
         raise HTTPException(status_code=400, detail="课次标题不能为空")
     lesson.title = title
     lesson.lesson_date = payload.lesson_date or None
-    db.commit()
-    db.refresh(lesson)
+    if commit:
+        db.commit()
+        db.refresh(lesson)
+    else:
+        db.flush()
     return lesson
 
 

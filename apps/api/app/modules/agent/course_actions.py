@@ -15,3 +15,14 @@ def create_lesson(db, context, args):
     if context.lesson_id:
         raise HTTPException(403, "请在课程对话或主对话添加课次")
     return execute_action(db, context, "create_lesson", args)
+
+
+def update_course(db, context, args):
+    check_course(db, context, args.course_id)
+    return execute_action(db, context, "update_course", args)
+
+
+def update_lesson(db, context, args):
+    from .tools import check_lesson
+    check_lesson(db, context, args.lesson_id)
+    return execute_action(db, context, "update_lesson", args)

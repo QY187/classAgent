@@ -29,7 +29,8 @@ def processing_detail(db, context, args):
     return get_processing_detail(db, args.lesson_id, context.username) | {"filters":args.model_dump()}
 
 
-READERS = {"get_processing_detail": (ProcessingDetailArguments, processing_detail),"list_pending_lessons": (PendingLessonsArguments, pending_lessons),
+READERS = {"get_processing_detail": (ProcessingDetailArguments, processing_detail),
+           "list_pending_lessons": (PendingLessonsArguments, pending_lessons),
            "list_unanswered_quizzes": (UnansweredQuizArguments, unanswered_quizzes)}
 
 
@@ -57,12 +58,19 @@ class WorkflowQueryStore:
                 lines.append(f"{data['course_name']} / [{data['title']}]({data['href']}) · {data['stage_label']}")
                 job = data["transcription_job"]
                 if job:
-                    lines.append(f"最近转写任务：{job['stage']} · 进度 {job['progress']}%。任务进度不代表纪要进度。")
+                    stages = {"queued":"排队中", "transcribing":"转写中", "completed":"已完成", "failed":"失败"}
+                    label = stages.get(job["stage"], "处理中")
+                    if job["stage"] == "failed" and data["lesson_status"] == "completed":
+                        label += "（历史任务，当前文字已完成）"
+                    lines.append(f"最近转写任务：{label} · 进度 {job['progress']}%。任务进度不代表纪要进度。")
                 else:
                     lines.append("暂无转写处理任务。")
                 labels = {"missing":"尚无纪要", "queued":"等待生成", "generating":"生成中",
                           "failed":"生成失败", "stale":"待更新", "completed":"已生成", "edited":"已编辑"}
-                lines.append(f"纪要状态：{labels.get(data['summary_status'], '暂不可用')}。")
+                label = labels.get(data['summary_status'], '暂不可用')
+                if data['summary_status'] in {"completed", "edited"} and not data["summary_available"]:
+                    label = "内容为空，尚无可用纪要"
+                lines.append(f"纪要状态：{label}。")
                 if data['error_message']:
                     lines.append(f"当前失败原因：{data['error_message']}")
                 continue

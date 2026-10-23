@@ -102,3 +102,17 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(current["stage_label"], "正在生成纪要")
         self.assertIsNone(current["error_message"])
         self.assertIsNone(current["transcription_job"]["error_message"])
+
+    def test_empty_summary_not_presented_as_available(self):
+        from app.modules.agent.workflow_queries import WorkflowQueryStore
+        self.seed()
+        self.db.get(Lesson,"l").status = "completed"
+        self.db.add(LessonSummary(lesson_id="l",status="completed",content="  "))
+        self.db.commit()
+        result = execute_tool(self.db,ToolContext("owner"),"get_processing_detail",{"lesson_id":"l"})
+        self.assertFalse(result["data"]["summary_available"])
+        store = WorkflowQueryStore()
+        store.collect("get_processing_detail",result)
+        answer = store.answer(self.db,ToolContext("owner"),{"query_ids":["W1"]})
+        self.assertIn("内容为空，尚无可用纪要",answer)
+        self.assertIn("历史任务，当前文字已完成",answer)

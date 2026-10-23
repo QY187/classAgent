@@ -130,3 +130,32 @@ class PracticeQuizArguments(ToolArguments):
         if not self.knowledge_point_ids and not self.wrong_question_ids:
             raise ValueError("需要选择至少一个学习记录")
         return self
+
+
+class UpdateCourseArguments(ToolArguments):
+    course_id: Identity
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)] | None = None
+    semester: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)] | None = None
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if self.name is None and self.semester is None:
+            raise ValueError("需要明确修改字段")
+        return self
+
+
+class UpdateLessonArguments(ToolArguments):
+    lesson_id: Identity
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)] | None = None
+    lesson_date: Annotated[str, StringConstraints(min_length=10, max_length=10)] | None = None
+
+    @field_validator("lesson_date")
+    @classmethod
+    def valid_date(cls, value):
+        return CreateLessonArguments.valid_date(value)
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if self.title is None and self.lesson_date is None:
+            raise ValueError("需要明确修改字段")
+        return self

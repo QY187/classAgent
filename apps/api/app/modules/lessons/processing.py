@@ -20,4 +20,5 @@ def get_processing_detail(db, lesson_id, username):
         "transcription_job": {"id":job.id, "stage":job.stage, "progress":job.progress,
             "error_message":job.error_message[:1000] if current_failed and job.error_message else None,
             "created_at":job.created_at.isoformat()} if job else None,
-        "summary_status":summary.status if summary else "missing", "href":f"/lessons/{lesson.id}"}
+        "summary_status":summary.status if summary else "missing",
+        "summary_available":bool(summary and summary.status in {"completed", "edited"} and (summary.content or "").strip()), "href":f"/lessons/{lesson.id}"}

@@ -6,7 +6,7 @@ from . import tools
 from . import learning
 from . import quiz_results
 from . import progress, workflow_queries, processing_actions
-from .schemas import RetryTranscriptionArguments
+from .schemas import RetryTranscriptionArguments, UpdateCourseArguments, UpdateLessonArguments
 from .schemas import PendingLessonsArguments, UnansweredQuizArguments, ProcessingDetailArguments
 from .schemas import CourseProgressArguments, CreateCourseArguments, CreateLessonArguments
 from . import course_actions
@@ -31,6 +31,8 @@ class ToolDefinition:
 
 
 _definitions = (
+    ToolDefinition("update_course", "仅用户本条明确指定课程名称或学期修改时调用。先查询定位唯一课程，使用后端识别的字段，未指定字段省略；同名歧义先澄清。", UpdateCourseArguments, course_actions.update_course, writes=True),
+    ToolDefinition("update_lesson", "仅用户本条明确指定课次标题或日期修改时调用。先查询定位唯一课次，只按后端字段修改；日期必须完整 YYYY-MM-DD，不猜年份，不改变未指定字段。", UpdateLessonArguments, course_actions.update_lesson, writes=True),
     ToolDefinition("retry_transcription", "仅明确要求重试转写时调用。先查询并确认课程、课次和当前任务失败，必须使用本条指令指定的唯一课次标题；排队或已完成不重复提交，已有文字不覆盖，仅登记任务而非已经完成转写。", RetryTranscriptionArguments, processing_actions.retry_transcription, writes=True),
     ToolDefinition("get_processing_detail", "查询一节课当前处理阶段、最近转写任务进度、纪要状态和当前失败原因。先定位唯一课次，不推断预计完成时间；任务进度仅属于转写，不等于纪要进度。", ProcessingDetailArguments, workflow_queries.processing_detail),
     ToolDefinition("list_unanswered_quizzes", "查询可答且本人尚未提交作答的小测，返回标题、题量和答题入口，不返回答案。支持课程、课次、标题搜索与分页；草稿不计入。主对话省略课程查询本人全部课程。", UnansweredQuizArguments, workflow_queries.unanswered_quizzes),
