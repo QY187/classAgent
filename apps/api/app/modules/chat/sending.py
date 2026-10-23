@@ -15,6 +15,7 @@ from .previews import save_preview
 from .agent_progress import save_agent_step
 from .quiz_actions import wants_quiz, wants_practice_quiz, generate_for_message
 from .course_actions import actions_for_message, action_hint as course_action_hint
+from .retry_actions import actions_for_message as retry_actions
 from .intents import request_text
 from .lesson_actions import actions_for_message as lesson_actions, action_hint as lesson_action_hint
 from .knowledge_actions import actions_for_message as knowledge_actions, status_request
@@ -106,7 +107,8 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
                 practice_only=wants_practice_quiz(question, context),
                 actions=actions_for_message(db, conversation_id, username, question_id, token, question, context) |
                         lesson_actions(db, conversation_id, username, question_id, token, question, context) |
-                        knowledge_actions(db, conversation_id, username, question_id, token, question, context),
+                        knowledge_actions(db, conversation_id, username, question_id, token, question, context) |
+                        retry_actions(db, conversation_id, username, question_id, token, question, context),
                 action_hints={"create_course": course_action_hint(question, context), "create_lesson": lesson_action_hint(question, context),
                     "update_knowledge_status": status_request(question, context)}), request_text(question), history=context, on_check=check, on_step=publish_step)
             if on_progress is not None:

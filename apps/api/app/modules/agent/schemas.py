@@ -55,6 +55,10 @@ class KnowledgeStatusArguments(ToolArguments):
     status: Literal["new", "review", "mastered"]
 
 
+class RetryTranscriptionArguments(ToolArguments):
+    lesson_id: Identity
+
+
 class ProcessingDetailArguments(ToolArguments):
     lesson_id: Identity
 

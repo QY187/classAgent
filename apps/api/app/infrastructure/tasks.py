@@ -11,6 +11,7 @@ from ..modules.summaries.service import generate_summary as build_summary
 
 celery_app = Celery("classagent", broker=get_settings().redis_url, backend=get_settings().redis_url)
 celery_app.conf.update(task_track_started=True, result_expires=3600, beat_schedule={
+    "retry-transcription-dispatch": {"task": "classagent.dispatch_transcription_retries", "schedule": 60.0},
     "recycle-bin-expiration": {"task": "classagent.clean_recycle_bin", "schedule": 600.0},
 })
 
@@ -23,6 +24,14 @@ def clean_recycle_bin() -> dict:
         return remove_expired_items(db)
 
 
+@celery_app.task(name="classagent.dispatch_transcription_retries")
+def dispatch_transcription_retries():
+    from ..core.db import SessionLocal
+    from ..modules.lessons.retry import dispatch_pending_retries
+    with SessionLocal() as db:
+        return dispatch_pending_retries(db)
+
+
 @celery_app.task(name="classagent.process_audio")
 def process_audio(job_id: str, object_key: str) -> None:
     from ..core.db import SessionLocal
@@ -30,8 +39,8 @@ def process_audio(job_id: str, object_key: str) -> None:
 
     db = SessionLocal()
     try:
-        job = visible_get(db, ProcessingJob, job_id)
-        if job is None:
+        job = db.scalar(select(ProcessingJob).where(ProcessingJob.id == job_id).with_for_update())
+        if job is None or job.stage != "queued":
             return
         lesson = visible_get(db, Lesson, job.lesson_id)
         if lesson is None:

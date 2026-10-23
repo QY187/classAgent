@@ -6,6 +6,7 @@ from .generation import GenerationStopped
 from ...shared.models import ChatMessage
 
 LABELS = {
+    "retry_transcription": "登记转写重试",
     "get_processing_detail": "查询课次处理详情",
     "list_unanswered_quizzes": "查询未作答小测",
     "list_pending_lessons": "查询待处理课次",
