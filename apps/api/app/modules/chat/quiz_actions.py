@@ -8,10 +8,12 @@ from ..quizzes.schemas import QuizGenerate
 from ..quizzes.service import generate_quiz
 from ..agent.schemas import PracticeQuizArguments
 from ..quizzes.practice import PracticeSelection
-from .intents import quiz_request
+from .intents import quiz_request, explicit_request
 
 
 def wants_quiz(question, history=None):
+    if not explicit_request(question):
+        return False
     if re.search(r"(不要|别|不需要|不用).{0,12}(生成|出题|小测|题)", question):
         return False
     if re.search(r"(怎么|如何|是否|能不能|能否|可以.*吗)", question) and not re.search(r"(请|帮我|给我)", question):

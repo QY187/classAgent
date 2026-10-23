@@ -284,7 +284,7 @@ class AdversarialActionContinuationTest(unittest.TestCase):
             card.title, card.status = "前序遍历", "review"
             chat = create_course_conversation(db, "c", "owner")
             model.return_value = {"content": '{"claims":[],"outcome":"needs_input","question":"要标记为哪种状态？"}'}
-            send_message(db, chat["id"], "owner", "把前序遍历标记为什么状态？", "first")
+            send_message(db, chat["id"], "owner", "把前序遍历标记为", "first")
             model.side_effect = [tool("list_knowledge_points", {"query": "前序遍历"}, "read"),
                                  tool("update_knowledge_status", {"knowledge_point_id": "r", "status": "mastered"}, "write"),
                                  {"content": "{}"}]

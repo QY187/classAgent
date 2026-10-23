@@ -7,7 +7,7 @@ from ...shared.schemas import CourseCreate
 from ..courses import service as courses
 from .action_records import perform_for_message
 from .access import owned_course
-from .intents import explicit_request, follows_clarification, request_text
+from .intents import explicit_request, follows_clarification, request_text, clarification_origin
 
 
 def clean_name(value):
@@ -40,11 +40,10 @@ def resolve_course_request(question, history):
     if requested_course(question):
         return question
     if follows_clarification(question, history) and explicit_request(question) and not re.search(r"什么|为什么|解释|查询|看看|生成|创建|添加|修改|标记", question):
-        previous = next((item["content"] for item in reversed(history) if item.get("role") == "user"), "")
-        previous_is_create = requested_course(previous) or (
-            bool(re.match(r"^(?:请|帮我|给我|麻烦你|麻烦|我想要|我希望|你|一下|\s)*(?:创建|新建|添加|新增)课程", previous))
-            and not re.search(r"不要|不需要|不用|取消|别|原文|老师说|引用", previous)
-        )
+        previous = clarification_origin(question, history)
+        if previous is None:
+            return question
+        previous_is_create = requested_course(previous)
         if previous_is_create and not course_name(previous):
             supplement = clean_name(question).rstrip("？?。！!").strip()
             return f"创建{supplement.removesuffix('课程')}课程"

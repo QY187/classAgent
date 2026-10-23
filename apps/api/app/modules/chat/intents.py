@@ -10,6 +10,17 @@ def request_text(question):
     return value
 
 
+def is_cancellation(question):
+    return bool(re.search(r"取消|不要|不需要|不用|先不做|先别|别做|停止|暂停|算了|不做了", question))
+
+
+def clarification_origin(question, history):
+    if is_cancellation(question) or not explicit_request(question.strip().rstrip("？?")) or not follows_clarification(question, history):
+        return None
+    previous = next((item.get("content", "") for item in reversed(history) if item.get("role") == "user"), "")
+    return previous if explicit_request(previous) else None
+
+
 def follows_clarification(question, history):
     if not history or len(question.strip()) > 200:
         return False
@@ -19,6 +30,8 @@ def follows_clarification(question, history):
 
 def explicit_request(question):
     value = request_text(question)
+    if is_cancellation(value):
+        return False
     if re.search(r"不要|不需要|不用|取消|先不做|(?:^|[，,。；;\s]|请)别(?:帮|给|创建|新建|添加|新增|标记|生成|出)|原文(?:说|中|里)|老师(?:说|要求)|引用|资料(?:内容|里|中)|阅读.{0,8}(?:文字|内容|原文)", value):
         return False
     return not bool(re.search(r"怎么|如何|是否|能否|能不能|为什么|什么意思|(?:可以|能).*吗|[？?]", value))

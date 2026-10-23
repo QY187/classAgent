@@ -7,7 +7,7 @@ from ..review_cards import service as cards
 from ..review_cards.schemas import CardReview
 from ..agent.learning import CARD_STATUSES
 from .course_actions import explicit_request, clean_name
-from .intents import follows_clarification, request_text
+from .intents import follows_clarification, request_text, clarification_origin, is_cancellation
 from .action_records import perform_for_message
 from .access import owned_course, owned_lesson
 
@@ -18,10 +18,12 @@ def _status_target(question):
 
 
 def status_request(question, history=None):
+    if is_cancellation(question):
+        return None
     if not explicit_request(question):
         if not follows_clarification(question, history):
             return None
-        previous = next((item.get("content", "") for item in reversed(history) if item.get("role") == "user"), "")
+        previous = clarification_origin(question, history) or ""
         target = _status_target(previous)
         answer = question.strip().rstrip("？?。！!").strip()
         if not target or answer not in CARD_STATUSES.values():
@@ -41,9 +43,9 @@ def status_request(question, history=None):
                 return {"title": title, "status": next(key for key, label in CARD_STATUSES.items() if label == match[2])}
     answer = question.strip().rstrip("？?。！!").strip()
     if follows_clarification(question, history) and answer in CARD_STATUSES.values():
-        previous = next((item.get("content", "") for item in reversed(history) if item.get("role") == "user"), "")
+        previous = clarification_origin(question, history) or ""
         target = _status_target(previous)
-        if target:
+        if target and status_request(previous) is None:
             return status_request(f"把{target}标记为{answer}")
     return None
 
