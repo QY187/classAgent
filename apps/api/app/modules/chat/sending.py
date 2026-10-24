@@ -113,7 +113,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
                         edit_actions(db, conversation_id, username, question_id, token, question, context),
                 action_hints={"create_course": course_action_hint(question, context), "create_lesson": lesson_action_hint(question, context),
                     "update_knowledge_status": status_request(question, context),
-                    "update_course":edit_action_hint(question), "update_lesson":edit_action_hint(question)}), request_text(question), history=context, on_check=check, on_step=publish_step)
+                    "update_course":edit_action_hint(question, context), "update_lesson":edit_action_hint(question, context)}), request_text(question), history=context, on_check=check, on_step=publish_step)
             if on_progress is not None:
                 publish(result)
         else:

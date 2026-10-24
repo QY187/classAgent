@@ -25,7 +25,7 @@ def follows_clarification(question, history):
     if not history or len(question.strip()) > 200:
         return False
     last = history[-1] if isinstance(history[-1], dict) else {}
-    return last.get("role") == "assistant" and isinstance(last.get("content"), str) and bool(re.search(r"[？?]\s*$", last["content"]))
+    return last.get("role") == "assistant" and isinstance(last.get("content"), str) and bool(re.search(r"[？?]\s*$|请(?:补充|提供|告诉).{0,40}(?:名称|标题|年份|日期)", last["content"]))
 
 
 def explicit_request(question):

@@ -25,7 +25,9 @@ def resolve_lesson_request(question, history):
         if previous_requested and not previous_title:
             supplement = question.strip().rstrip("？?。！!").strip()
             prefix = re.split(r"添加|新增|创建|新建", previous, maxsplit=1)[0]
-            return f"{prefix}添加{supplement}"
+            day = re.search(r"(?:日期|时间)(?:为|是|[：:])?\s*(\d{4}-\d{2}-\d{2})", previous)
+            suffix = f"，日期为{day[1]}" if day else ""
+            return f"{prefix}添加课次：{supplement}{suffix}"
     return question
 
 

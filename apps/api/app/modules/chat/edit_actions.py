@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from ...shared.schemas import CourseUpdate, LessonUpdate
 from ..courses import service as courses
 from .access import owned_course, owned_lesson
-from .intents import explicit_request, request_text
+from .intents import explicit_request, request_text, clarification_origin
 from .course_actions import clean_name
 from .action_records import perform_for_message
 
@@ -37,12 +37,32 @@ def edit_request(question):
     return {"kind":kind, "target":target, "fields":fields}
 
 
-def action_hint(question):
-    return edit_request(question) or {}
+def resolve_edit_request(question, history=None):
+    direct = edit_request(question)
+    if direct:
+        return direct
+    previous = clarification_origin(question, history)
+    origin = edit_request(previous) if previous else None
+    year = re.fullmatch(r"(\d{4})年?[。！! ]*", question.strip())
+    if not origin or not year:
+        return None
+    partial = origin["fields"].get("lesson_date", "")
+    month_day = re.fullmatch(r"(\d{1,2})月(\d{1,2})日?", partial)
+    if not month_day:
+        return None
+    try:
+        day = date(int(year[1]), int(month_day[1]), int(month_day[2])).isoformat()
+    except ValueError:
+        return None
+    return origin | {"fields":origin["fields"] | {"lesson_date":day}}
+
+
+def action_hint(question, history=None):
+    return resolve_edit_request(question, history) or {}
 
 
 def actions_for_message(db, conversation_id, username, message_id, token, question, history=None):
-    request = edit_request(question)
+    request = resolve_edit_request(question, history)
     if not request:
         return {}
     tool = "update_course" if request["kind"] == "course" else "update_lesson"

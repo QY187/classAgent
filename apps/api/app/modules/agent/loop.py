@@ -71,6 +71,11 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                     "citations":[], "outcome":"needs_input", "steps":[]}
     if context.lesson_id:
         check_lesson(db, context, context.lesson_id)
+    edit_hint = context.action_hints.get("update_lesson", {})
+    partial_day = edit_hint.get("fields", {}).get("lesson_date", "")
+    if "update_lesson" in context.actions and re.fullmatch(r"\d{1,2}月\d{1,2}日?", partial_day):
+        return {"answer":f"请补充“{edit_hint.get('target', '该课次')}”日期 {partial_day} 的年份？",
+                "citations":[], "outcome":"needs_input", "steps":[]}
     messages = [{"role": "system", "content": SYSTEM_PROMPT + "\n当前范围：" + json.dumps(
         {"mode":"course" if context.course_id else "global", "course_name":course_name, "course_id": context.course_id, "lesson_id": context.lesson_id}, ensure_ascii=False)}]
     for item in (history or [])[-8:]:
