@@ -10,6 +10,7 @@ from ..rag.service import ground_claims
 from .tools import ToolContext, check_lesson
 from .learning import LearningStore
 from .quiz_results import QuizResultStore
+from .claim_validation import verified_claims
 from .progress import ProgressStore
 from .workflow_queries import WorkflowQueryStore
 
@@ -65,9 +66,9 @@ class EvidenceStore:
             if segment.lesson_id != entry["lesson_id"]:
                 continue
             evidence[key] = SimpleNamespace(lesson_id=lesson.id, start_ms=segment.start_ms,
-                end_ms=segment.end_ms, content=entry["content"], source_segment_ids=json.dumps([segment.id]))
+                end_ms=segment.end_ms, content=entry["content"], full_content=segment.text, source_segment_ids=json.dumps([segment.id]))
             lessons[lesson.id] = lesson
-        return ground_claims(claims, evidence, lessons, citation_offset=citation_offset)
+        return ground_claims(verified_claims(claims, evidence), evidence, lessons, citation_offset=citation_offset)
 
     def catalog_answer(self, db: Session, context: ToolContext, catalog: dict) -> list[str]:
         from .tools import check_course
