@@ -52,7 +52,7 @@ class FinalResponse(ResponseModel):
                 raise ValueError("澄清不能混入未核验的回答")
         elif self.question is not None:
             raise ValueError("补充问题必须使用澄清结果")
-        if self.outcome in {"insufficient_evidence", "actions_completed"} and has_results:
+        if self.outcome == "insufficient_evidence" and has_results:
             raise ValueError("结果类型与内容不一致")
         return self
 

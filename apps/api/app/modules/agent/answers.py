@@ -1,4 +1,5 @@
 """组合已核验的读取结果；每类业务保持自己的查询和权限校验。"""
+import re
 from fastapi import HTTPException
 
 
@@ -43,3 +44,19 @@ def compose_answer(db, context, payload, evidence, steps):
         return {"answer": payload["question"], "citations": [], "outcome": "needs_input", "steps": steps}
     result = evidence.answer(db, context, [])
     return {**result, "outcome": "insufficient_evidence", "steps": steps}
+
+
+def requested_query_groups(question):
+    groups = set()
+    for clause in re.split(r"[，,。；;]|同时|顺便|并且|以及", question):
+        if not re.search(r"查询|列出|查看|看看|告诉|哪些|多少|成绩|正确率|进度", clause):
+            continue
+        if re.search(r"成绩|正确率|作答记录", clause):
+            groups.add("quiz_results")
+        elif re.search(r"小测|待处理|处理阶段|处理进度|失败原因", clause):
+            groups.add("workflow")
+        elif re.search(r"课程进度|缺少纪要", clause):
+            groups.add("progress")
+        elif re.search(r"知识点|错题", clause):
+            groups.add("learning")
+    return groups
