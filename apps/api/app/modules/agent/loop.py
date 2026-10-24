@@ -1,5 +1,6 @@
 """受控工具循环；聊天历史与学习资料写入由对应业务服务负责。"""
 import json
+import re
 from dataclasses import replace
 from time import monotonic
 from fastapi import HTTPException
@@ -57,12 +58,20 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
     user_id_for_username(db, context.username)
     if context.lesson_id is not None and context.course_id is None:
         raise HTTPException(422, "课次范围必须同时绑定所属课程")
+    course_name = None
     if context.course_id:
-        check_course(db, context, context.course_id)
+        current_course = check_course(db, context, context.course_id)
+        course_name = current_course.name
+        from ..courses.service import list_courses
+        others = [row for row in list_courses(db, context.username) if row.id != context.course_id
+                  and row.name + "课程" in question and row.name != course_name]
+        if others:
+            return {"answer":f"当前对话限定在“{course_name}”。要查询“{others[0].name}”，请进入主对话或对应课程对话。",
+                    "citations":[], "outcome":"needs_input", "steps":[]}
     if context.lesson_id:
         check_lesson(db, context, context.lesson_id)
     messages = [{"role": "system", "content": SYSTEM_PROMPT + "\n当前范围：" + json.dumps(
-        {"course_id": context.course_id, "lesson_id": context.lesson_id}, ensure_ascii=False)}]
+        {"mode":"course" if context.course_id else "global", "course_name":course_name, "course_id": context.course_id, "lesson_id": context.lesson_id}, ensure_ascii=False)}]
     for item in (history or [])[-8:]:
         if isinstance(item, dict) and item.get("role") in {"user", "assistant"} and isinstance(item.get("content"), str):
             messages.append({"role": item["role"], "content": item["content"][:1000]})
@@ -71,6 +80,9 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         scope = "先查询本次适用的学习记录，再选择记录出题；无记录时呈现空查询结果。" if context.practice_only else "绑定课程且未明确指定或承接课次时使用整门课程，省略 lesson_ids。"
         messages.append({"role": "system", "content": f"接下来是当前问题的小测生成任务。历史消息中的‘已生成’只代表以前问题的结果，不能代替本次执行。本次必须实际调用 {action} 才能完成生成，不可直接回复已生成。缺少必要范围时按规定澄清；{scope}"})
     messages.append({"role": "system", "content": FINAL_RESPONSE_INSTRUCTION})
+    messages.append({"role":"system", "content":
+        ("当前是主对话：course_id 为 null，允许逐条切换查询本人任意课程。历史主题不绑定范围；本条明确指定的课程优先，先查询定位。不得要求已经在主对话的用户再次进入主对话或绑定课程，不能因未绑定课程拒绝查询。" if context.course_id is None else
+         f"当前是课程对话，范围固定为“{course_name}”。用课程名称说明范围限制，不说其他课程不存在，不输出内部 ID。")})
     messages.append({"role": "user", "content": question.strip()})
     evidence, steps, seen_ids = EvidenceStore(), [], set()
     actions = ActionStore()
@@ -193,6 +205,9 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
 def finalize(db: Session, context: ToolContext, content: str | None, evidence: EvidenceStore, steps: list) -> dict:
     try:
         payload = parse_response(content)
+        if context.course_id is None and payload.get("outcome") == "needs_input" and re.search(
+                r"进入主对话|当前对话.{0,15}(?:未绑定|不是|限定|绑定)|对话范围不是", payload.get("question", "")):
+            raise ValueError("主对话不需要绑定课程才能查询；重新按本条课程名称调用工具")
         return compose_answer(db, context, payload, evidence, steps)
     except (ValueError, TypeError, AttributeError) as exc:
         raise InvalidFinalResponse() from exc
