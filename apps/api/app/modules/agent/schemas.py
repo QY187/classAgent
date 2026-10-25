@@ -87,6 +87,16 @@ class LearningListArguments(PageArguments):
 
 
 class KnowledgeListArguments(LearningListArguments):
+    knowledge_point_id: Identity | None = None
+    body_offset: int = Field(default=0, ge=0, le=100000)
+    body_limit: int = Field(default=600, ge=1, le=4000)
+
+    @model_validator(mode="after")
+    def detail_paging_requires_identity(self):
+        if not self.knowledge_point_id and (self.body_offset or self.body_limit != 600):
+            raise ValueError("正文分页需要指定知识点 ID")
+        return self
+
     status: Literal["all", "new", "review", "mastered"] = "all"
 
 

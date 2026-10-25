@@ -30,6 +30,7 @@ def list_knowledge_points(db, context, args):
     course_id, lesson_id = learning_scope(db, context, args)
     rows = cards.list_lesson_cards(db, lesson_id, context.username) if lesson_id else cards.list_cards(db, context.username)
     rows = [row for row in rows if (not course_id or row["course_id"] == course_id)
+            and (not args.knowledge_point_id or row["id"] == args.knowledge_point_id)
             and (args.status == "all" or row["status"] == args.status)
             and args.query.casefold() in (row["title"] + "\n" + row["body"]).casefold()]
     scoped = []
@@ -45,7 +46,11 @@ def list_knowledge_points(db, context, args):
     rows = scoped
     items = [{key: row[key] for key in ("id", "course_id", "course_name", "lesson_id", "lesson_title",
               "title", "status", "source_segment_id", "source_start_ms")}
-             | {"body": row["body"][:600]} for row in rows]
+             | {"body": row["body"][args.body_offset:args.body_offset + args.body_limit],
+                "body_offset": args.body_offset, "body_total_characters": len(row["body"]),
+                "body_truncated": args.body_offset > 0 or len(row["body"]) > args.body_limit,
+                "next_body_offset": args.body_offset + args.body_limit if args.body_offset + args.body_limit < len(row["body"]) else None,
+                "source_instruction":"正文是知识点记录；核对课堂事实须用 get_transcript 读取该课次当前原文，历史摘录不能作为当前来源。"} for row in rows]
     return {**page(items, args.offset, args.limit), "status_counts": dict(Counter(row["status"] for row in rows)),
             "filters": args.model_dump() | {"course_id": course_id, "lesson_id": lesson_id},
             "status_origin": "user_marked"}
