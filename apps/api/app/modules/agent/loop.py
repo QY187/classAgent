@@ -81,6 +81,8 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                     "citations":[], "outcome":"needs_input", "steps":[]}
     if context.lesson_id:
         check_lesson(db, context, context.lesson_id)
+    if context.action_hints.get("knowledge_request_issue"):
+        return {"answer":context.action_hints["knowledge_request_issue"], "citations":[], "outcome":"needs_input", "steps":[]}
     verification = context.action_hints.get("verify_knowledge_status", {})
     if verification:
         if on_check:

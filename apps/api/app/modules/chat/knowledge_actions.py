@@ -50,6 +50,14 @@ def status_request(question, history=None):
     return None
 
 
+def status_request_issue(question):
+    requests = [status_request(clause) for clause in re.split(r"[，,。；;\n]|(?=再(?:把|将))", question)]
+    targets = {(item["title"], item["status"]) for item in requests if item}
+    if len(targets) > 1:
+        return "当前每条问题只能修改一个知识点。请明确选择其中一个，或分别发送两条修改指令。"
+    return ""
+
+
 def candidate_cards(db, username, scope, requested):
     rows = []
     for row in cards.list_cards(db, username):
@@ -91,6 +99,8 @@ def status_verification_hint(db, username, scope, question, history):
 
 def actions_for_message(db, conversation_id, username, message_id, token, question, history=None):
     raw_question = question
+    if status_request_issue(question):
+        return {}
     intent = status_request(question, history)
     if not intent:
         return {}
