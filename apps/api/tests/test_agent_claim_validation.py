@@ -22,3 +22,22 @@ class ClaimValidationTest(unittest.TestCase):
         self.assertEqual(self.check("叶子节点没有孩子。","叶子节点没有孩子。")[0]["text"],"叶子节点没有孩子。")
         self.assertEqual(self.check("叶子节点没有","叶子节点没有孩子。",read="叶子节点没有"),[])
         self.assertEqual(verified_claims([{"text":"伪造","source_ids":["E99"]}],{}),[])
+
+    def test_case_sensitive_symbols_and_spacing_are_not_conflated(self):
+        from types import SimpleNamespace
+        from app.modules.agent.claim_validation import verified_claims
+        for source,wrong in [("变量 X 与 x 不同。","变量 x 与 x 不同。"),("标识符 a b 与 ab 不同。","标识符 ab 与 ab 不同。")]:
+            evidence={"E1":SimpleNamespace(full_content=source,content=source)}
+            result=verified_claims([{"text":wrong,"source_ids":["E1"]}],evidence)
+            self.assertTrue(result[0]["text"].startswith("课堂原文："))
+            self.assertNotEqual(result[0]["text"],wrong)
+
+    def test_each_sentence_keeps_only_its_supporting_sources(self):
+        from types import SimpleNamespace
+        from app.modules.agent.claim_validation import verified_claims
+        evidence={"E1":SimpleNamespace(full_content="叶子没有孩子。",content="叶子没有孩子。"),
+                  "E2":SimpleNamespace(full_content="导数为2x。",content="导数为2x。")}
+        result=verified_claims([{"text":"导数为2x。","source_ids":["E1","E2"]}],evidence)
+        self.assertEqual(result[0]["source_ids"],["E2"])
+        result=verified_claims([{"text":"叶子没有孩子。导数为2x。","source_ids":["E1","E2"]}],evidence)
+        self.assertEqual([r["source_ids"] for r in result],[["E1"],["E2"]])

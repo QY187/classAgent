@@ -3,7 +3,7 @@ import re
 
 
 def normalize(text):
-    return re.sub(r"[\s，,。！？!?；;：:‘’“”\"']", "", text).casefold()
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def sentences(text):
@@ -25,7 +25,10 @@ def verified_claims(claims, evidence):
         claim_units = sentences(claim["text"])
         supported = {normalize(unit) for unit,_ in units}
         if claim_units and all(normalize(unit) in supported for unit in claim_units):
-            verified.append(claim)
+            for claim_unit in claim_units:
+                supporting_ids = list(dict.fromkeys(key for unit,key in units if normalize(unit) == normalize(claim_unit)))
+                verified.append({"text":claim["text"] if len(claim_units) == 1 else claim_unit,
+                                 "source_ids":supporting_ids})
             continue
         # 引用编号真实不等于改写结论真实。回退为原文，不展示未核对的自由结论。
         selected, used = [], set()
