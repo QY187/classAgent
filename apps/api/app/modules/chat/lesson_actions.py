@@ -7,7 +7,7 @@ from ...shared.schemas import LessonCreate
 from ..courses import service as courses
 from .action_records import perform_for_message
 from .access import owned_course, owned_lesson
-from .course_actions import explicit_request, clean_name, requested_course
+from .course_actions import explicit_request, clean_name, requested_course, resolve_course_request
 from .intents import follows_clarification, request_text, clarification_origin
 
 
@@ -17,6 +17,9 @@ PREFIX = r"(?:请|帮我|给我|麻烦你|麻烦|然后|再|我想要|我想|你
 def resolve_lesson_request(question, history):
     if lesson_request(question)[0]:
         return question
+    course_request = resolve_course_request(question, history)
+    if course_request != question and lesson_request(course_request)[0]:
+        return course_request
     if follows_clarification(question, history) and question.strip() and not re.search(r"什么|为什么|解释|查询|看看|生成|修改|标记", question):
         previous = clarification_origin(question, history)
         if previous is None:

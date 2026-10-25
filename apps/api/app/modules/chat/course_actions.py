@@ -46,7 +46,8 @@ def resolve_course_request(question, history):
         previous_is_create = requested_course(previous)
         if previous_is_create and not course_name(previous):
             supplement = clean_name(question).rstrip("？?。！!").strip()
-            return f"创建{supplement.removesuffix('课程')}课程"
+            first_clause = re.split(r"[，,。；;\n]", previous, maxsplit=1)[0]
+            return f"创建{supplement.removesuffix('课程')}课程" + previous[len(first_clause):]
     return question
 
 
