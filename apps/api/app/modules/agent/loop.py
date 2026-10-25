@@ -52,6 +52,16 @@ SYSTEM_PROMPT = """你是课堂学习 Agent，只使用提供的工具完成用�
 资料不足时只输出 {"outcome":"insufficient_evidence","claims":[]}。"""
 
 
+def mentioned_courses(question, courses):
+    matches = [(m.start(), m.end(), row) for row in courses
+               for m in re.finditer(re.escape(row.name + "课程"), question)]
+    selected = []
+    for start, end, row in sorted(matches, key=lambda item: item[1] - item[0], reverse=True):
+        if not any(start < other_end and end > other_start for other_start, other_end, _ in selected):
+            selected.append((start, end, row))
+    return [row for _, _, row in sorted(selected, key=lambda item:item[0])]
+
+
 def run_agent(db: Session, context: ToolContext, question: str, *, history: list[dict] | None = None,
               on_step=None, on_check=None) -> dict:
     if not isinstance(question, str) or not 2 <= len(question.strip()) <= 1000:
@@ -64,8 +74,8 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         current_course = check_course(db, context, context.course_id)
         course_name = current_course.name
         from ..courses.service import list_courses
-        others = [row for row in list_courses(db, context.username) if row.id != context.course_id
-                  and row.name + "课程" in question and row.name != course_name]
+        others = [row for row in mentioned_courses(question, list_courses(db, context.username))
+                  if row.id != context.course_id]
         if others:
             return {"answer":f"当前对话限定在“{course_name}”。要查询“{others[0].name}”，请进入主对话或对应课程对话。",
                     "citations":[], "outcome":"needs_input", "steps":[]}

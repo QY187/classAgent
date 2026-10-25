@@ -37,3 +37,19 @@ class ScopeAccuracyTest(unittest.TestCase):
             self.assertNotIn("不存在",result["answer"])
             self.assertEqual(result["outcome"],"needs_input")
             model.assert_not_called()
+
+    def test_overlapping_names_use_longest_mention_but_keep_separate_mentions(self):
+        from types import SimpleNamespace
+        from app.modules.agent.loop import mentioned_courses
+        courses = [SimpleNamespace(id="short",name="数学"),SimpleNamespace(id="long",name="高等数学")]
+        self.assertEqual([r.id for r in mentioned_courses("高等数学课程里导数是什么",courses)],["long"])
+        self.assertEqual([r.id for r in mentioned_courses("比较高等数学课程和数学课程",courses)],["long","short"])
+
+    @patch("app.modules.agent.loop.complete")
+    def test_current_long_course_name_is_not_blocked(self, model):
+        with Session(self.engine) as db:
+            db.add_all([Course(id="math",owner_id="u",name="高等数学"),Course(id="short",owner_id="u",name="数学")]);db.commit()
+            model.return_value={"content":'{"claims":[],"outcome":"insufficient_evidence"}'}
+            result=run_agent(db,ToolContext("owner","math"),"高等数学课程的内容是什么")
+            model.assert_called_once()
+            self.assertEqual(result["outcome"],"insufficient_evidence")
