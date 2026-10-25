@@ -81,6 +81,9 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                     "citations":[], "outcome":"needs_input", "steps":[]}
     if context.lesson_id:
         check_lesson(db, context, context.lesson_id)
+    creation_issue = context.action_hints.get("create_course", {}).get("issue")
+    if "create_course" in context.actions and creation_issue:
+        return {"answer":creation_issue, "citations":[], "outcome":"needs_input", "steps":[]}
     if "create_course" in context.actions and context.action_hints.get("create_course", {}).get("name") is None and "create_course" in context.action_hints:
         return {"answer":"请提供要创建的课程名称？", "citations":[], "outcome":"needs_input", "steps":[]}
     if context.action_hints.get("knowledge_request_issue"):

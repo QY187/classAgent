@@ -33,6 +33,7 @@ class CourseProgressArguments(PageArguments):
 
 class CreateCourseArguments(ToolArguments):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    semester: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)] | None = None
 
 
 class CreateLessonArguments(ToolArguments):
