@@ -4,10 +4,13 @@ from app.modules.chat.edit_actions import actions_for_message, resolve_edit_requ
 from app.modules.chat.lesson_actions import action_hint
 from app.modules.agent.schemas import UpdateLessonArguments
 from app.shared.models import Lesson
-from test_agent_edits import EditTest
+import test_agent_edits as edits
 
 
-class FieldFollowupTest(EditTest):
+class FieldFollowupTest(unittest.TestCase):
+    setUp = edits.EditTest.setUp
+    tearDown = edits.EditTest.tearDown
+    seed = edits.EditTest.seed
     def test_year_followup_writes_original_target_and_only_date(self):
         text = "2026年"
         self.seed(text)

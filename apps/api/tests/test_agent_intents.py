@@ -30,14 +30,20 @@ class IntentTest(unittest.TestCase):
 
     def test_clarified_action_parameters_resume_the_original_request(self):
         lesson_history = [
-            {"role": "user", "content": "请添加课次，标题是什么？"},
+            {"role": "user", "content": "请添加课次"},
             {"role": "assistant", "content": "请提供要添加的课次标题？"},
         ]
-        self.assertEqual(resolve_lesson_request("第三讲", lesson_history), "请添加第三讲")
+        self.assertEqual(resolve_lesson_request("第三讲", lesson_history), "请添加课次：第三讲")
         self.assertEqual(lesson_request(resolve_lesson_request("第三讲", lesson_history)), (True, "第三讲"))
 
         status_history = [
-            {"role": "user", "content": "帮我把前序遍历标记为什么状态？"},
+            {"role": "user", "content": "帮我把前序遍历标记为"},
             {"role": "assistant", "content": "要标记为哪种状态？"},
         ]
         self.assertEqual(status_request("已掌握", status_history), {"title": "前序遍历", "status": "mastered"})
+
+    def test_consultation_followup_never_resumes_a_write(self):
+        for original, reply in [("请添加课次，标题是什么？", "第三讲"), ("帮我把前序遍历标记为什么状态？", "已掌握")]:
+            history = [{"role":"user", "content":original}, {"role":"assistant", "content":"请提供要设置的参数？"}]
+            self.assertEqual(resolve_lesson_request(reply,history),reply)
+            self.assertIsNone(status_request(reply,history))
