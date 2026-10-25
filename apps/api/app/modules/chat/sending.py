@@ -19,7 +19,7 @@ from .edit_actions import actions_for_message as edit_actions, action_hint as ed
 from .retry_actions import actions_for_message as retry_actions
 from .intents import request_text
 from .lesson_actions import actions_for_message as lesson_actions, action_hint as lesson_action_hint
-from .knowledge_actions import actions_for_message as knowledge_actions, status_request
+from .knowledge_actions import actions_for_message as knowledge_actions, status_request, status_verification_hint
 
 
 def _finish_failed(db: Session, conversation_id: str, request_id: str, token: str, error: str):
@@ -113,6 +113,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
                         edit_actions(db, conversation_id, username, question_id, token, question, context),
                 action_hints={"create_course": course_action_hint(question, context), "create_lesson": lesson_action_hint(question, context),
                     "update_knowledge_status": status_request(question, context),
+                    "verify_knowledge_status":status_verification_hint(db, username, course_id, question, context),
                     "update_course":edit_action_hint(question, context), "update_lesson":edit_action_hint(question, context)}), request_text(question), history=context, on_check=check, on_step=publish_step)
             if on_progress is not None:
                 publish(result)

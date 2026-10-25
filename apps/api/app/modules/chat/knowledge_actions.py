@@ -72,6 +72,23 @@ def candidate_cards(db, username, scope, requested):
     return exact or [row for row, _ in rows]
 
 
+def status_verification_hint(db, username, scope, question, history):
+    # 只产生读取提示；不恢复历史写权限，也不把历史回执当作当前状态。
+    if not re.fullmatch(r"(?:请问)?(?:刚才|刚刚|之前).{0,12}(?:成功|完成)(?:了)?(?:吗|么)?[？?。!！ ]*", question.strip()):
+        return {}
+    previous = next((item.get("content", "") for item in reversed(history or []) if item.get("role") == "user"), "")
+    intent = status_request(previous)
+    if not intent:
+        return {}
+    try:
+        targets = candidate_cards(db, username, scope, intent["title"])
+    except HTTPException:
+        return {}
+    if len(targets) == 1:
+        return {"knowledge_point_id":targets[0]["id"]}
+    return {"ambiguous":True}
+
+
 def actions_for_message(db, conversation_id, username, message_id, token, question, history=None):
     raw_question = question
     intent = status_request(question, history)

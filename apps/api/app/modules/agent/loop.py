@@ -71,6 +71,27 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                     "citations":[], "outcome":"needs_input", "steps":[]}
     if context.lesson_id:
         check_lesson(db, context, context.lesson_id)
+    verification = context.action_hints.get("verify_knowledge_status", {})
+    if verification:
+        if on_check:
+            on_check()
+        if verification.get("ambiguous"):
+            return {"answer":"请明确要核对的课程和知识点，目标缺失或有多个同名记录。", "citations":[], "outcome":"needs_input", "steps":[]}
+        step = {"id":"verify-status", "tool":"list_knowledge_points", "status":"running"}
+        if on_step:
+            on_step(dict(step))
+        result = execute_tool(db, context, "list_knowledge_points", {"knowledge_point_id":verification["knowledge_point_id"]})
+        if on_check:
+            on_check()
+        step["status"] = "completed" if result["ok"] else "failed"
+        if on_step:
+            on_step(dict(step))
+        if not result["ok"]:
+            return {"answer":"当前知识点状态无法核对，请确认资料仍存在。", "citations":[], "outcome":"operation_failed", "steps":[step]}
+        store = EvidenceStore()
+        store.collect(db, context, "list_knowledge_points", result)
+        return {"answer":store.learning.answer(db, context, {"query_ids":[result["data"]["learning_query_id"]]}),
+                "citations":[], "outcome":"answered", "steps":[step]}
     edit_hint = context.action_hints.get("update_lesson", {})
     partial_day = edit_hint.get("fields", {}).get("lesson_date", "")
     if "update_lesson" in context.actions and re.fullmatch(r"\d{1,2}月\d{1,2}日?", partial_day):
