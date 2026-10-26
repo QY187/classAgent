@@ -53,10 +53,23 @@ def requested_query_groups(question):
             continue
         if re.search(r"成绩|正确率|作答记录", clause):
             groups.add("quiz_results")
-        elif re.search(r"小测|待处理|处理阶段|处理进度|失败原因", clause):
+        if re.search(r"待处理|处理阶段|处理进度|失败原因|未作答|还没做|没有做", clause) or ("小测" in clause and not re.search(r"成绩|正确率|作答记录", clause)):
             groups.add("workflow")
-        elif re.search(r"课程进度|缺少纪要", clause):
+        if re.search(r"课程进度|缺少纪要", clause):
             groups.add("progress")
-        elif re.search(r"知识点|错题", clause):
+        if re.search(r"知识点|错题", clause):
             groups.add("learning")
+    if requested_catalog_kinds(question):
+        groups.add("catalog")
     return groups
+
+
+def requested_catalog_kinds(question):
+    kinds = set()
+    if not re.search(r"查询|列出|查看|看看|告诉|哪些|有哪些", question):
+        return kinds
+    if re.search(r"所有课程|全部课程|课程列表|课程目录|课程名称|有哪些课程", question):
+        kinds.add("list_courses")
+    if re.search(r"所有课次|全部课次|课次列表|课次目录|有哪些课次", question) and not re.search(r"待处理|未完成|没有纪要|缺少纪要", question):
+        kinds.add("list_lessons")
+    return kinds

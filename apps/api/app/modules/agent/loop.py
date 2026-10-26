@@ -15,7 +15,7 @@ from .tools import ToolContext, check_course, check_lesson
 from .schemas import PracticeQuizArguments
 from .actions import ActionStore
 from .responses import parse_response, InvalidFinalResponse, FINAL_RESPONSE_INSTRUCTION, REPAIR_INSTRUCTION
-from .answers import compose_answer, requested_query_groups
+from .answers import compose_answer, requested_query_groups, requested_catalog_kinds
 
 
 MAX_ROUNDS = 6
@@ -183,10 +183,12 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         if not calls:
             if actions.results:
                 groups = requested_query_groups(question)
-                if any(not getattr(evidence, group).queries for group in groups) and not repaired:
+                catalog_kinds = requested_catalog_kinds(question)
+                missing = [group for group in groups if (not evidence.catalog_complete(catalog_kinds) if group == "catalog" else not getattr(evidence, group).queries)]
+                if missing and not repaired:
                     repaired = True
                     messages.append(message)
-                    messages.append({"role":"system","content":"操作已经实际执行，不要重复写入。本条还有查询要求尚未完成，请调用对应读取工具，再用 workflow 等查询编号返回组合结果。"})
+                    messages.append({"role":"system","content":"操作已经实际执行，不要重复写入。本条还有查询要求尚未完成：" + "、".join(sorted(missing)) + "。请补齐这些读取，目录用 catalog 返回，业务查询用相应查询编号返回；有下一页时继续读取，不能重复写入。"})
                     continue
                 answer = actions.answer()
                 try:
@@ -194,6 +196,9 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 except (ValueError, TypeError):
                     payload = {"claims":[]}
                 for group in groups:
+                    if group == "catalog":
+                        payload["catalog"] = evidence.catalog_selection(catalog_kinds)
+                        continue
                     queries = getattr(evidence, group).queries
                     if queries:
                         payload[group] = {"query_ids":list(queries)}
@@ -205,8 +210,9 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                         answer += "\n\n其他查询结果未通过核验，请重新查询。"
                 if combined:
                     answer += "\n\n" + combined["answer"]
-                elif groups:
-                    answer += "\n\n本条查询尚未完成，请重新查询。"
+                if missing:
+                    labels = {"catalog":"课程或课次目录", "progress":"课程进度", "workflow":"处理或小测记录", "learning":"知识点或错题", "quiz_results":"小测成绩"}
+                    answer += "\n\n尚未完整完成的查询：" + "、".join(labels[group] for group in sorted(missing)) + "。请继续查询。"
                 if actions.errors:
                     answer += "\n\n未完成的操作：" + "；".join(actions.errors.values())
                 if set(context.actions) - set(actions.results):
@@ -250,7 +256,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 check()
             if len(json.dumps(result, ensure_ascii=False)) > 64000:
                 result = failure(name, "result_too_large", "读取结果过长，请减小 limit 分页读取")
-            evidence.collect(db, context, name, result)
+            evidence.collect(db, context, name, result, json.loads(call["function"]["arguments"]) if result["ok"] else None)
             actions.collect(context, name, result)
             if name == "create_course" and result["ok"]:
                 evidence.course_ids.add(result["data"]["id"])

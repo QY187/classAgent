@@ -18,6 +18,7 @@ from .workflow_queries import WorkflowQueryStore
 class EvidenceStore:
     def __init__(self):
         self.entries = {}
+        self.catalog_reads = []
         self.course_ids = set()
         self.lesson_ids = set()
         self.learning = LearningStore()
@@ -25,7 +26,7 @@ class EvidenceStore:
         self.progress = ProgressStore()
         self.workflow = WorkflowQueryStore()
 
-    def collect(self, db: Session, context: ToolContext, name: str, result: dict):
+    def collect(self, db: Session, context: ToolContext, name: str, result: dict, arguments=None):
         if not result["ok"]:
             return
         self.learning.collect(name, result)
@@ -33,6 +34,7 @@ class EvidenceStore:
         self.progress.collect(name, result)
         self.workflow.collect(name, result)
         if name in {"list_courses", "list_lessons"}:
+            self.catalog_reads.append((name, arguments or {}, result["data"]))
             target = self.course_ids if name == "list_courses" else self.lesson_ids
             target.update(row["id"] for row in result["data"]["items"])
             return
@@ -69,6 +71,33 @@ class EvidenceStore:
                 end_ms=segment.end_ms, content=entry["content"], full_content=segment.text, source_segment_ids=json.dumps([segment.id]))
             lessons[lesson.id] = lesson
         return ground_claims(verified_claims(claims, evidence), evidence, lessons, citation_offset=citation_offset)
+
+    def catalog_selection(self, kinds):
+        selected = {"course_ids":[], "lesson_ids":[]}
+        for name, args, data in self.catalog_reads:
+            if name in kinds and not args.get("query"):
+                key = "course_ids" if name == "list_courses" else "lesson_ids"
+                selected[key].extend(row["id"] for row in data["items"])
+        return selected
+
+    def catalog_complete(self, kinds):
+        for kind in kinds:
+            reads = [(args, data) for name, args, data in self.catalog_reads if name == kind and not args.get("query")]
+            scopes = {args.get("course_id") for args, _ in reads}
+            complete = False
+            for scope in scopes:
+                pages = {args.get("offset",0):data for args,data in reads if args.get("course_id") == scope}
+                offset, seen = 0, set()
+                while offset in pages and offset not in seen:
+                    seen.add(offset)
+                    following = pages[offset].get("next_offset")
+                    if following is None:
+                        complete = True
+                        break
+                    offset = following
+            if not complete:
+                return False
+        return True
 
     def catalog_answer(self, db: Session, context: ToolContext, catalog: dict) -> list[str]:
         from .tools import check_course
