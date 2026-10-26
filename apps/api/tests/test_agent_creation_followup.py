@@ -40,3 +40,16 @@ class CreationFollowupTest(unittest.TestCase):
             self.assertIn("添加第三讲",resolve_course_request("线性代数",history))
             self.assertIn("添加第三讲",resolve_lesson_request("线性代数",history))
             self.assertEqual(resolve_lesson_request("取消",history),"取消")
+
+    @patch("app.modules.agent.loop.complete")
+    def test_global_missing_title_is_clarified_before_model_and_keeps_date(self,model):
+        with Session(self.engine) as db:
+            chat=create_global_conversation(db,"owner")
+            send_message(db,chat["id"],"owner","在数据结构课程添加课次，日期为2026-10-05。","first")
+            model.assert_not_called()
+            model.side_effect=[call("find","list_courses",{"query":"数据结构"}),
+                call("create","create_lesson",{"course_id":"c","title":"第三讲","lesson_date":"2026-10-05"}),{"content":"{}"}]
+            send_message(db,chat["id"],"owner","第三讲","second")
+            created=next(row for row in db.query(Lesson).all() if row.title=="第三讲")
+            self.assertEqual(created.course_id,"c")
+            self.assertEqual(created.lesson_date,"2026-10-05")
