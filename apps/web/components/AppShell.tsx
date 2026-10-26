@@ -98,7 +98,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <aside id="app-sidebar" className={`sidebar${sidebarCollapsed ? " sidebar-collapsed" : ""}`} aria-label="左侧导航">
         {!sidebarCollapsed && <button type="button" className="sidebar-mobile-close" onClick={toggleSidebar} aria-label="关闭左侧导航" title="关闭左侧导航">×</button>}
         <Link href="/" className="brand" aria-label="ClassAgent 课程库" title="ClassAgent 课程库">
-          <span className="brand-mark">C</span>
+          <img className="brand-mark" src="/classagent-logo.svg" alt="" aria-hidden="true" />
           <span className="brand-copy"><span className="brand-name">ClassAgent</span><span className="brand-subtitle">课堂学习助手</span></span>
         </Link>
         <div className="nav-label">我的空间</div>

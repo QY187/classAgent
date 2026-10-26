@@ -56,7 +56,7 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <span className="brand-mark">C</span>
+          <img className="brand-mark" src="/classagent-logo.svg" alt="" aria-hidden="true" />
           <span className="brand-copy"><span className="brand-name">ClassAgent</span><span className="brand-subtitle">课堂学习助手</span></span>
         </div>
         <h1>{mode === "login" ? "登录到你的资料库" : "创建新账号"}</h1>
