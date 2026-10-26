@@ -19,7 +19,10 @@ def _status_target(question):
 
 def status_request(question, history=None):
     if is_cancellation(question):
-        return None
+        affirmative = affirmative_status_instruction(question)
+        if not affirmative:
+            return None
+        question = affirmative
     if not explicit_request(question):
         if not follows_clarification(question, history):
             return None
@@ -50,9 +53,36 @@ def status_request(question, history=None):
     return None
 
 
+def affirmative_status_instruction(question):
+    # 仅允许独立、完整的肯定指令；全局取消、咨询、引用和同目标冲突仍不授权。
+    if re.search(r"老师|原文|资料|引用|假设|如果|示例|举例|怎么|如何|能否|[？?]", question):
+        return None
+    clauses = [clause.strip() for clause in re.split(r"[，,。；;\n]", question) if clause.strip()]
+    negatives = [clause for clause in clauses if is_cancellation(clause)]
+    targets = []
+    for clause in negatives:
+        match = re.fullmatch(r"(?:请)?不要(?:修改|标记|设置|把|将)(.+)", clause)
+        if not match:
+            return None
+        target = _status_target(clause) or match[1].removesuffix("的状态").strip()
+        if not target or re.search(r"全部|所有|任何|这些|它们", target):
+            return None
+        targets.append(target)
+    positives = [(clause, status_request(clause)) for clause in clauses if not is_cancellation(clause)]
+    positives = [(clause,intent) for clause,intent in positives if intent]
+    if len(positives) != 1 or not targets:
+        return None
+    clause, intent = positives[0]
+    if any(target in intent["title"] or intent["title"] in target for target in targets):
+        return None
+    return clause
+
+
 def status_request_issue(question):
     requests = [status_request(clause) for clause in re.split(r"[，,。；;\n]|(?=再(?:把|将))", question)]
     targets = {(item["title"], item["status"]) for item in requests if item}
+    if is_cancellation(question) and targets and not affirmative_status_instruction(question):
+        return "这条指令包含取消、范围不明确或相互冲突的修改要求。请重新明确要修改的单个知识点及状态；当前未执行修改。"
     if len(targets) > 1:
         return "当前每条问题只能修改一个知识点。请明确选择其中一个，或分别发送两条修改指令。"
     return ""
