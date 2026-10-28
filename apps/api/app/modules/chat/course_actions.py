@@ -39,7 +39,9 @@ def semester_fields(question):
     return values[0] if values else None, ""
 
 
-def action_hint(question, history=None):
+def action_hint(question, history=None, semantic=None):
+    if semantic is not None:
+        return semantic.get("create_course", {})
     authorization = resolve_course_request(question, history)
     semester, issue = semester_fields(authorization)
     return {"name": course_name(authorization), "semester":semester, "issue":issue,
@@ -61,13 +63,14 @@ def resolve_course_request(question, history):
     return question
 
 
-def actions_for_message(db, conversation_id, username, message_id, token, question, history=None):
+def actions_for_message(db, conversation_id, username, message_id, token, question, history=None, semantic=None):
     actions = {}
-    authorization = resolve_course_request(question, history)
-    if requested_course(authorization):
+    authorization = resolve_course_request(question, history) if semantic is None else question
+    intent = semantic.get("create_course") if semantic is not None else None
+    if intent is not None or (semantic is None and requested_course(authorization)):
         def create(args):
-            name = course_name(authorization)
-            semester, issue = semester_fields(authorization)
+            name = intent["name"] if intent is not None else course_name(authorization)
+            semester, issue = (intent["semester"], "") if intent is not None else semester_fields(authorization)
             def validate(db, conversation, message, previous):
                 if conversation.course_id or conversation.lesson_id:
                     raise HTTPException(403, "请在主对话创建新课程")

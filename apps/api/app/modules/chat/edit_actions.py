@@ -57,12 +57,14 @@ def resolve_edit_request(question, history=None):
     return origin | {"fields":origin["fields"] | {"lesson_date":day}}
 
 
-def action_hint(question, history=None):
+def action_hint(question, history=None, semantic=None):
+    if semantic is not None:
+        return semantic.get("edit", {})
     return resolve_edit_request(question, history) or {}
 
 
-def actions_for_message(db, conversation_id, username, message_id, token, question, history=None):
-    request = resolve_edit_request(question, history)
+def actions_for_message(db, conversation_id, username, message_id, token, question, history=None, semantic=None):
+    request = semantic.get("edit") if semantic is not None else resolve_edit_request(question, history)
     if not request:
         return {}
     tool = "update_course" if request["kind"] == "course" else "update_lesson"

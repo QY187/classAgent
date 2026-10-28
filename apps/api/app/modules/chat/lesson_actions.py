@@ -1,5 +1,6 @@
 """添加课次的指令解析与业务接入；不改变既有页面的课次排序规则。"""
 import re
+from datetime import date
 from fastapi import HTTPException
 from sqlalchemy import select
 from ...shared.models import AgentAction
@@ -34,7 +35,9 @@ def resolve_lesson_request(question, history):
     return question
 
 
-def action_hint(question, history=None):
+def action_hint(question, history=None, semantic=None):
+    if semantic is not None:
+        return semantic.get("create_lesson", {})
     authorization = resolve_lesson_request(question, history)
     requested, title = lesson_request(authorization)
     match = re.search(r"(?:日期|时间)(?:为|是|[：:])?\s*(\d{4}-\d{2}-\d{2})", authorization)
@@ -68,10 +71,14 @@ def named_courses(db, username, question):
             re.search(r"(?:在|给|为)\s*[“\"]?" + re.escape(row.name) + r"[”\"]?(?:下|中|里|的)?(?:添加|新增|创建|新建)", question)]
 
 
-def actions_for_message(db, conversation_id, username, message_id, token, question, history=None):
+def actions_for_message(db, conversation_id, username, message_id, token, question, history=None, semantic=None):
     raw_question = question
-    question = resolve_lesson_request(question, history)
-    requested, title = lesson_request(question)
+    question = resolve_lesson_request(question, history) if semantic is None else question
+    intent = semantic.get("create_lesson") if semantic is not None else None
+    if semantic is None:
+        requested, title = lesson_request(question)
+    else:
+        requested, title = intent is not None, intent["title"] if intent is not None else None
     if not requested:
         return {}
     def create(args):
@@ -84,21 +91,28 @@ def actions_for_message(db, conversation_id, username, message_id, token, questi
                 if args.course_id != conversation.course_id:
                     raise HTTPException(404, "课程不存在")
                 named = re.search(r"(?:在|给|为)\s*(.{1,200}?)课程", question)
-                if named and clean_name(named[1]) != owned_course(db, conversation.course_id, username).name:
+                target_name = intent["course"] if intent is not None else (clean_name(named[1]) if named else None)
+                if target_name and target_name != owned_course(db, conversation.course_id, username).name:
                     raise HTTPException(400, "当前对话绑定其他课程，请进入目标课程对话或主对话")
             else:
-                candidates = named_courses(db, username, question)
+                candidates = [row for row in courses.list_courses(db, username) if row.name == intent["course"]] if intent is not None else named_courses(db, username, question)
                 if len(candidates) != 1 or candidates[0].id != args.course_id:
                     raise HTTPException(400, "请明确唯一的目标课程，或进入对应课程对话添加课次")
             course = owned_course(db, args.course_id, username, lock=True)
-            if requested_course(question):
+            if (semantic is not None and "create_course" in semantic) or (semantic is None and requested_course(question)):
                 import json
                 created = db.scalar(select(AgentAction).where(AgentAction.message_id == message_id, AgentAction.tool == "create_course"))
                 if created is None or json.loads(created.result_json)["id"] != course.id:
                     raise HTTPException(400, "请先成功创建本条指令指定的课程，再添加课次")
             date_match = re.search(r"(?:日期|时间)(?:为|是|[：:])?\s*(\d{4}-\d{2}-\d{2})", question)
-            expected_date = date_match[1] if date_match else None
-            if args.lesson_date != expected_date or (re.search(r"日期|时间", question) and not date_match):
+            expected_date = intent["lesson_date"] if intent is not None else (date_match[1] if date_match else None)
+            invalid_date = False
+            if expected_date is not None:
+                try:
+                    invalid_date = date.fromisoformat(expected_date).isoformat() != expected_date
+                except ValueError:
+                    invalid_date = True
+            if args.lesson_date != expected_date or invalid_date or (semantic is None and re.search(r"日期|时间", question) and not date_match):
                 raise HTTPException(400, "日期需由你明确指定为 YYYY-MM-DD；未指定时保持为空")
             if previous:
                 lesson = owned_lesson(db, previous["id"], username)

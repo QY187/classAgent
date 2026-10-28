@@ -88,8 +88,9 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         return {"answer":"请提供要创建的课程名称？", "citations":[], "outcome":"needs_input", "steps":[]}
     if "create_lesson" in context.actions and "create_lesson" in context.action_hints and context.action_hints["create_lesson"].get("title") is None:
         return {"answer":"请提供要添加的课次标题？", "citations":[], "outcome":"needs_input", "steps":[]}
-    if context.action_hints.get("knowledge_request_issue"):
-        return {"answer":context.action_hints["knowledge_request_issue"], "citations":[], "outcome":"needs_input", "steps":[]}
+    write_issue = context.action_hints.get("write_request_issue") or context.action_hints.get("knowledge_request_issue")
+    if write_issue:
+        return {"answer":write_issue, "citations":[], "outcome":"needs_input", "steps":[]}
     verification = context.action_hints.get("verify_knowledge_status", {})
     if verification:
         if on_check:
@@ -116,6 +117,17 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
     if "update_lesson" in context.actions and re.fullmatch(r"\d{1,2}月\d{1,2}日?", partial_day):
         return {"answer":f"请补充“{edit_hint.get('target', '该课次')}”日期 {partial_day} 的年份？",
                 "citations":[], "outcome":"needs_input", "steps":[]}
+    from datetime import date
+    dates = [("create_lesson", context.action_hints.get("create_lesson", {}).get("lesson_date")),
+             ("update_lesson", partial_day)]
+    for action, day in dates:
+        if action not in context.actions or not day:
+            continue
+        try:
+            if date.fromisoformat(day).isoformat() != day:
+                raise ValueError()
+        except ValueError:
+            return {"answer":"请提供包含年份的有效完整日期 YYYY-MM-DD？", "citations":[], "outcome":"needs_input", "steps":[]}
     messages = [{"role": "system", "content": SYSTEM_PROMPT + "\n当前范围：" + json.dumps(
         {"mode":"course" if context.course_id else "global", "course_name":course_name, "course_id": context.course_id, "lesson_id": context.lesson_id}, ensure_ascii=False)}]
     for item in (history or [])[-8:]:

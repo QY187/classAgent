@@ -127,11 +127,11 @@ def status_verification_hint(db, username, scope, question, history):
     return {"ambiguous":True}
 
 
-def actions_for_message(db, conversation_id, username, message_id, token, question, history=None):
+def actions_for_message(db, conversation_id, username, message_id, token, question, history=None, semantic=None):
     raw_question = question
-    if status_request_issue(question):
+    if semantic is None and status_request_issue(question):
         return {}
-    intent = status_request(question, history)
+    intent = semantic.get("knowledge") if semantic is not None else status_request(question, history)
     if not intent:
         return {}
     def update(args):
