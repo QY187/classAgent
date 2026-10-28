@@ -13,7 +13,7 @@ from .generation import is_generating, GenerationStopped
 from .context import recent_context
 from .previews import save_preview
 from .agent_progress import save_agent_step
-from .quiz_actions import wants_quiz, wants_practice_quiz, generate_for_message
+from .quiz_actions import resolve_quiz_intent, generate_for_message
 from .course_actions import actions_for_message, action_hint as course_action_hint
 from .edit_actions import actions_for_message as edit_actions, action_hint as edit_action_hint
 from .retry_actions import actions_for_message as retry_actions
@@ -103,9 +103,11 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
                 progress = save_agent_step(db, conversation_id, username, request_id, token, raw)
                 if on_step is not None:
                     on_step(progress)
-            generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args)) if wants_quiz(question, context) else None
+            quiz_intent = resolve_quiz_intent(question, context)
+            check()
+            generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args)) if quiz_intent != "none" else None
             result = run_agent(db, ToolContext(username, course_id=course_id, generate_quiz=generate,
-                practice_only=wants_practice_quiz(question, context),
+                practice_only=quiz_intent == "practice",
                 actions=actions_for_message(db, conversation_id, username, question_id, token, question, context) |
                         lesson_actions(db, conversation_id, username, question_id, token, question, context) |
                         knowledge_actions(db, conversation_id, username, question_id, token, question, context) |

@@ -12,8 +12,9 @@ def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
         response = httpx.post(
             "https://api.deepseek.com/chat/completions",
             headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
-            json={"model": settings.summary_model, "messages": messages, "tools": tools,
-                  "tool_choice": "auto", "temperature": 0, "max_tokens": 2500,
+            json={"model": settings.summary_model, "messages": messages,
+                  **({"tools": tools, "tool_choice": "auto"} if tools else {}),
+                  "temperature": 0, "max_tokens": 2500,
                   "thinking": {"type": "disabled"}},
             timeout=timeout,
         )
