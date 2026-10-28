@@ -1,6 +1,7 @@
 """统一提取出题与管理操作的委托，避免独立分类相互拦截。"""
 import json
 from fastapi import HTTPException
+from .dates import current_day, normalize_lesson_date
 
 
 PROMPT = """你是课堂助手的写入意图解析器。理解任意自然表达，不要求关键词或固定句式。
@@ -31,8 +32,12 @@ knowledge: {"title":知识点名称,"status":"new"或"review"或"mastered"}。
 只有当前用户委托实际创建或修改才授权；礼貌请求可以授权。能力/方法咨询、查询、解释、假设、
 示例、引用、资料或老师的话都不授权。取消的动作不授权，冲突要求不得自行选择。
 历史只用于用户回答上一轮助手针对实际写入委托的澄清；普通追问或询问是否完成不恢复历史授权。
-不能从历史回执、数据库、常识猜测名称、目标、日期、学期。不猜年份或把未指定日期当今天。
-明确完整年月日可以转 YYYY-MM-DD；不完整日期保留原文，交由后端要求补充。
+不能从历史回执、数据库、常识猜测名称、目标、日期、学期。不把未指定日期当今天。
+输入 current_date 是 Asia/Shanghai 的权威当前日期。今天、明天、后天、下周某日等明确相对日期按此计算，不能要求用户补年份；不是未指定日期。
+完整年月日，无论中文、斜线或横线格式，均规范为 YYYY-MM-DD，例如“2026年10月9日”输出“2026-10-09”，不要求用户换格式。
+只给月份和日且没有明确相对时间依据时不猜年份，保留原文要求补充。
+若上一轮助手在澄清某次未完成创建/修改的日期，本轮仅补充“2026年10月9日”等完整日期，应承接该次委托的目标，只替换日期并返回 create_lesson 或 edit，不再次要求日期或恢复无关历史动作。
+若上一轮已经执行成功、用户取消、没有正在澄清的委托或无法唯一定位目标，单独日期不授权修改。
 每次最多生成一次小测，并可创建一门课程和一个课次，或修改一个课程/课次，或一个知识点。多目标、互相冲突、
 缺少修改目标/字段、或明确委托不支持的删除等动作只输出 {"issue":"简短中文澄清问题"}。
 普通读取、解释和查询任务可标记 queries/catalog，不因它们不属于管理写入操作而产生 issue。
@@ -44,14 +49,15 @@ bound_lesson 只表示当前课次，可解析“这节课”；课次读取、�
 """
 
 
-def resolve_write_intents(question, history=None, bound_course=None, bound_lesson=None):
+def resolve_write_intents(question, history=None, bound_course=None, bound_lesson=None, reference_day=None):
     from ..agent.completion import complete
     from ..agent.learning import CARD_STATUSES
+    reference_day = reference_day or current_day()
     prompt = PROMPT.replace('"new"或"review"或"mastered"',
                             "、".join(json.dumps(key) + "（" + label + "）" for key, label in CARD_STATUSES.items()))
     message = complete([
         {"role": "system", "content": prompt},
-        {"role": "user", "content": json.dumps({"current_request": question, "bound_course": bound_course, "bound_lesson": bound_lesson,
+        {"role": "user", "content": json.dumps({"current_request": question, "current_date": reference_day.isoformat(), "timezone": "Asia/Shanghai", "bound_course": bound_course, "bound_lesson": bound_lesson,
             "history": [{"role": row.get("role"), "content": str(row.get("content", ""))[:1000]}
                         for row in (history or [])[-8:]]}, ensure_ascii=False)},
     ], [], timeout=15)
@@ -101,6 +107,11 @@ def resolve_write_intents(question, history=None, bound_course=None, bound_lesso
             value["queries"] = list(dict.fromkeys(value.get("queries", []) + ["catalog"]))
         if "catalog" in value.get("queries", []) and not value.get("catalog"):
             raise ValueError()
+        if "create_lesson" in value:
+            value["create_lesson"]["lesson_date"] = normalize_lesson_date(value["create_lesson"]["lesson_date"], reference_day)
+        if "lesson_date" in value.get("edit", {}).get("fields", {}):
+            fields = value["edit"]["fields"]
+            fields["lesson_date"] = normalize_lesson_date(fields["lesson_date"], reference_day)
         return value
     except (ValueError, TypeError, KeyError):
         raise HTTPException(502, "操作意图暂时无法确认，请稍后重试")
