@@ -138,9 +138,10 @@ def actions_for_message(db, conversation_id, username, message_id, token, questi
         def validate(db, conversation, message, previous):
             if message.content != raw_question or args.status != intent["status"]:
                 raise HTTPException(400, "只按你明确指定的状态修改知识点")
+            scope = conversation.course_id or (owned_lesson(db, conversation.lesson_id, username).course_id if conversation.lesson_id else None)
+            matches = candidate_cards(db, username, scope, intent["title"])
             if conversation.lesson_id:
-                raise HTTPException(403, "请在课程对话或主对话修改知识点状态")
-            matches = candidate_cards(db, username, conversation.course_id, intent["title"])
+                matches = [row for row in matches if row["lesson_id"] == conversation.lesson_id]
             if not matches:
                 raise HTTPException(400, "没有找到对应知识点，请核对名称和课程范围")
             if len(matches) != 1:

@@ -85,14 +85,13 @@ def actions_for_message(db, conversation_id, username, message_id, token, questi
         def validate(db, conversation, message, previous):
             if message.content != raw_question or not title or args.title != title:
                 raise HTTPException(400, "请明确要添加的课次标题，不猜测或改写标题")
-            if conversation.lesson_id:
-                raise HTTPException(403, "请在课程对话或主对话添加课次")
-            if conversation.course_id:
-                if args.course_id != conversation.course_id:
+            scope = conversation.course_id or (owned_lesson(db, conversation.lesson_id, username).course_id if conversation.lesson_id else None)
+            if scope:
+                if args.course_id != scope:
                     raise HTTPException(404, "课程不存在")
                 named = re.search(r"(?:在|给|为)\s*(.{1,200}?)课程", question)
                 target_name = intent["course"] if intent is not None else (clean_name(named[1]) if named else None)
-                if target_name and target_name != owned_course(db, conversation.course_id, username).name:
+                if target_name and target_name != owned_course(db, scope, username).name:
                     raise HTTPException(400, "当前对话绑定其他课程，请进入目标课程对话或主对话")
             else:
                 candidates = [row for row in courses.list_courses(db, username) if row.name == intent["course"]] if intent is not None else named_courses(db, username, question)

@@ -1,26 +1,26 @@
-"""消息发送、幂等请求和失败恢复；按对话范围绑定 Agent 或历史课次检索。"""
+"""消息发送、幂等请求和失败恢复；所有对话按后端范围绑定 Agent。"""
 import json
 from fastapi import HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_utc
-from ..rag.service import ask_course
 from ..agent.loop import run_agent
 from ..agent.tools import ToolContext
-from .access import owned_conversation, owned_course
+from .access import owned_conversation, owned_course, owned_lesson
 from .messages import read_messages
 from .generation import is_generating, GenerationStopped
 from .context import recent_context
 from .previews import save_preview
 from .agent_progress import save_agent_step
-from .quiz_actions import resolve_quiz_intent, generate_for_message
+from .quiz_actions import generate_for_message
 from .write_intents import resolve_write_intents
 from .course_actions import actions_for_message, action_hint as course_action_hint
 from .edit_actions import actions_for_message as edit_actions, action_hint as edit_action_hint
 from .retry_actions import actions_for_message as retry_actions
 from .intents import request_text
 from .lesson_actions import actions_for_message as lesson_actions, action_hint as lesson_action_hint
-from .knowledge_actions import actions_for_message as knowledge_actions, status_verification_hint
+from .knowledge_actions import actions_for_message as knowledge_actions
+from .action_verification import verify_actions
 
 
 def _finish_failed(db: Session, conversation_id: str, request_id: str, token: str, error: str):
@@ -90,43 +90,46 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
             current = owned_conversation(db, conversation_id, username)
             if current.generation_token != token:
                 raise GenerationStopped()
-        options = {"history": context} if context else {}
         if on_progress is not None:
             def publish(result):
                 check()
                 save_preview(db, conversation_id, username, token, result)
                 on_progress(result)
-            options["on_progress"] = publish
-            options["on_check"] = check
         check()
-        if lesson_id is None:
-            def publish_step(raw):
-                progress = save_agent_step(db, conversation_id, username, request_id, token, raw)
-                if on_step is not None:
-                    on_step(progress)
-            quiz_intent = resolve_quiz_intent(question, context)
-            check()
-            bound_course = owned_course(db, course_id, username).name if course_id else None
-            db.rollback()  # 模型理解期间不持有数据库事务。
-            semantic = resolve_write_intents(question, context, bound_course=bound_course)
-            check()
-            generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args)) if quiz_intent != "none" else None
-            result = run_agent(db, ToolContext(username, course_id=course_id, generate_quiz=generate,
-                practice_only=quiz_intent == "practice",
-                actions=actions_for_message(db, conversation_id, username, question_id, token, question, context, semantic) |
-                        lesson_actions(db, conversation_id, username, question_id, token, question, context, semantic) |
-                        knowledge_actions(db, conversation_id, username, question_id, token, question, context, semantic) |
-                        retry_actions(db, conversation_id, username, question_id, token, question, context) |
-                        edit_actions(db, conversation_id, username, question_id, token, question, context, semantic),
-                action_hints={"create_course": course_action_hint(question, context, semantic), "create_lesson": lesson_action_hint(question, context, semantic),
-                    "update_knowledge_status": semantic.get("knowledge"),
-                    "write_request_issue":semantic.get("issue", ""),
-                    "verify_knowledge_status":status_verification_hint(db, username, course_id, question, context),
-                    "update_course":edit_action_hint(question, context, semantic), "update_lesson":edit_action_hint(question, context, semantic)}), request_text(question), history=context, on_check=check, on_step=publish_step)
-            if on_progress is not None:
-                publish(result)
+        def publish_step(raw):
+            progress = save_agent_step(db, conversation_id, username, request_id, token, raw)
+            if on_step is not None:
+                on_step(progress)
+        bound_course = owned_course(db, course_id, username).name if course_id else None
+        bound_lesson = owned_lesson(db, lesson_id, username).title if lesson_id else None
+        db.rollback()  # 模型理解期间不持有数据库事务。
+        semantic = resolve_write_intents(question, context, bound_course=bound_course, bound_lesson=bound_lesson)
+        check()
+        quiz_intent = semantic.get("quiz", "none")
+        generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args)) if quiz_intent != "none" else None
+        verification = verify_actions(db, conversation_id, username, question_id, semantic["verify"]) if "verify" in semantic else None
+        agent_context = ToolContext(username, course_id=course_id, lesson_id=lesson_id, generate_quiz=generate,
+            practice_only=quiz_intent == "practice",
+            actions=actions_for_message(db, conversation_id, username, question_id, token, question, context, semantic) |
+                    lesson_actions(db, conversation_id, username, question_id, token, question, context, semantic) |
+                    knowledge_actions(db, conversation_id, username, question_id, token, question, context, semantic) |
+                    retry_actions(db, conversation_id, username, question_id, token, question, context, semantic) |
+                    edit_actions(db, conversation_id, username, question_id, token, question, context, semantic),
+            action_hints={"create_course": course_action_hint(question, context, semantic), "create_lesson": lesson_action_hint(question, context, semantic),
+                "update_knowledge_status": semantic.get("knowledge"),
+                "write_request_issue":semantic.get("issue", ""),
+                "semantic_queries":semantic.get("queries", []), "semantic_catalog":semantic.get("catalog", []),
+                "retry_transcription":semantic.get("retry", {}),
+                "update_course":edit_action_hint(question, context, semantic), "update_lesson":edit_action_hint(question, context, semantic)})
+        verification_only = verification and set(semantic) <= {"verify", "queries", "catalog"} and not semantic.get("queries")
+        if verification_only:
+            result = {"answer": verification, "citations": [], "outcome": "answered", "steps": []}
         else:
-            result = ask_course(db, course_id, username, question, lesson_id=lesson_id, **options)
+            result = run_agent(db, agent_context, request_text(question), history=context, on_check=check, on_step=publish_step)
+        if verification and not verification_only:
+            result["answer"] = verification + "\n\n" + result["answer"]
+        if on_progress is not None:
+            publish(result)
         db.rollback()
         conversation = owned_conversation(db, conversation_id, username, lock=True)
         if conversation.generation_token != token:

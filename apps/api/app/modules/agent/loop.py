@@ -33,8 +33,9 @@ SYSTEM_PROMPT = """你是课堂学习 Agent，只使用提供的工具完成用�
 仅提供 update_knowledge_status 且用户明确要求标记知识点状态时执行。先用 list_knowledge_points 查到目标；同名多条时询问课程或课次，不任意选择。只按用户明确的 new 未学习、review 需要复习、mastered 已掌握修改一个知识点，不依据成绩、聊天表述或课堂指令自动修改。不修改标题、内容或其他知识点。状态已一致时说明无需改变。
 仅在提供 generate_quiz 工具且用户明确要求生成小测时使用该工具。未绑定课程时必须先查询课程，生成前查询课次，范围有歧义先询问，不猜选课程；不提供答案或解析。明确的题数和题型必须遵循，不支持的要求先说明。每条问题最多生成一组。
 当前范围绑定 course_id 时，未指定课程的请求默认使用该课程，不再询问课程名称。生成小测未指定课次时默认整门课程，指定课次时先查询定位，课次有歧义再澄清。用户明确要求其他课程时说明应进入主对话或对应课程对话，不擅自换成当前课程继续生成。
+当前范围绑定 lesson_id 时，读取、修改课次、知识点状态、重试和出题均限定当前课次；“这节课”使用当前课次，出题必须使用该 lesson_id。可以明确添加同课程的新课次或修改当前课次所属课程信息；新建课程请进入主对话。不能读取或修改其他课次；整门课程进度请进入课程对话。
 提供 generate_practice_quiz 时，本次是根据学习记录出题：先查询需要复习的知识点或待巩固错题，薄弱点可查询两者，选择实际查到且属于同一课程的记录。排除未学习和已掌握内容。不得把普通课堂小测当成薄弱点练习；没有适用记录时返回学习查询结果并说明，来源不可用时说明失败。主对话跨课程练习需要用户选择一门课程。
-历史中讨论过某节课，不等于本条生成请求限定了该课次。本条只要求生成题目、没有指定或明确承接某课次时，generate_quiz 的 lesson_ids 必须省略；“这节课”等明确承接请求才可按上文定位课次。
+主对话或课程对话中，历史讨论过某节课不等于本条生成请求限定该课次；只要求生成题目时省略 lesson_ids。课次对话始终使用后端绑定的 lesson_id；“这节课”等指代按绑定范围或明确上文定位。
 查询某节课处理到哪一步使用 get_processing_detail，先查询并定位唯一课次，返回 workflow.query_ids。最近转写任务与当前纪要阶段分开解释，旧失败不代表当前失败，不猜剩余时间。处理阶段与失败原因属于业务记录，不需要课堂原文引用，最终只返回 workflow；不要把这些状态再编为 claims，也不要因未读取课堂内容声称无法回答状态查询。
 查询还没做的小测使用 list_unanswered_quizzes，返回 workflow.query_ids。仅可答且本人没有提交记录的小测计入，未提交不代表从未打开，不提前展示答案。
 查询待处理课次及失败原因使用 list_pending_lessons，返回 {"claims":[],"workflow":{"query_ids":["本次 workflow_query_id"]}}，后端复核记录；主对话省略课程查询所有课程，课程对话只查当前课程。不把等待上传或缺少纪要说成转写失败。
@@ -79,8 +80,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         if others:
             return {"answer":f"当前对话限定在“{course_name}”。要查询“{others[0].name}”，请进入主对话或对应课程对话。",
                     "citations":[], "outcome":"needs_input", "steps":[]}
-    if context.lesson_id:
-        check_lesson(db, context, context.lesson_id)
+    lesson_name = check_lesson(db, context, context.lesson_id).title if context.lesson_id else None
     creation_issue = context.action_hints.get("create_course", {}).get("issue")
     if "create_course" in context.actions and creation_issue:
         return {"answer":creation_issue, "citations":[], "outcome":"needs_input", "steps":[]}
@@ -129,13 +129,15 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         except ValueError:
             return {"answer":"请提供包含年份的有效完整日期 YYYY-MM-DD？", "citations":[], "outcome":"needs_input", "steps":[]}
     messages = [{"role": "system", "content": SYSTEM_PROMPT + "\n当前范围：" + json.dumps(
-        {"mode":"course" if context.course_id else "global", "course_name":course_name, "course_id": context.course_id, "lesson_id": context.lesson_id}, ensure_ascii=False)}]
+        {"mode":"lesson" if context.lesson_id else "course" if context.course_id else "global", "course_name":course_name, "course_id": context.course_id, "lesson_id": context.lesson_id, "lesson_title":lesson_name}, ensure_ascii=False)}]
+    if context.action_hints:
+        messages.append({"role": "system", "content": "本条请求的后端解析参数及最终查询要求：" + json.dumps(context.action_hints, ensure_ascii=False) + "。查询类别仅用于确保没有漏答；参数不代表目标已定位，仍需查询并核对。执行成功后继续完成所有查询，不重复执行动作。"})
     for item in (history or [])[-8:]:
         if isinstance(item, dict) and item.get("role") in {"user", "assistant"} and isinstance(item.get("content"), str):
             messages.append({"role": item["role"], "content": item["content"][:1000]})
     if context.generate_quiz is not None:
         action = "generate_practice_quiz" if context.practice_only else "generate_quiz"
-        scope = "先查询本次适用的学习记录，再选择记录出题；无记录时呈现空查询结果。" if context.practice_only else "绑定课程且未明确指定或承接课次时使用整门课程，省略 lesson_ids。"
+        scope = "先查询本次适用的学习记录，再选择记录出题；无记录时呈现空查询结果。" if context.practice_only else ("课次对话只为当前 lesson_id 出题。" if context.lesson_id else "绑定课程且未明确指定或承接课次时使用整门课程，省略 lesson_ids。")
         messages.append({"role": "system", "content": f"接下来是当前问题的小测生成任务。历史消息中的‘已生成’只代表以前问题的结果，不能代替本次执行。本次必须实际调用 {action} 才能完成生成，不可直接回复已生成。缺少必要范围时按规定澄清；{scope}"})
     messages.append({"role": "system", "content": FINAL_RESPONSE_INSTRUCTION})
     messages.append({"role":"system", "content":
@@ -143,10 +145,14 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
          f"当前是课程对话，范围固定为“{course_name}”。用课程名称说明范围限制，不说其他课程不存在，不输出内部 ID。")})
     messages.append({"role": "user", "content": question.strip()})
     evidence, steps, seen_ids = EvidenceStore(), [], set()
+    if context.lesson_id:
+        evidence.lesson_ids.add(context.lesson_id)
     actions = ActionStore()
     if context.generate_quiz is not None:
         generate = context.generate_quiz
         def checked_generate(args):
+            if context.lesson_id and not isinstance(args, PracticeQuizArguments) and not args.lesson_ids:
+                args = args.model_copy(update={"lesson_ids": [context.lesson_id]})
             confirmed_course = args.course_id == context.course_id or args.course_id in evidence.course_ids
             if isinstance(args, PracticeQuizArguments):
                 if not confirmed_course:
@@ -195,9 +201,18 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         check()
         calls = message.get("tool_calls")
         if not calls:
+            unperformed = set(context.actions) - set(actions.results) - set(actions.errors)
+            quiz_tool = "generate_practice_quiz" if context.practice_only else "generate_quiz"
+            if context.generate_quiz is not None and quiz_tool not in actions.results:
+                unperformed.add(quiz_tool)
+            if unperformed and not repaired:
+                repaired = True
+                messages.append(message)
+                messages.append({"role": "system", "content": "本条仍有操作未实际执行：" + "、".join(sorted(unperformed)) + "。目标和参数明确且业务条件允许时实际执行；缺少信息、范围不允许或来源不可用时明确澄清，不声称已完成。已经成功的操作不得重复执行。"})
+                continue
             if actions.results:
-                groups = requested_query_groups(question)
-                catalog_kinds = requested_catalog_kinds(question)
+                groups = set(context.action_hints["semantic_queries"]) if "semantic_queries" in context.action_hints else requested_query_groups(question)
+                catalog_kinds = set(context.action_hints["semantic_catalog"]) if "semantic_catalog" in context.action_hints else requested_catalog_kinds(question)
                 missing = [group for group in groups if (not evidence.catalog_complete(catalog_kinds) if group == "catalog" else not getattr(evidence, group).queries)]
                 if missing and not repaired:
                     repaired = True
@@ -236,7 +251,11 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             if actions.errors:
                 return {"answer": "；".join(actions.errors.values()), "citations": [], "outcome": "operation_failed", "steps": steps}
             try:
-                return finalize(db, context, message.get("content"), evidence, steps)
+                final = finalize(db, context, message.get("content"), evidence, steps)
+                if unperformed:
+                    labels = {"create_course":"创建课程", "create_lesson":"添加课次", "update_course":"修改课程信息", "update_lesson":"修改课次信息", "update_knowledge_status":"修改知识点状态", "retry_transcription":"重试转写", "generate_quiz":"生成小测", "generate_practice_quiz":"生成薄弱点练习"}
+                    final["answer"] += "\n\n尚未执行的操作：" + "、".join(labels.get(name, name) for name in sorted(unperformed)) + "。"
+                return final
             except InvalidFinalResponse:
                 if repaired:
                     raise
@@ -282,7 +301,10 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 on_step(dict(step))
             if name in {"generate_quiz", "generate_practice_quiz"} and result["ok"]:
                 label = "薄弱点练习题" if name == "generate_practice_quiz" else "课堂小测题"
-                return {"answer": f"已生成 {result['data']['question_count']} 道{label}，可以开始答题。", "citations": [], "outcome": "quiz_created", "steps": steps}
+                message_text = f"已生成 {result['data']['question_count']} 道{label}，可以开始答题。"
+                if not context.action_hints.get("semantic_queries") and not (set(context.actions) - set(actions.results)):
+                    return {"answer": message_text, "citations": [], "outcome": "quiz_created", "steps": steps}
+                actions.results[name] = {"message": message_text}
             if name in {"generate_quiz", "generate_practice_quiz"} and result.get("error", {}).get("code") == "generation_failed":
                 return {"answer": result["error"]["message"], "citations": [], "outcome": "operation_failed", "steps": steps}
             messages.append({"role": "tool", "tool_call_id": call["id"],

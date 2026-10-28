@@ -86,7 +86,8 @@ def actions_for_message(db, conversation_id, username, message_id, token, questi
                     raise HTTPException(400, "请明确完整日期 YYYY-MM-DD，不猜测年份")
             if tool == "update_course":
                 item = owned_course(db, identity, username, lock=True)
-                if conversation.course_id and conversation.course_id != item.id:
+                scope = conversation.course_id or (owned_lesson(db, conversation.lesson_id, username).course_id if conversation.lesson_id else None)
+                if scope and scope != item.id:
                     raise HTTPException(404, "课程不存在")
                 if not previous:
                     matches = [row for row in courses.list_courses(db, username) if row.name == request["target"]]
@@ -103,11 +104,13 @@ def actions_for_message(db, conversation_id, username, message_id, token, questi
                     raise HTTPException(404, "课次不存在")
                 if not previous:
                     target = request["target"]
-                    if not conversation.course_id:
+                    if not conversation.course_id and not conversation.lesson_id:
                         prefix = course.name + "课程的"
                         if not target.startswith(prefix):
                             raise HTTPException(400, "请明确课程名称与课次标题，或进入对应课程对话")
                         target = target[len(prefix):]
+                    elif target.startswith(course.name + "课程的"):
+                        target = target[len(course.name + "课程的"):]
                     matches = [row for row in courses.list_lessons(db, course.id, username) if row.title == target]
                     if len(matches) != 1 or matches[0].id != item.id:
                         raise HTTPException(400, "请明确唯一的目标课次标题")

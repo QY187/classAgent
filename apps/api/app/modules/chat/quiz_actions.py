@@ -84,6 +84,21 @@ def generate_for_message(db, conversation_id, username, question_id, token, args
             raise GenerationStopped()
         if conversation.course_id is not None and args.course_id != conversation.course_id:
             raise HTTPException(404, "课程不存在或当前对话不可访问")
+        if conversation.lesson_id:
+            from .access import owned_lesson
+            lesson = owned_lesson(db, conversation.lesson_id, username)
+            if lesson.course_id != args.course_id:
+                raise HTTPException(404, "课程不存在或当前课次不可访问")
+            if isinstance(args, PracticeQuizArguments):
+                from ...shared.models import ReviewCard, QuizQuestion
+                for model, identities, field in ((ReviewCard, args.knowledge_point_ids, "lesson_id"),
+                                                 (QuizQuestion, args.wrong_question_ids, "source_lesson_id")):
+                    for identity in identities:
+                        record = db.get(model, identity)
+                        if record is None or getattr(record, field) != lesson.id:
+                            raise HTTPException(404, "学习记录超出当前课次范围")
+            elif args.lesson_ids != [lesson.id]:
+                raise HTTPException(400, "课次对话只能为当前课次出题")
     before_save()
     db.commit()  # 不在模型生成期间持有对话锁。
     practice = isinstance(args, PracticeQuizArguments)
