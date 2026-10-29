@@ -162,6 +162,9 @@ class DocumentChunk(Base):
     end_ms: Mapped[int] = mapped_column(Integer)
     source_segment_ids: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float]] = mapped_column(VECTOR(1536))
+    parent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=True, index=True)
+    chunk_level: Mapped[str] = mapped_column(String(20), default="child", server_default="child", index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class ReviewCard(Base):

@@ -17,6 +17,7 @@ from .modules.review_cards.controller import router as review_cards_router
 from .modules.materials.controller import router as materials_router
 from .modules.quizzes.controller import router as quizzes_router
 from .modules.quizzes.migrations import prepare_quiz_scope
+from .modules.rag.migrations import prepare_document_chunks
 from .modules.recycle_bin.migrations import prepare_deleted_columns
 from .modules.recycle_bin.controller import router as recycle_bin_router
 from .modules.chat.controller import router as chat_router
@@ -47,6 +48,7 @@ def prepare_database() -> None:
     prepare_chat_pinning(engine)
     prepare_chat_archive(engine)
     prepare_quiz_scope(engine)
+    prepare_document_chunks(engine)
     Base.metadata.create_all(bind=engine)
     _seed_root_user()
     _backfill_course_owner_ids()

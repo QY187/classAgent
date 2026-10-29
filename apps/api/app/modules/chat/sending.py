@@ -1,5 +1,6 @@
 """消息发送、幂等请求和失败恢复；所有对话按后端范围绑定 Agent。"""
 import json
+import re
 from fastapi import HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -103,11 +104,28 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
         bound_course = owned_course(db, course_id, username).name if course_id else None
         bound_lesson = owned_lesson(db, lesson_id, username).title if lesson_id else None
         db.rollback()  # 模型理解期间不持有数据库事务。
-        semantic = resolve_write_intents(question, context, bound_course=bound_course, bound_lesson=bound_lesson)
+        # 普通读取直接进入主 Agent；只有疑似写入/出题/核对请求才做额外的授权解析。
+        # 这样读取类问题走主流的“一次模型理解并选工具”路径，写入仍保留严格授权边界。
+        write_candidate = bool(re.search(
+            r"创建|新建|添加|新增|修改|改名|重命名|标记|设置|重试|重新转写|出题|小测|测验|练习|生成(?:一套|几道|[0-9一二三四五六七八九十]+道)?(?:小测|测验|练习|题)|刚才.{0,12}(?:成功|完成)",
+            question
+        ))
+        semantic = (resolve_write_intents(question, context, bound_course=bound_course, bound_lesson=bound_lesson)
+                    if write_candidate else None)
         check()
-        quiz_intent = semantic.get("quiz", "none")
+        quiz_intent = semantic.get("quiz", "none") if semantic else "none"
         generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args)) if quiz_intent != "none" else None
-        verification = verify_actions(db, conversation_id, username, question_id, semantic["verify"]) if "verify" in semantic else None
+        verification = verify_actions(db, conversation_id, username, question_id, semantic["verify"]) if semantic and "verify" in semantic else None
+        action_hints = {"create_course": course_action_hint(question, context, semantic),
+                        "create_lesson": lesson_action_hint(question, context, semantic),
+                        "update_knowledge_status": semantic.get("knowledge") if semantic else None,
+                        "write_request_issue": semantic.get("issue", "") if semantic else "",
+                        "update_course": edit_action_hint(question, context, semantic),
+                        "update_lesson": edit_action_hint(question, context, semantic)}
+        if semantic is not None:
+            action_hints.update({"semantic_queries": semantic.get("queries", []),
+                                 "semantic_catalog": semantic.get("catalog", []),
+                                 "retry_transcription": semantic.get("retry", {})})
         agent_context = ToolContext(username, course_id=course_id, lesson_id=lesson_id, generate_quiz=generate,
             practice_only=quiz_intent == "practice",
             actions=actions_for_message(db, conversation_id, username, question_id, token, question, context, semantic) |
@@ -115,12 +133,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
                     knowledge_actions(db, conversation_id, username, question_id, token, question, context, semantic) |
                     retry_actions(db, conversation_id, username, question_id, token, question, context, semantic) |
                     edit_actions(db, conversation_id, username, question_id, token, question, context, semantic),
-            action_hints={"create_course": course_action_hint(question, context, semantic), "create_lesson": lesson_action_hint(question, context, semantic),
-                "update_knowledge_status": semantic.get("knowledge"),
-                "write_request_issue":semantic.get("issue", ""),
-                "semantic_queries":semantic.get("queries", []), "semantic_catalog":semantic.get("catalog", []),
-                "retry_transcription":semantic.get("retry", {}),
-                "update_course":edit_action_hint(question, context, semantic), "update_lesson":edit_action_hint(question, context, semantic)})
+            action_hints=action_hints)
         verification_only = verification and set(semantic) <= {"verify", "queries", "catalog"} and not semantic.get("queries")
         if verification_only:
             result = {"answer": verification, "citations": [], "outcome": "answered", "steps": []}

@@ -4,7 +4,7 @@ import re
 
 import httpx
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
@@ -23,7 +23,10 @@ def owned_course(db: Session, course_id: str, username: str) -> Course:
 
 def index_status(db: Session, course_id: str, username: str) -> dict:
     owned_course(db, course_id, username)
-    count = db.scalar(select(func.count()).select_from(DocumentChunk).where(DocumentChunk.course_id == course_id)) or 0
+    count = db.scalar(select(func.count()).select_from(DocumentChunk).where(
+        DocumentChunk.course_id == course_id,
+        or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"),
+    )) or 0
     settings = get_settings()
     return {"chunk_count": count, "configured": bool(settings.dashscope_api_key and settings.deepseek_api_key)}
 
@@ -57,13 +60,16 @@ def ask_course(db: Session, course_id: str, username: str, question: str, *, les
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     matches = list(db.scalars(
-        select(DocumentChunk).where(*scope)
+        select(DocumentChunk).where(*scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))
         .order_by(DocumentChunk.embedding.cosine_distance(vector)).limit(8)
     ))
+    parent_ids = [item.parent_id for item in matches if item.parent_id]
+    parents = {item.id: item for item in db.scalars(select(DocumentChunk).where(DocumentChunk.id.in_(parent_ids)))} if parent_ids else {}
     lessons = {lesson.id: lesson for lesson in db.scalars(select(Lesson).where(Lesson.id.in_([item.lesson_id for item in matches])))}
     evidence = {f"S{i}": item for i, item in enumerate(matches, start=1)}
     context = "\n\n".join(
-        f"[{key}] {lessons[item.lesson_id].title} {item.start_ms // 60000:02d}:{item.start_ms // 1000 % 60:02d}\n{item.content}"
+        f"[{key}] {lessons[item.lesson_id].title} {item.start_ms // 60000:02d}:{item.start_ms // 1000 % 60:02d}\n"
+        f"{(parents[item.parent_id].content if item.parent_id in parents else item.content)}"
         for key, item in evidence.items()
     )
     prompt = (
