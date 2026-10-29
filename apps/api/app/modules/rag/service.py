@@ -19,8 +19,8 @@ from .streaming import stream_completion
 BM25_K1 = 1.5
 BM25_B = 0.75
 RRF_K = 60
-RECALL_MULTIPLIER = 8
-MIN_CANDIDATES = 40
+RECALL_MULTIPLIER = 10
+MIN_CANDIDATES = 64
 BM25_MIN_RATIO = 0.15
 
 
@@ -61,6 +61,23 @@ def _rewrite_query(value: str) -> str:
     except (HTTPException, httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
         pass
     return original
+
+
+def _query_variants(value: str, rewritten: str) -> list[str]:
+    """保留原问题并补充改写/子问题，避免改写丢失术语、数字或否定条件。"""
+    variants: list[str] = []
+    for candidate in (value, rewritten):
+        normalized = _normalize_query(candidate)
+        if normalized and normalized not in variants:
+            variants.append(normalized)
+    # 中文课堂问题常用分号、顿号或“另外”连接多个需求；分别召回后再融合。
+    source = _normalize_query(value)
+    clauses = re.split(r"[；;。\n]|(?:另外|同时|以及还要|并且还要)", source)
+    for clause in clauses:
+        clause = _normalize_query(clause)
+        if len(clause) >= 2 and clause not in variants:
+            variants.append(clause)
+    return variants[:4]
 
 
 def _rerank(query: str, ranked: list[tuple[str, float]], rows: dict[str, DocumentChunk], lexical_scores: dict[str, float]) -> list[tuple[str, float]]:
@@ -134,8 +151,10 @@ def _bm25_scores(query: str, rows: list[DocumentChunk]) -> dict[str, float]:
 def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, lesson_id: str | None = None, limit: int = 8) -> list[DocumentChunk]:
     """在后端权限范围内融合向量召回和 BM25 词法召回。"""
     owned_course(db, course_id, username)
-    query = _rewrite_query(query)
-    if not query or not _tokens(query):
+    original_query = _normalize_query(query)
+    rewritten_query = _rewrite_query(query)
+    variants = _query_variants(original_query, rewritten_query)
+    if not variants or not any(_tokens(item) for item in variants):
         return []
     scope = chunk_scope(course_id, lesson_id)
     rows = list(db.scalars(select(DocumentChunk).where(
@@ -143,31 +162,39 @@ def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, l
     if not rows:
         return []
     vector_rows = []
+    candidate_limit = max(limit * RECALL_MULTIPLIER, MIN_CANDIDATES)
     try:
-        vector = embed_texts([query])[0]
-        candidate_limit = max(limit * RECALL_MULTIPLIER, MIN_CANDIDATES)
-        vector_rows = list(db.scalars(select(DocumentChunk).where(
-            *scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))
-            .order_by(DocumentChunk.embedding.cosine_distance(vector)).limit(candidate_limit)))
+        vectors = embed_texts(variants)
+        for vector in vectors:
+            vector_rows.append(list(db.scalars(select(DocumentChunk).where(
+                *scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))
+                .order_by(DocumentChunk.embedding.cosine_distance(vector)).limit(candidate_limit))))
     except (HTTPException, RuntimeError, httpx.HTTPError):
         # 向量服务短暂不可用时仍返回 BM25 结果，避免检索整体不可用；下次请求自动恢复混合召回。
         pass
-    lexical_scores = _bm25_scores(query, rows)
-    if not vector_rows and lexical_scores:
+    # 词法分数取各路查询的最大值，保留原始数字/术语的精确匹配能力。
+    lexical_by_variant = [_bm25_scores(item, rows) for item in variants]
+    lexical_scores = {row.id: max((scores.get(row.id, 0.0) for scores in lexical_by_variant), default=0.0)
+                      for row in rows}
+    lexical_scores = {identity: score for identity, score in lexical_scores.items() if score > 0}
+    if not any(vector_rows) and lexical_scores:
         best = max(lexical_scores.values())
         lexical_scores = {identity: score for identity, score in lexical_scores.items()
                           if score >= best * BM25_MIN_RATIO}
     lexical = sorted(lexical_scores.items(), key=lambda item: item[1], reverse=True)[:max(limit * RECALL_MULTIPLIER, MIN_CANDIDATES)]
     by_id = {row.id: row for row in rows}
     fused: dict[str, float] = {}
-    for rank, row in enumerate(vector_rows):
-        fused[row.id] = fused.get(row.id, 0.0) + 0.6 / (RRF_K + rank + 1)
+    vector_weight = 0.6 / max(len(vector_rows), 1)
+    for variant_rows in vector_rows:
+        for rank, row in enumerate(variant_rows):
+            fused[row.id] = fused.get(row.id, 0.0) + vector_weight / (RRF_K + rank + 1)
     for rank, (identity, _score) in enumerate(lexical):
         fused[identity] = fused.get(identity, 0.0) + 0.4 / (RRF_K + rank + 1)
     # 先按融合分排序，再限制同一父块的数量，避免 Top-K 被一个长父块占满。
     ranked = sorted(fused.items(), key=lambda item: item[1], reverse=True)
-    ranked = (_cross_encoder_rerank(query, ranked, by_id)
-              or _rerank(query, ranked, by_id, lexical_scores))
+    rerank_query = rewritten_query or original_query
+    ranked = (_cross_encoder_rerank(rerank_query, ranked, by_id)
+              or _rerank(rerank_query, ranked, by_id, lexical_scores))
     selected, parent_counts, seen_sources = [], {}, set()
     for identity, _score in ranked:
         row = by_id[identity]
