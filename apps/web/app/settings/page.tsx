@@ -12,9 +12,12 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [newUsername, setNewUsername] = useState("");
+  const [usernamePassword, setUsernamePassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  const [savingUsername, setSavingUsername] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInput = useRef<HTMLInputElement>(null);
 
@@ -71,6 +74,26 @@ export default function SettingsPage() {
     }
   }
 
+  async function saveUsername(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (savingUsername) return;
+    setError("");
+    setNotice("");
+    setSavingUsername(true);
+    try {
+      await request("/auth/change-username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: usernamePassword, new_username: newUsername }),
+      });
+      clearSession();
+      window.location.href = "/login?username_changed=1";
+    } catch (err) {
+      setError(errorMessage(err));
+      setSavingUsername(false);
+    }
+  }
+
   return (
     <main className="content settings-page">
       <div className="settings-heading"><span className="eyebrow">我的账号</span><h1>个人设置</h1><p>管理你的头像和登录密码。</p></div>
@@ -94,8 +117,23 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="settings-card settings-security" aria-labelledby="settings-password-title">
-        <div className="settings-section-heading"><div><span className="settings-kicker">账号安全</span><h2 id="settings-password-title">修改密码</h2><p>定期更新密码，保护你的课程资料。</p></div></div>
+      <section className="settings-card settings-security" aria-labelledby="settings-security-title">
+        <div className="settings-section-heading"><div><span className="settings-kicker">账号安全</span><h2 id="settings-security-title">登录与安全</h2><p>管理用户名和登录密码，修改后需要重新登录。</p></div></div>
+        <div className="settings-subsection" aria-labelledby="settings-username-title">
+          <h3 id="settings-username-title">修改用户名</h3>
+          <p>用户名仅支持字母、数字、下划线、点和短横线。</p>
+        <form onSubmit={saveUsername}>
+          <div className="settings-password-fields">
+            <label className="field-label">新用户名<input className="field" required minLength={2} maxLength={100} pattern="[A-Za-z0-9_.-]+" value={newUsername} onChange={(event) => setNewUsername(event.target.value)} placeholder="仅支持字母、数字、下划线、点和短横线" autoComplete="username" /></label>
+            <label className="field-label">当前密码<input className="field" type="password" required value={usernamePassword} onChange={(event) => setUsernamePassword(event.target.value)} autoComplete="current-password" /></label>
+          </div>
+          <div className="settings-password-footer"><p>修改用户名会退出当前登录。</p><button className="button button-primary" type="submit" disabled={savingUsername}>{savingUsername ? "保存中…" : "保存新用户名"}</button></div>
+        </form>
+        </div>
+
+        <div className="settings-subsection settings-subsection-password" aria-labelledby="settings-password-title">
+          <h3 id="settings-password-title">修改密码</h3>
+          <p>定期更新密码，保护你的课程资料。</p>
         <form onSubmit={savePassword}>
           <div className="settings-password-fields">
             <label className="field-label settings-current-password">当前密码<input className="field" type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
@@ -104,6 +142,7 @@ export default function SettingsPage() {
           </div>
           <div className="settings-password-footer"><p>保存后需要使用新密码重新登录。</p><button className="button button-primary" type="submit" disabled={savingPassword}>{savingPassword ? "保存中…" : "保存新密码"}</button></div>
         </form>
+        </div>
       </section>
     </main>
   );

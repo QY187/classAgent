@@ -785,6 +785,10 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .settings-kicker { display: block; margin-bottom: 6px; color: var(--blue); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
 .settings-section-heading h2 { font-size: 20px; }
 .settings-section-heading p { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+.settings-subsection { margin-top: 24px; border-top: 1px solid #edf0f5; }
+.settings-subsection h3 { margin: 0; padding: 22px 30px 0; font-size: 16px; }
+.settings-subsection > p { margin: 7px 30px 0; color: var(--muted); font-size: 13px; }
+.settings-subsection-password { margin-top: 0; }
 .settings-profile { background: var(--surface); }
 .settings-profile-content { display: flex; align-items: center; gap: 22px; padding: 25px 30px 30px; }
 .settings-profile-avatar.avatar { width: 76px; height: 76px; border-radius: 22px; flex: none; font-size: 30px; }
@@ -821,6 +825,8 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
   .settings-password-fields { grid-template-columns: 1fr; padding: 22px; }
   .settings-password-footer { align-items: stretch; flex-direction: column; padding: 20px 22px; }
   .settings-section-heading, .settings-profile-content { padding-left: 22px; padding-right: 22px; }
+  .settings-subsection h3 { padding-left: 22px; padding-right: 22px; }
+  .settings-subsection > p { margin-left: 22px; margin-right: 22px; }
   .sidebar.sidebar-collapsed { flex-basis: 66px; padding: 18px 8px; }
   .sidebar:not(.sidebar-collapsed) { position: fixed; width: 244px; z-index: 20; background: #fff; box-shadow: var(--shadow); }
   .sidebar-mobile-close { display: grid; place-items: center; position: absolute; top: 24px; right: 10px; width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--blue-soft); color: var(--blue); font-size: 22px; }
