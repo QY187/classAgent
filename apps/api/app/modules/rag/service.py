@@ -19,8 +19,10 @@ from .streaming import stream_completion
 BM25_K1 = 1.5
 BM25_B = 0.75
 RRF_K = 60
-RECALL_MULTIPLIER = 10
-MIN_CANDIDATES = 64
+# 生产默认采用 40 个候选并对这 40 个候选重排；limit=8/10 时由最小值保证候选池为 40。
+RECALL_MULTIPLIER = 5
+MIN_CANDIDATES = 40
+RERANK_CANDIDATES = 40
 BM25_MIN_RATIO = 0.15
 
 
@@ -105,7 +107,7 @@ def _cross_encoder_rerank(query: str, ranked: list[tuple[str, float]], rows: dic
     settings = get_settings()
     if not settings.rerank_enabled or not settings.dashscope_api_key or not ranked:
         return None
-    candidates = ranked[:max(MIN_CANDIDATES, 40)]
+    candidates = ranked[:max(RERANK_CANDIDATES, MIN_CANDIDATES)]
     try:
         response = httpx.post(
             settings.rerank_base_url,
@@ -146,6 +148,33 @@ def _bm25_scores(query: str, rows: list[DocumentChunk]) -> dict[str, float]:
         if score:
             scores[row.id] = score
     return scores
+
+
+def _rerank_with_exact_signals(query: str, ranked: list[tuple[str, float]], rows: dict[str, DocumentChunk],
+                               lexical_scores: dict[str, float]) -> list[tuple[str, float]]:
+    """在语义重排后补充术语、数字、否定词和完整短语信号。"""
+    if not ranked:
+        return []
+    query_terms = set(_tokens(query))
+    query_numbers = set(re.findall(r"\d+(?:\.\d+)?", query))
+    query_negations = set(re.findall(r"不|没|无|未|不能|不会|不是|除非", query))
+    max_cross = max((score for _, score in ranked), default=0.0) or 1.0
+    max_lexical = max(lexical_scores.values(), default=0.0) or 1.0
+    rescored = []
+    for identity, cross_score in ranked:
+        content = rows[identity].content or ""
+        content_terms = set(_tokens(content))
+        coverage = len(query_terms & content_terms) / len(query_terms) if query_terms else 0.0
+        phrase = 0.08 if len(query) >= 4 and query.lower() in content.lower() else 0.0
+        content_numbers = set(re.findall(r"\d+(?:\.\d+)?", content))
+        number_match = 0.10 if query_numbers and query_numbers <= content_numbers else 0.0
+        content_negations = set(re.findall(r"不|没|无|未|不能|不会|不是|除非", content))
+        negation_match = 0.05 if query_negations and query_negations & content_negations else 0.0
+        score = (0.70 * cross_score / max_cross
+                 + 0.15 * lexical_scores.get(identity, 0.0) / max_lexical
+                 + 0.10 * coverage + phrase + number_match + negation_match)
+        rescored.append((identity, score))
+    return sorted(rescored, key=lambda item: item[1], reverse=True)
 
 
 def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, lesson_id: str | None = None, limit: int = 8) -> list[DocumentChunk]:
@@ -193,8 +222,9 @@ def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, l
     # 先按融合分排序，再限制同一父块的数量，避免 Top-K 被一个长父块占满。
     ranked = sorted(fused.items(), key=lambda item: item[1], reverse=True)
     rerank_query = rewritten_query or original_query
-    ranked = (_cross_encoder_rerank(rerank_query, ranked, by_id)
-              or _rerank(rerank_query, ranked, by_id, lexical_scores))
+    cross_ranked = _cross_encoder_rerank(rerank_query, ranked, by_id)
+    ranked = (_rerank_with_exact_signals(rerank_query, cross_ranked, by_id, lexical_scores)
+              if cross_ranked else _rerank(rerank_query, ranked, by_id, lexical_scores))
     selected, parent_counts, seen_sources = [], {}, set()
     for identity, _score in ranked:
         row = by_id[identity]
