@@ -1,4 +1,5 @@
 """把现有业务封装为读取工具，不执行模型生成的代码。"""
+import json
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..courses import service as courses
 from ..lessons import service as lessons
 from ..summaries import service as summaries
-from ..rag.service import owned_course
+from ..rag.service import owned_course, hybrid_retrieve
 from ..search.mapper import search_all
 from .schemas import CourseListArguments, LessonListArguments, TranscriptArguments, SummaryArguments, SearchArguments
 
@@ -107,11 +108,21 @@ def search_course(db: Session, context: ToolContext, args: SearchArguments) -> d
         lesson = check_lesson(db, context, lesson_id)
         if lesson.course_id != args.course_id:
             raise HTTPException(404, "课次不存在")
-    result = search_all(db, args.query, context.username, course_id=args.course_id,
-                        kind="transcript", lesson_id=lesson_id)
-    rows = result["transcript"]
+    rows = hybrid_retrieve(db, args.course_id, context.username, args.query, lesson_id=lesson_id, limit=args.limit)
+    if not rows:
+        # 尚未建立向量索引时保留可用的精确词法回退，重建索引后自动走混合召回。
+        legacy = search_all(db, args.query, context.username, course_id=args.course_id,
+                            kind="transcript", lesson_id=lesson_id)["transcript"]
+        return {"course_id": args.course_id, "lesson_id": lesson_id, "query": args.query,
+                "retrieval_method": "keyword", "has_more": len(legacy) > args.limit or len(legacy) == 30,
+                "items": [{"segment_id": row["segment_id"], "lesson_id": row["lesson_id"],
+                           "lesson_title": row["lesson_title"], "start_ms": row["start_ms"],
+                           "snippet": row["snippet"]} for row in legacy[:args.limit]]}
+    lessons_by_id = {row.id: lessons.get_lesson(db, row.lesson_id, context.username) for row in rows}
     return {"course_id": args.course_id, "lesson_id": lesson_id, "query": args.query,
-            "retrieval_method": "keyword", "has_more": len(rows) > args.limit or len(rows) == 30,
-            "items": [{"segment_id": row["segment_id"], "lesson_id": row["lesson_id"],
-                       "lesson_title": row["lesson_title"], "start_ms": row["start_ms"],
-                       "snippet": row["snippet"]} for row in rows[:args.limit]]}
+            "retrieval_method": "hybrid_bm25_vector", "has_more": False,
+            "items": [{"segment_id": source_ids[0] if source_ids else row.id, "lesson_id": row.lesson_id,
+                       "lesson_title": lessons_by_id[row.lesson_id].title, "start_ms": row.start_ms,
+                       "snippet": row.content[:500], "source_segment_ids": source_ids}
+                      for row in rows[:args.limit]
+                      for source_ids in [json.loads(row.source_segment_ids)] ]}

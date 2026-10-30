@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     embedding_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     embedding_model: str = "text-embedding-v2"
     embedding_dim: int = 1536
+    rerank_enabled: bool = True
+    rerank_base_url: str = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank"
+    rerank_model: str = "gte-rerank-v2"
     deepseek_api_key: str = ""
     summary_model: str = "deepseek-chat"
     summary_provider: str = "deepseek"

@@ -1,0 +1,5 @@
+[
+  {"query": "前序遍历的访问顺序是什么", "relevant_ids": ["demo-preorder"], "k": 5},
+  {"query": "二叉树的时间复杂度", "relevant_ids": ["demo-complexity"], "k": 5},
+  {"query": "层序遍历使用什么数据结构", "relevant_ids": ["demo-level-order"], "k": 5}
+]
