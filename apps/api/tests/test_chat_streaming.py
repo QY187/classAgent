@@ -43,13 +43,12 @@ class ChatStreamPersistenceTest(unittest.TestCase):
     setUp = fixtures.RecycleVisibilityTest.setUp
     tearDown = fixtures.RecycleVisibilityTest.tearDown
 
-    @patch("app.modules.chat.sending.ask_course")
+    @patch("app.modules.chat.sending.run_agent")
     def test_preview_is_not_saved_as_completed_until_generation_finishes(self, ask):
         with Session(self.engine) as db:
             chat = create_conversation(db, "l", "owner")
             preview = Mock()
             def generate(*args, **kwargs):
-                kwargs["on_progress"]({"answer": "临时结论", "citations": []})
                 rows = read_messages(db, chat["id"], "owner")["messages"]
                 self.assertEqual(len(rows), 1)
                 self.assertEqual(rows[0]["status"], "pending")
@@ -63,16 +62,14 @@ class ChatStreamPersistenceTest(unittest.TestCase):
             send_message(db, chat["id"], "owner", "课堂问题", "r", on_progress=preview)
             self.assertEqual(ask.call_count, 1)
 
-    @patch("app.modules.chat.sending.ask_course")
+    @patch("app.modules.chat.sending.run_agent")
     def test_failed_stream_keeps_question_retryable(self, ask):
         with Session(self.engine) as db:
             chat = create_conversation(db, "l", "owner")
-            def generate(*args, **kwargs):
-                kwargs["on_progress"]({"answer": "临时结论", "citations": []})
-                raise HTTPException(502, "模型流中断")
-            ask.side_effect = generate
+            ask.return_value = {"answer": "已校验结论", "citations": []}
             with self.assertRaises(HTTPException):
-                send_message(db, chat["id"], "owner", "课堂问题", "r", on_progress=Mock())
+                send_message(db, chat["id"], "owner", "课堂问题", "r",
+                    on_progress=Mock(side_effect=HTTPException(502, "结果流中断")))
             history = read_messages(db, chat["id"], "owner")
             self.assertEqual(len(history["messages"]), 1)
             self.assertEqual(history["messages"][0]["status"], "failed")

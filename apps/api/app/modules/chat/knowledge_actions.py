@@ -88,10 +88,14 @@ def status_request_issue(question):
     return ""
 
 
-def candidate_cards(db, username, scope, requested):
+def candidate_cards(db, username, scope, requested, *, course_name=None, lesson_title=None):
     rows = []
     for row in cards.list_cards(db, username):
         if scope and row["course_id"] != scope:
+            continue
+        if course_name and row["course_name"] != course_name:
+            continue
+        if lesson_title and row["lesson_title"] != lesson_title:
             continue
         lesson = owned_lesson(db, row["lesson_id"], username)
         if lesson.course_id != row["course_id"]:
@@ -139,7 +143,8 @@ def actions_for_message(db, conversation_id, username, message_id, token, questi
             if message.content != raw_question or args.status != intent["status"]:
                 raise HTTPException(400, "只按你明确指定的状态修改知识点")
             scope = conversation.course_id or (owned_lesson(db, conversation.lesson_id, username).course_id if conversation.lesson_id else None)
-            matches = candidate_cards(db, username, scope, intent["title"])
+            matches = candidate_cards(db, username, scope, intent["title"],
+                course_name=intent.get("course"), lesson_title=intent.get("lesson"))
             if conversation.lesson_id:
                 matches = [row for row in matches if row["lesson_id"] == conversation.lesson_id]
             if not matches:

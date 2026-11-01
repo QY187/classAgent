@@ -52,7 +52,8 @@ class CourseAgentTest(unittest.TestCase):
             self.assertEqual(read_messages(db, chat["id"], "owner"), result)
             prompts = model.call_args.args[0]
             self.assertIn('"course_id": "c"', prompts[0]["content"])
-            self.assertEqual([item["content"] for item in prompts[1:3]], ["之前的问题", "以前的回答"])
+            history = [item["content"] for item in prompts if item["role"] in {"user", "assistant"}]
+            self.assertEqual(history[:2], ["之前的问题", "以前的回答"])
             self.assertEqual(len(model.call_args.args[1]), 13)
             send_message(db, chat["id"], "owner", "这门课程讲了什么", "r")
             self.assertEqual(model.call_count, 3)

@@ -74,7 +74,7 @@ def quiz_card(db, quiz):
             "course_name": course.name, "question_count": len(quiz.questions), "lesson_ids": json.loads(quiz.lesson_ids_json) if quiz.lesson_ids_json else ([quiz.lesson_id] if quiz.lesson_id else [])}
 
 
-def generate_for_message(db, conversation_id, username, question_id, token, args):
+def generate_for_message(db, conversation_id, username, question_id, token, args, *, requested=None):
     from .access import owned_conversation
     from .generation import GenerationStopped
     def before_save():
@@ -99,6 +99,30 @@ def generate_for_message(db, conversation_id, username, question_id, token, args
                             raise HTTPException(404, "学习记录超出当前课次范围")
             elif args.lesson_ids != [lesson.id]:
                 raise HTTPException(400, "课次对话只能为当前课次出题")
+        if requested:
+            # 题量、题型和显式范围来自已验证计划；续接后也不能由工具模型擅自改变。
+            if requested.get("count") is not None and args.count != requested["count"]:
+                raise HTTPException(400, "请按本次请求指定的题量生成")
+            if requested.get("question_type") and args.question_type != requested["question_type"]:
+                raise HTTPException(400, "请按本次请求指定的题型生成")
+            from .access import owned_course, owned_lesson
+            if requested.get("course") and owned_course(db, args.course_id, username).name != requested["course"]:
+                raise HTTPException(400, "不能改变本次请求指定的课程")
+            if requested.get("lessons"):
+                if isinstance(args, PracticeQuizArguments):
+                    from ...shared.models import ReviewCard, QuizQuestion
+                    lesson_ids = set()
+                    for model, ids, field in ((ReviewCard, args.knowledge_point_ids, "lesson_id"),
+                                             (QuizQuestion, args.wrong_question_ids, "source_lesson_id")):
+                        for identity in ids:
+                            row = db.get(model, identity)
+                            if row is not None:
+                                lesson_ids.add(getattr(row, field))
+                else:
+                    lesson_ids = set(args.lesson_ids or [])
+                actual = [owned_lesson(db, identity, username).title for identity in lesson_ids]
+                if sorted(actual) != sorted(requested["lessons"]):
+                    raise HTTPException(400, "请使用本次请求明确指定的课次范围")
     before_save()
     db.commit()  # 不在模型生成期间持有对话锁。
     practice = isinstance(args, PracticeQuizArguments)

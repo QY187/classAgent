@@ -279,6 +279,7 @@ class ChatConversation(Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     generation_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
     generation_preview_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pending_task_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     generating_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
@@ -302,6 +303,7 @@ class ChatMessage(Base):
     status: Mapped[str] = mapped_column(String(20), default="completed")
     citations_json: Mapped[str] = mapped_column(Text, default="[]")
     agent_steps_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    intent_state_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 

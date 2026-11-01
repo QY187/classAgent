@@ -1,6 +1,5 @@
 """消息发送、幂等请求和失败恢复；所有对话按后端范围绑定 Agent。"""
 import json
-import re
 from fastapi import HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -14,11 +13,13 @@ from .context import recent_context
 from .previews import save_preview
 from .agent_progress import save_agent_step
 from .quiz_actions import generate_for_message
-from .write_intents import resolve_write_intents
+from .turn_intents import resolve_turn_intent
+from .intent_schema import TurnDecision
+from .pending_tasks import start_request, save_decision, next_pending, valid_pending, MAX_CLARIFICATIONS
+from .intent_entities import intent_entities
 from .course_actions import actions_for_message, action_hint as course_action_hint
 from .edit_actions import actions_for_message as edit_actions, action_hint as edit_action_hint
 from .retry_actions import actions_for_message as retry_actions
-from .intents import request_text
 from .lesson_actions import actions_for_message as lesson_actions, action_hint as lesson_action_hint
 from .knowledge_actions import actions_for_message as knowledge_actions
 from .action_verification import verify_actions
@@ -81,6 +82,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
         course_id = lesson.course_id
     position = existing.position
     context = recent_context(db, conversation_id, position)
+    intent_snapshot = start_request(existing, conversation)
     db.commit()
     question_id = existing.id
     try:
@@ -103,18 +105,28 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
                 on_step(progress)
         bound_course = owned_course(db, course_id, username).name if course_id else None
         bound_lesson = owned_lesson(db, lesson_id, username).title if lesson_id else None
+        pending = valid_pending(intent_snapshot.get("pending"), conversation, position)
+        entities = intent_entities(db, conversation.user_id, course_id, lesson_id)
         db.rollback()  # 模型理解期间不持有数据库事务。
-        # 普通读取直接进入主 Agent；只有疑似写入/出题/核对请求才做额外的授权解析。
-        # 这样读取类问题走主流的“一次模型理解并选工具”路径，写入仍保留严格授权边界。
-        write_candidate = bool(re.search(
-            r"创建|新建|添加|新增|修改|改名|重命名|标记|设置|重试|重新转写|出题|小测|测验|练习|生成(?:一套|几道|[0-9一二三四五六七八九十]+道)?(?:小测|测验|练习|题)|刚才.{0,12}(?:成功|完成)",
-            question
-        ))
-        semantic = (resolve_write_intents(question, context, bound_course=bound_course, bound_lesson=bound_lesson)
-                    if write_candidate else None)
+        # 每条消息都做语义规划；只从后端待办续接，普通历史不能恢复写权限。
+        # 同请求失败重试复用已验证计划，不因模型重判而改变动作或参数。
+        if intent_snapshot.get("decision"):
+            decision = TurnDecision.model_validate(intent_snapshot["decision"])
+        else:
+            intent_snapshot["pending"] = pending
+            decision = resolve_turn_intent(question, context, pending=pending,
+                bound_course=bound_course, bound_lesson=bound_lesson, entities=entities)
+            check()
+            current = owned_conversation(db, conversation_id, username, lock=True)
+            if current.generation_token != token:
+                raise GenerationStopped()
+            save_decision(db.get(ChatMessage, question_id), intent_snapshot, decision)
+            db.commit()
+        semantic = decision.intent.legacy()
         check()
         quiz_intent = semantic.get("quiz", "none") if semantic else "none"
-        generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args)) if quiz_intent != "none" else None
+        generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args,
+            requested=semantic.get("quiz_spec"))) if quiz_intent != "none" else None
         verification = verify_actions(db, conversation_id, username, question_id, semantic["verify"]) if semantic and "verify" in semantic else None
         action_hints = {"create_course": course_action_hint(question, context, semantic),
                         "create_lesson": lesson_action_hint(question, context, semantic),
@@ -125,7 +137,12 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
         if semantic is not None:
             action_hints.update({"semantic_queries": semantic.get("queries", []),
                                  "semantic_catalog": semantic.get("catalog", []),
-                                 "retry_transcription": semantic.get("retry", {})})
+                                 "retry_transcription": semantic.get("retry", {}),
+                                 "quiz_request": semantic.get("quiz_spec", {})})
+        if decision.relation == "continue":
+            action_hints["pending_task"] = {"request": intent_snapshot["pending"]["request"],
+                "clarification": intent_snapshot["pending"]["clarification"],
+                "instruction": "用户本轮在补充已授权待办，按本轮语义参数执行剩余任务；已完成动作不重放。"}
         agent_context = ToolContext(username, course_id=course_id, lesson_id=lesson_id, generate_quiz=generate,
             practice_only=quiz_intent == "practice",
             actions=actions_for_message(db, conversation_id, username, question_id, token, question, context, semantic) |
@@ -135,12 +152,21 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
                     edit_actions(db, conversation_id, username, question_id, token, question, context, semantic),
             action_hints=action_hints)
         verification_only = verification and set(semantic) <= {"verify", "queries", "catalog"} and not semantic.get("queries")
-        if verification_only:
+        clarification = decision.clarification or decision.intent.issue
+        if clarification:
+            result = {"answer": clarification, "citations": [], "outcome": "needs_input", "steps": []}
+        elif decision.relation == "cancel" and not decision.intent.queries:
+            result = {"answer": "已取消待处理的操作。" if intent_snapshot.get("pending") else "本轮不执行任何操作。",
+                      "citations": [], "outcome": "answered", "steps": []}
+        elif verification_only:
             result = {"answer": verification, "citations": [], "outcome": "answered", "steps": []}
         else:
-            result = run_agent(db, agent_context, request_text(question), history=context, on_check=check, on_step=publish_step)
+            result = run_agent(db, agent_context, question, history=context, on_check=check, on_step=publish_step)
         if verification and not verification_only:
             result["answer"] = verification + "\n\n" + result["answer"]
+        if (decision.relation == "continue" and intent_snapshot["pending"]["turns"] >= MAX_CLARIFICATIONS
+                and (result.get("outcome") == "needs_input" or result.get("clarification"))):
+            result["answer"] += "\n\n本次补充次数已达到上限，请重新完整描述操作、目标和参数。"
         if on_progress is not None:
             publish(result)
         db.rollback()
@@ -151,6 +177,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
             ChatMessage.request_id == request_id, ChatMessage.role == "user"))
         user_message.status = "completed"
         user_message.error_message = None
+        conversation.pending_task_json = next_pending(db, conversation, user_message, intent_snapshot, decision, result)
         db.add(ChatMessage(conversation_id=conversation_id, request_id=request_id, position=position + 1,
             role="assistant", content=result["answer"], citations_json=json.dumps(result["citations"], ensure_ascii=False)))
         conversation.generation_token = None

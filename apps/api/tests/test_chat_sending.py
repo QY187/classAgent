@@ -15,7 +15,7 @@ class ChatSendingTest(unittest.TestCase):
     setUp = fixtures.RecycleVisibilityTest.setUp
     tearDown = fixtures.RecycleVisibilityTest.tearDown
 
-    @patch("app.modules.chat.sending.ask_course", return_value={"answer":"恢复后的回答", "citations":[]})
+    @patch("app.modules.chat.sending.run_agent", return_value={"answer":"恢复后的回答", "citations":[]})
     def test_expired_generation_can_retry_original_question(self, ask):
         with Session(self.engine) as db:
             chat = create_conversation(db, "l", "owner")
@@ -26,7 +26,7 @@ class ChatSendingTest(unittest.TestCase):
             self.assertEqual(len(result["messages"]), 2)
             self.assertFalse(result["conversation"]["generating"])
 
-    @patch("app.modules.chat.sending.ask_course")
+    @patch("app.modules.chat.sending.run_agent")
     def test_recycled_lesson_during_generation_does_not_save_answer(self, ask):
         with Session(self.engine) as db:
             chat = create_conversation(db, "l", "owner")
@@ -41,7 +41,7 @@ class ChatSendingTest(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0].status, "failed")
 
-    @patch("app.modules.chat.sending.ask_course", return_value={"answer":"原文依据", "citations":[]})
+    @patch("app.modules.chat.sending.run_agent", return_value={"answer":"原文依据", "citations":[]})
     def test_follow_up_uses_only_this_conversation_completed_history(self, ask):
         with Session(self.engine) as db:
             chat = create_conversation(db, "l", "owner")
@@ -51,9 +51,9 @@ class ChatSendingTest(unittest.TestCase):
             send_message(db, chat["id"], "owner", "能举个例子吗", "follow")
             context = ask.call_args.kwargs["history"]
             self.assertEqual([item["content"] for item in context], ["二叉树定义", "原文依据"])
-            self.assertEqual(ask.call_args.kwargs["lesson_id"], "l")
+            self.assertEqual(ask.call_args.args[1].lesson_id, "l")
 
-    @patch("app.modules.chat.sending.ask_course", return_value={"answer":"有依据的答案", "citations":[{"id":1}]})
+    @patch("app.modules.chat.sending.run_agent", return_value={"answer":"有依据的答案", "citations":[{"id":1}]})
     def test_saving_and_same_request_is_idempotent(self, ask):
         with Session(self.engine) as db:
             chat = create_conversation(db, "l", "owner")
@@ -61,11 +61,15 @@ class ChatSendingTest(unittest.TestCase):
             second = send_message(db, chat["id"], "owner", "课堂问题", "request")
             self.assertEqual(len(second["messages"]), 2)
             self.assertEqual(first["messages"][1]["citations"], [{"id":1}])
-            ask.assert_called_once_with(db, "c", "owner", "课堂问题", lesson_id="l")
+            ask.assert_called_once()
+            self.assertIs(ask.call_args.args[0], db)
+            self.assertEqual(ask.call_args.args[1].course_id, "c")
+            self.assertEqual(ask.call_args.args[1].lesson_id, "l")
+            self.assertEqual(ask.call_args.args[2], "课堂问题")
             with self.assertRaises(HTTPException):
                 send_message(db, chat["id"], "owner", "另一个问题", "request")
 
-    @patch("app.modules.chat.sending.ask_course")
+    @patch("app.modules.chat.sending.run_agent")
     def test_failed_question_can_retry_without_duplicate(self, ask):
         with Session(self.engine) as db:
             chat = create_conversation(db, "l", "owner")
@@ -77,7 +81,7 @@ class ChatSendingTest(unittest.TestCase):
             result = send_message(db, chat["id"], "owner", "课堂问题", "request")
             self.assertEqual([m["status"] for m in result["messages"]], ["completed", "completed"])
 
-    @patch("app.modules.chat.sending.ask_course")
+    @patch("app.modules.chat.sending.run_agent")
     def test_busy_conversation_rejects_duplicate_generation(self, ask):
         with Session(self.engine) as db:
             chat = create_conversation(db, "l", "owner")

@@ -3,9 +3,9 @@ import json
 import os
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
-os.environ["DASHSCOPE_API_KEY"] = "test-key"
 
 from fastapi import UploadFile  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
@@ -44,7 +44,9 @@ class BrowserTranscriptUploadTest(unittest.TestCase):
             file=io.BytesIO(b"audio data"),
             headers=Headers({"content-type": "audio/webm"}),
         )
-        with patch("app.modules.lessons.service.upload_file"), patch(
+        with patch("app.core.config.get_settings", return_value=SimpleNamespace(
+            dashscope_api_key="offline-test-key", summary_provider="deepseek"
+        )), patch("app.modules.lessons.service.upload_file"), patch(
             "app.infrastructure.tasks.generate_summary.delay"
         ) as summary_task, patch("app.infrastructure.tasks.process_audio.delay") as asr_task:
             job = upload_audio(self.db, self.lesson.id, audio, transcript, "test")

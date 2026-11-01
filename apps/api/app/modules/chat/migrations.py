@@ -1,6 +1,15 @@
 from sqlalchemy import inspect, text
 
 
+def prepare_chat_intent_state(engine) -> None:
+    """为既有会话补充待澄清状态及请求级计划；可重复执行，不修改旧消息。"""
+    inspector = inspect(engine)
+    for table, column in (("chat_conversations", "pending_task_json"), ("chat_messages", "intent_state_json")):
+        if inspector.has_table(table) and column not in {item["name"] for item in inspector.get_columns(table)}:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} TEXT"))
+
+
 def prepare_chat_cancellation(engine) -> None:
     inspector = inspect(engine)
     if inspector.has_table("chat_conversations"):

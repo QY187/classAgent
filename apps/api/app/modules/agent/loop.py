@@ -206,7 +206,13 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             quiz_tool = "generate_practice_quiz" if context.practice_only else "generate_quiz"
             if context.generate_quiz is not None and quiz_tool not in actions.results:
                 unperformed.add(quiz_tool)
-            if unperformed and not repaired:
+            try:
+                final_payload = parse_response(message.get("content"))
+                requested_clarification = final_payload.get("outcome") == "needs_input"
+            except (ValueError, TypeError):
+                requested_clarification = False
+            # 合法澄清和实际工具失败是停止条件，不能为了“未执行”再催促模型盲目尝试。
+            if unperformed and not repaired and not requested_clarification and not actions.errors:
                 repaired = True
                 messages.append(message)
                 messages.append({"role": "system", "content": "本条仍有操作未实际执行：" + "、".join(sorted(unperformed)) + "。目标和参数明确且业务条件允许时实际执行；缺少信息、范围不允许或来源不可用时明确澄清，不声称已完成。已经成功的操作不得重复执行。"})

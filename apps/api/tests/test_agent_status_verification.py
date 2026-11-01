@@ -32,6 +32,7 @@ class StatusVerificationTest(unittest.TestCase):
             self.assertIn("需要复习",result["messages"][-1]["content"])
             self.assertEqual(db.get(ReviewCard,"r").status,"review")
             self.assertEqual(len(db.scalars(select(AgentAction)).all()),1)
-            self.assertEqual(result["messages"][-2]["steps"][0]["label"],"查询知识点状态")
+            # 核对直接读取事务回执及当前数据，不再伪造一次模型工具步骤。
+            self.assertEqual(result["messages"][-2]["steps"], [])
             for original in ["怎么把前序遍历标记为已掌握？", "不要把前序遍历标记为已掌握"]:
                 self.assertEqual(status_verification_hint(db,"owner","c","刚才修改成功了吗？",[{"role":"user","content":original}]),{})
