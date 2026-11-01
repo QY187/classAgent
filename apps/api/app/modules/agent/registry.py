@@ -45,7 +45,7 @@ _definitions = (
     ToolDefinition("update_knowledge_status", "仅用户明确要求将某个知识点标记为指定状态时可用。必须先用 list_knowledge_points 查找并确认唯一目标，再使用本次查到的 knowledge_point_id。new 未学习、review 需要复习、mastered 已掌握。不依据成绩推断或批量修改，同名或范围有歧义先澄清；每条问题最多修改一个知识点。", KnowledgeStatusArguments, knowledge_actions.update_knowledge_status, writes=True),
     ToolDefinition("get_transcript", "分页读取课堂文字记录，包含片段编号和时间点。truncated 表示该片段文本被截短。", TranscriptArguments, tools.get_transcript),
     ToolDefinition("get_summary", "读取已有纪要及状态，按字符分页；available 为 false 时不可作为课堂依据。", SummaryArguments, tools.get_summary),
-    ToolDefinition("search_course", "按关键词搜索课堂文字记录，返回原文片段和时间点；不是语义检索，未命中不代表课堂没有相关内容。", SearchArguments, tools.search_course),
+    ToolDefinition("search_course", "在授权课程/课次内混合检索课堂文字记录，结合词法与向量候选、重排和父块上下文返回原文及时间点；索引不可用时可回退关键词检索，未命中不代表课堂没有相关内容。", SearchArguments, tools.search_course),
     ToolDefinition("list_knowledge_points", "查询知识点与用户手动标记的状态：new 未学习、review 需要复习、mastered 已掌握；all 全部。支持课程、课次、关键词和分页，省略课程时使用当前对话范围，主对话可查全部课程。状态不是考试评估。body_truncated 表示正文不完整，可指定已查到的 knowledge_point_id 和 next_body_offset 作为 body_offset 分页读取正文，body_limit 最大 4000。课堂事实须进一步读取该课次当前原文引用。", KnowledgeListArguments, learning.list_knowledge_points),
     ToolDefinition("list_wrong_questions", "查询错题本，pending 待巩固、mastered 最近作答正确、all 全部。支持课程、来源课次、题干关键词和分页；wrong_count 是小测答错次数，retry_count 是错题重练次数；不返回答案。省略课程时使用当前对话范围，主对话可查全部课程。", WrongQuestionListArguments, learning.list_wrong_questions),
     ToolDefinition("list_quiz_attempts", "查询自己的已提交小测成绩，最新作答在前，可按课程、quiz_id、小测标题关键词筛选及分页。省略课程使用当前课程，主对话查询全部课程；未提交小测不计入。page_summary 只统计本页，不是全部历史。返回真实 attempt id，可继续 get_quiz_attempt 查看某次作答。", QuizAttemptListArguments, quiz_results.list_quiz_attempts),

@@ -118,7 +118,7 @@ def search_course(db: Session, context: ToolContext, args: SearchArguments) -> d
                 "items": [{"segment_id": row["segment_id"], "lesson_id": row["lesson_id"],
                            "lesson_title": row["lesson_title"], "start_ms": row["start_ms"],
                            "snippet": row["snippet"]} for row in legacy[:args.limit]]}
-    lessons_by_id = {row.id: lessons.get_lesson(db, row.lesson_id, context.username) for row in rows}
+    lessons_by_id = {row.lesson_id: lessons.get_lesson(db, row.lesson_id, context.username) for row in rows}
     return {"course_id": args.course_id, "lesson_id": lesson_id, "query": args.query,
             "retrieval_method": "hybrid_bm25_vector", "has_more": False,
             "items": [{"segment_id": source_ids[0] if source_ids else row.id, "lesson_id": row.lesson_id,

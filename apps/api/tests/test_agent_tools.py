@@ -10,7 +10,7 @@ from app.core.db import Base
 from app.modules.agent.executor import execute_tool
 from app.modules.agent.registry import tool_schemas
 from app.modules.agent.tools import ToolContext
-from app.shared.models import Course, Lesson, LessonSummary, TranscriptSegment, User
+from app.shared.models import Course, DocumentChunk, Lesson, LessonSummary, TranscriptSegment, User
 
 
 class AgentToolTest(unittest.TestCase):
@@ -144,6 +144,21 @@ class AgentToolTest(unittest.TestCase):
         self.assertEqual(self.call("list_lessons", {"course_id": "c1"})["data"]["total"], 1)
         self.db.get(Course, "c1").deleted_at = datetime.now(timezone.utc); self.db.commit()
         self.assertEqual(self.call("list_courses", {}, ToolContext("owner", "c1"))["error"]["code"], "not_found")
+
+    @patch("app.modules.agent.tools.hybrid_retrieve")
+    def test_hybrid_chunks_keep_their_own_lesson_titles_and_sources(self, retrieve):
+        retrieve.return_value = [DocumentChunk(id=f"chunk-{index}", lesson_id=lesson_id,
+            content="二叉树课堂内容", start_ms=1000 + index,
+            source_segment_ids=json.dumps([f"s-{lesson_id}"]))
+            for index, lesson_id in enumerate(("l2", "l1", "l2"))]
+        result = self.call("search_course", {"course_id": "c1", "query": "二叉树", "limit": 3})
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["data"]["retrieval_method"], "hybrid_bm25_vector")
+        rows = result["data"]["items"]
+        self.assertEqual([row["lesson_title"] for row in rows], ["第二讲", "第一讲", "第二讲"])
+        self.assertEqual([row["segment_id"] for row in rows], ["s-l2", "s-l1", "s-l2"])
+        self.assertEqual([row["start_ms"] for row in rows], [1000, 1001, 1002])
+        self.assertTrue(all(row["source_segment_ids"] == [row["segment_id"]] for row in rows))
 
     def test_internal_failure_never_returns_exception_or_credentials(self):
         with patch("app.modules.agent.tools.courses.list_courses", side_effect=RuntimeError("secret_token database error")):
