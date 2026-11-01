@@ -249,6 +249,27 @@ class SemanticSendingTest(unittest.TestCase):
             parser.assert_called_once()
         self.assertEqual(self.db.query(ChatMessage).filter_by(role="user").count(),1)
 
+    @patch("app.modules.agent.loop.complete")
+    def test_rejected_target_can_resume_only_after_explicit_clarification(self, model):
+        plan = decision({"edit": {"kind": "lesson", "target": "找不到的课次",
+                                  "fields": {"lesson_date": "2026-11-02"}}})
+        model.side_effect = [call("list_lessons", {"course_id": "c"}, "lookup"),
+            call("update_lesson", {"lesson_id": "l", "lesson_date": "2026-11-02"}, "rejected"),
+            {"content": '{"claims":[],"outcome":"needs_input","question":"请核对课次名称？"}'},
+            call("list_lessons", {"course_id": "c"}, "lookup-again"),
+            call("update_lesson", {"lesson_id": "l", "lesson_date": "2026-11-02"}, "accepted"), DONE]
+        with patch("app.modules.chat.sending.resolve_turn_intent", return_value=plan):
+            self.send("把找不到的课次改为2026年11月2日", "bad-target")
+        self.assertEqual(self.db.query(AgentAction).count(), 0)
+        task = self.pending()
+        self.assertIsNotNone(task)
+        corrected = decision({"edit": {"kind": "lesson", "target": "第一讲",
+            "fields": {"lesson_date": "2026-11-02"}}}, relation="continue", task_id=task["id"])
+        with patch("app.modules.chat.sending.resolve_turn_intent", return_value=corrected):
+            self.send("我指的是第一讲", "corrected-target")
+        self.assertEqual(self.db.get(Lesson, "l").lesson_date, "2026-11-02")
+        self.assertEqual(self.db.query(AgentAction).count(), 1)
+        self.assertIsNone(self.pending())
 
     def test_plan_is_not_saved_if_generation_cancelled_during_parser(self):
         from app.modules.chat.cancellation import stop_generation

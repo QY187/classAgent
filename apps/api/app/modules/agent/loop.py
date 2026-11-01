@@ -211,6 +211,16 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 requested_clarification = final_payload.get("outcome") == "needs_input"
             except (ValueError, TypeError):
                 requested_clarification = False
+            groups = set(context.action_hints["semantic_queries"]) if "semantic_queries" in context.action_hints else requested_query_groups(question)
+            catalog_kinds = set(context.action_hints["semantic_catalog"]) if "semantic_catalog" in context.action_hints else requested_catalog_kinds(question)
+            missing_queries = [group for group in groups if (
+                not evidence.catalog_complete(catalog_kinds) if group == "catalog" else not getattr(evidence, group).queries)]
+            if missing_queries and not actions.results and not repaired and not requested_clarification:
+                repaired = True
+                messages.append(message)
+                messages.append({"role": "system", "content": "本条还有查询未完成：" + "、".join(sorted(missing_queries)) +
+                    "。请完成可执行的读取并保留所有查询编号；失败的写入不能妨碍独立读取，也不要重复执行已经成功的动作。"})
+                continue
             # 合法澄清和实际工具失败是停止条件，不能为了“未执行”再催促模型盲目尝试。
             if unperformed and not repaired and not requested_clarification and not actions.errors:
                 repaired = True
@@ -251,20 +261,70 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                     answer += "\n\n尚未完整完成的查询：" + "、".join(labels[group] for group in sorted(missing)) + "。请继续查询。"
                 if actions.errors:
                     answer += "\n\n未完成的操作：" + "；".join(actions.errors.values())
-                if set(context.actions) - set(actions.results):
+                pending_actions = set(context.actions) - set(actions.results)
+                if context.generate_quiz is not None and quiz_tool not in actions.results:
+                    pending_actions.add(quiz_tool)
+                if pending_actions:
                     answer += "\n\n其他请求的操作尚未执行，请补充明确的目标信息后继续。"
                 return {"answer": answer, "citations":combined["citations"] if combined else [],
-                        "outcome": "actions_completed", "steps": steps}
+                        "outcome": "actions_completed", "steps": steps,
+                        **({"clarification": payload.get("question") or "请补充尚未完成操作的目标或参数？"}
+                           if pending_actions else {})}
             if actions.errors:
-                return {"answer": "；".join(actions.errors.values()), "citations": [], "outcome": "operation_failed", "steps": steps}
+                answer = "；".join(actions.errors.values())
+                citations = []
+                selections = {"claims": []}
+                for group in groups:
+                    if group == "catalog":
+                        if evidence.catalog_complete(catalog_kinds):
+                            selections[group] = evidence.catalog_selection(catalog_kinds)
+                    else:
+                        queries = getattr(evidence, group).queries
+                        if queries:
+                            selections[group] = {"query_ids": list(queries)}
+                if len(selections) > 1:
+                    try:
+                        independent = compose_answer(db, context, selections, evidence, steps)
+                        answer += "\n\n" + independent["answer"]
+                        citations = independent["citations"]
+                    except (ValueError, TypeError):
+                        answer += "\n\n其他查询结果未通过核验，请重新查询。"
+                if missing_queries:
+                    answer += "\n\n仍有查询未完成，请补充范围后重试。"
+                clarification = final_payload["question"] if requested_clarification else None
+                if clarification:
+                    answer += "\n\n" + clarification
+                return {"answer": answer, "citations": citations, "outcome": "operation_failed", "steps": steps,
+                        **({"clarification": clarification} if clarification else {})}
             try:
                 final = finalize(db, context, message.get("content"), evidence, steps)
                 if unperformed:
                     labels = {"create_course":"创建课程", "create_lesson":"添加课次", "update_course":"修改课程信息", "update_lesson":"修改课次信息", "update_knowledge_status":"修改知识点状态", "retry_transcription":"重试转写", "generate_quiz":"生成小测", "generate_practice_quiz":"生成薄弱点练习"}
                     final["answer"] += "\n\n尚未执行的操作：" + "、".join(labels.get(name, name) for name in sorted(unperformed)) + "。"
+                    final["clarification"] = final["answer"] if final.get("outcome") == "needs_input" else "请补充尚未执行操作的目标或参数？"
+                    final["outcome"] = "needs_input"
                 return final
             except InvalidFinalResponse:
                 if repaired:
+                    # 已实际完成的业务读取可以由后端重建；不采纳模型的无效文本或虚构引用。
+                    if groups and not missing_queries and not unperformed:
+                        verified = {"claims": []}
+                        for group in groups:
+                            verified[group] = (evidence.catalog_selection(catalog_kinds) if group == "catalog"
+                                               else {"query_ids": list(getattr(evidence, group).queries)})
+                        result = compose_answer(db, context, verified, evidence, steps)
+                        result["answer"] += "\n\n以上为已核验的查询结果；本次自由回答未通过格式校验，其余内容请重新提问。"
+                        return result
+                    # 名称定位为空时无法继续查询课次；只报告真实空结果，不将其解释为任务完成。
+                    named_reads = [(name, args, data) for name, args, data in evidence.catalog_reads if args.get("query")]
+                    if (named_reads and not unperformed and not evidence.entries
+                            and not any(getattr(evidence, group).queries for group in
+                                        ("progress", "workflow", "learning", "quiz_results"))):
+                        name, args, data = named_reads[-1]
+                        if not args.get("offset", 0) and data.get("total") == 0 and not data.get("items"):
+                            label = "课程" if name == "list_courses" else "课次"
+                            return {"answer": f"按本次名称条件未找到匹配的{label}，后续查询尚未完成。请确认{label}名称后重试？",
+                                    "citations": [], "outcome": "needs_input", "steps": steps}
                     raise
                 repaired = True
                 messages.append(message)
@@ -310,10 +370,14 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 label = "薄弱点练习题" if name == "generate_practice_quiz" else "课堂小测题"
                 message_text = f"已生成 {result['data']['question_count']} 道{label}，可以开始答题。"
                 if not context.action_hints.get("semantic_queries") and not (set(context.actions) - set(actions.results)):
-                    return {"answer": message_text, "citations": [], "outcome": "quiz_created", "steps": steps}
+                    previous_actions = actions.answer() if actions.results else ""
+                    return {"answer": (previous_actions + "\n\n" if previous_actions else "") + message_text,
+                            "citations": [], "outcome": "quiz_created", "steps": steps}
                 actions.results[name] = {"message": message_text}
             if name in {"generate_quiz", "generate_practice_quiz"} and result.get("error", {}).get("code") == "generation_failed":
-                return {"answer": result["error"]["message"], "citations": [], "outcome": "operation_failed", "steps": steps}
+                previous_actions = actions.answer() if actions.results else ""
+                return {"answer": (previous_actions + "\n\n" if previous_actions else "") + result["error"]["message"],
+                        "citations": [], "outcome": "operation_failed", "steps": steps}
             messages.append({"role": "tool", "tool_call_id": call["id"],
                              "content": json.dumps(result, ensure_ascii=False)})
             calls_used += 1
