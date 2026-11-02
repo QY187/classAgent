@@ -18,7 +18,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserInf
     if not get_settings().allow_registration:
         raise HTTPException(status_code=403, detail="当前站点未开放注册")
     user = service.register_user(db, payload.username, payload.password)
-    return UserInfo(username=user.username, has_avatar=bool(user.avatar_content_type))
+    return UserInfo(username=user.username, role=user.role, has_avatar=bool(user.avatar_content_type))
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -51,7 +51,7 @@ def logout_all(username: str = Depends(get_current_user), db: Session = Depends(
 @router.get("/me", response_model=UserInfo)
 def me(username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> UserInfo:
     user = service.user_by_username(db, username)
-    return UserInfo(username=user.username, has_avatar=bool(user.avatar_content_type))
+    return UserInfo(username=user.username, role=user.role, has_avatar=bool(user.avatar_content_type))
 
 
 @router.get("/avatar")
@@ -70,7 +70,7 @@ def get_avatar(username: str = Depends(get_current_user), db: Session = Depends(
 def upload_avatar(file: UploadFile = File(...), username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> UserInfo:
     data = file.file.read(service.MAX_AVATAR_BYTES + 1)
     user = service.save_avatar(db, username, data)
-    return UserInfo(username=user.username, has_avatar=True)
+    return UserInfo(username=user.username, role=user.role, has_avatar=True)
 
 
 @router.post("/change-password")

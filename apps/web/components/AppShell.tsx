@@ -40,6 +40,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const searchActive = pathname === "/search";
   const chatActive = pathname === "/chat";
   const settingsActive = pathname === "/settings";
+  const monitoringActive = pathname === "/monitoring";
 
   useEffect(() => {
     if (isLogin) {
@@ -109,6 +110,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <Link className={`nav-item ${chatActive ? "active" : ""}`} href="/chat" aria-label="问答工作台" title="问答工作台"><span className="nav-icon"><SidebarIcon name="chat" /></span><span>问答工作台</span></Link>
           <Link className={`nav-item ${wrongBookActive ? "active" : ""}`} href="/wrong-questions" aria-label="错题本" title="错题本"><span className="nav-icon"><SidebarIcon name="notebook" /></span><span>错题本</span></Link>
           <Link className={`nav-item ${recycleActive ? "active" : ""}`} href="/recycle-bin" aria-label="回收站" title="回收站"><span className="nav-icon"><SidebarIcon name="trash" /></span><span>回收站</span></Link>
+          {user?.role === "admin" && <Link className={`nav-item ${monitoringActive ? "active" : ""}`} href="/monitoring" aria-label="运行监控" title="运行监控"><span className="nav-icon"><SidebarIcon name="monitor" /></span><span>运行监控</span></Link>}
         </nav>
         <div className="side-section">
           <div className="nav-label">我的课程</div>
@@ -131,7 +133,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-controls="app-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"} title={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /><path d={sidebarCollapsed ? "m13 9 3 3-3 3" : "m16 9-3 3 3 3"} /></svg></button>
           <nav className="breadcrumb" aria-label="当前位置">
-            {courseMatch || lessonMatch || chatActive || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive || pendingActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
+            {courseMatch || lessonMatch || chatActive || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive || pendingActive || monitoringActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
             {pendingActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">待处理课次</span></>}
             {chatActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">问答工作台</span></>}
             {recycleActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">回收站</span></>}
@@ -139,6 +141,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             {searchActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">全局搜索</span></>}
             {reviewActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">知识点清单</span></>}
             {settingsActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">个人设置</span></>}
+            {monitoringActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">运行监控</span></>}
             {(courseMatch || (lessonMatch && lessonInfo)) && <><span className="breadcrumb-separator" aria-hidden="true">/</span>{lessonMatch && lessonInfo ? <Link className="breadcrumb-link" href={`/courses/${lessonInfo.course_id}`}>{activeCourseName || "我的课程"}</Link> : <span className="breadcrumb-current" aria-current="page">{activeCourseName || "我的课程"}</span>}</>}
             {lessonMatch && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">{lessonTitle || "我的课次"}</span></>}
             {lessonMatch && pathname.endsWith("/summary") && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">智能纪要</span></>}

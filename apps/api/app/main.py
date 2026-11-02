@@ -4,8 +4,8 @@ from sqlalchemy import inspect, select, text
 
 from .core.config import get_settings
 from .core.db import Base, SessionLocal, engine
-from .core.telemetry import configure_trace_logging
-from .core.passwords import hash_password
+from .core.telemetry import configure_trace_logging, configure_trace_sink
+from .core.passwords import hash_password, verify_password
 from .modules.auth.controller import router as auth_router
 from .modules.courses.controller import router as courses_router
 from .modules.lessons.controller import router as lessons_router
@@ -24,6 +24,8 @@ from .modules.recycle_bin.controller import router as recycle_bin_router
 from .modules.chat.controller import router as chat_router
 from .modules.chat.migrations import prepare_chat_scope, prepare_chat_cancellation, prepare_chat_pinning, prepare_chat_archive
 from .modules.chat.migrations import prepare_chat_intent_state
+from .modules.monitoring.controller import router as monitoring_router
+from .modules.monitoring.persistence import start_persistence
 
 
 configure_trace_logging()
@@ -43,6 +45,7 @@ def prepare_database() -> None:
         connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     _prepare_course_owner_columns()
     _prepare_user_avatar_column()
+    bootstrap_roles = _prepare_user_role_column()
     _prepare_course_material_columns()
     _prepare_lesson_sort_column()
     prepare_deleted_columns(engine)
@@ -54,8 +57,26 @@ def prepare_database() -> None:
     prepare_quiz_scope(engine)
     prepare_document_chunks(engine)
     Base.metadata.create_all(bind=engine)
-    _seed_root_user()
+    _seed_root_user(bootstrap_roles=bootstrap_roles)
     _backfill_course_owner_ids()
+    app.state.trace_engine = start_persistence()
+
+
+@app.on_event("shutdown")
+def close_trace_persistence() -> None:
+    configure_trace_sink(None)
+    trace_engine = getattr(app.state, "trace_engine", None)
+    if trace_engine is not None:
+        trace_engine.dispose()
+
+
+def _prepare_user_role_column() -> bool:
+    inspector = inspect(engine)
+    if inspector.has_table("users") and "role" not in {column["name"] for column in inspector.get_columns("users")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"))
+        return True
+    return False
 
 
 def _prepare_lesson_sort_column() -> None:
@@ -112,12 +133,18 @@ def _backfill_course_owner_ids() -> None:
             connection.execute(text("ALTER TABLE courses ADD CONSTRAINT courses_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES users(id)"))
 
 
-def _seed_root_user() -> None:
+def _seed_root_user(*, bootstrap_roles=False) -> None:
     settings = get_settings()
     with SessionLocal() as db:
         if db.scalar(select(User.id).limit(1)) is None:
-            db.add(User(username=settings.admin_username, password_hash=hash_password(settings.admin_password)))
+            db.add(User(username=settings.admin_username, password_hash=hash_password(settings.admin_password), role="admin"))
             db.commit()
+        elif bootstrap_roles:
+            user = db.scalar(select(User).where(User.username == settings.admin_username))
+            # 存量升级只在首次加列时校验启动管理员凭证；不能通过修改用户名获得管理员权限。
+            if user is not None and verify_password(settings.admin_password, user.password_hash):
+                user.role = "admin"
+                db.commit()
 
 
 @app.get("/health", tags=["system"])
@@ -137,3 +164,4 @@ app.include_router(materials_router)
 app.include_router(quizzes_router)
 app.include_router(recycle_bin_router)
 app.include_router(chat_router)
+app.include_router(monitoring_router)
