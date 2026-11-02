@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import get_settings
+from .telemetry import install_sql_metrics
 
 
 class Base(DeclarativeBase):
@@ -11,6 +12,7 @@ class Base(DeclarativeBase):
 
 
 engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+install_sql_metrics()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

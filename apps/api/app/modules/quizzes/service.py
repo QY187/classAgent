@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
 from ...core.ownership import user_id_for_username
+from ...core.telemetry import annotate, record_usage, traced
 from ...shared.models import Course, Lesson, Quiz, QuizAnswer, QuizAttempt, QuizQuestion, QuizQuestionRetry, ReviewCard, TranscriptSegment
 from ..summaries.service import _parse_json
 from .schemas import QuizGenerate, QuizSubmit, WrongQuestionRetry
@@ -59,8 +60,10 @@ def _source_segments(db: Session, course_id: str, lesson_ids: list[str] | None) 
     return samples
 
 
+@traced("model.quiz", kind="model")
 def _generate_questions(segments: list[TranscriptSegment], count: int, question_type: str = "mixed", *, focus_topics=None, source_windows=None) -> list[dict]:
     settings = get_settings()
+    annotate(provider="deepseek", model=settings.summary_model, purpose="quiz", timeout_seconds=120)
     if not settings.deepseek_api_key:
         raise HTTPException(status_code=503, detail="未配置 AI 服务，无法生成课堂小测")
     sources = "\n".join(f"[{i}]（课次 {segment.lesson_id}）{source_windows[segment.id] if source_windows else segment.text[:350]}" for i, segment in enumerate(segments, 1))
@@ -88,7 +91,9 @@ def _generate_questions(segments: list[TranscriptSegment], count: int, question_
             timeout=120,
         )
         response.raise_for_status()
-        payload = _parse_json(response.json()["choices"][0]["message"]["content"])
+        response_payload = response.json()
+        record_usage(response_payload.get("usage"))
+        payload = _parse_json(response_payload["choices"][0]["message"]["content"])
     except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError) as exc:
         raise HTTPException(status_code=502, detail="小测生成失败，请稍后重试") from exc
     items = payload.get("questions")

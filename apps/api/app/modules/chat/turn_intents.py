@@ -1,5 +1,6 @@
 """每轮统一语义规划；失败关闭写权限，不使用关键词或历史正则降级。"""
 import json
+from hashlib import sha256
 from time import monotonic
 
 from fastapi import HTTPException
@@ -7,6 +8,7 @@ from pydantic import ValidationError
 
 from .dates import current_day, normalize_lesson_date
 from .intent_schema import TurnDecision, missing_information
+from ...core.telemetry import annotate, trace_event, traced
 
 
 PROMPT = """你是课堂助手的当前轮语义规划器。每条用户消息都交由你理解，不要求固定关键词。
@@ -84,9 +86,11 @@ def validate_creation_target(decision, entities, bound_course):
                          "不能因同名自动授权修改，也不能忽略实体信息重复新建。")
 
 
+@traced("intent.resolve")
 def resolve_turn_intent(question, history=None, *, pending=None, bound_course=None,
                         bound_lesson=None, reference_day=None, entities=None) -> TurnDecision:
     from ..agent.completion import complete
+    annotate(prompt_revision=sha256(PROMPT.encode()).hexdigest()[:16], pending=bool(pending))
     reference_day = reference_day or current_day()
     messages = [
         {"role": "system", "content": PROMPT + "\nJSON Schema：" + json.dumps(TurnDecision.model_json_schema(), ensure_ascii=False)},
@@ -98,6 +102,7 @@ def resolve_turn_intent(question, history=None, *, pending=None, bound_course=No
     ]
     deadline = monotonic() + MAX_INTENT_SECONDS
     for attempt in range(2):
+        annotate(attempt=attempt + 1)
         remaining = deadline - monotonic()
         if remaining <= 0:
             raise HTTPException(504, "操作意图解析超时，请稍后重试")
@@ -118,6 +123,7 @@ def resolve_turn_intent(question, history=None, *, pending=None, bound_course=No
         except (ValueError, TypeError, KeyError, ValidationError) as exc:
             if attempt:
                 raise HTTPException(502, "本次请求暂时无法可靠解析，未新增操作，请重新说明") from None
+            trace_event("intent.repair", reason="invalid_plan", attempt=attempt + 1)
             messages.append({"role": "assistant", "content": str(response.get("content") or "")[:16000]})
             errors = ([{"field": list(item["loc"]), "reason": item["msg"]}
                        for item in exc.errors(include_input=False, include_url=False)][:6]

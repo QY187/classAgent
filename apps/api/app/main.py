@@ -4,6 +4,7 @@ from sqlalchemy import inspect, select, text
 
 from .core.config import get_settings
 from .core.db import Base, SessionLocal, engine
+from .core.telemetry import configure_trace_logging
 from .core.passwords import hash_password
 from .modules.auth.controller import router as auth_router
 from .modules.courses.controller import router as courses_router
@@ -25,6 +26,7 @@ from .modules.chat.migrations import prepare_chat_scope, prepare_chat_cancellati
 from .modules.chat.migrations import prepare_chat_intent_state
 
 
+configure_trace_logging()
 app = FastAPI(title="ClassAgent API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,

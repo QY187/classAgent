@@ -2,11 +2,13 @@
 import json
 import re
 from dataclasses import replace
+from hashlib import sha256
 from time import monotonic
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
+from ...core.telemetry import annotate, span, trace_event, traced
 from .completion import complete
 from .evidence import EvidenceStore
 from .executor import execute_tool, failure
@@ -64,8 +66,11 @@ def mentioned_courses(question, courses):
     return [row for _, _, row in sorted(selected, key=lambda item:item[0])]
 
 
+@traced("agent.execute")
 def run_agent(db: Session, context: ToolContext, question: str, *, history: list[dict] | None = None,
               on_step=None, on_check=None) -> dict:
+    annotate(prompt_revision=sha256((SYSTEM_PROMPT + FINAL_RESPONSE_INSTRUCTION + REPAIR_INSTRUCTION).encode()).hexdigest()[:16],
+             call_limit=MAX_CALLS, round_limit=MAX_ROUNDS, timeout_seconds=MAX_SECONDS)
     if not isinstance(question, str) or not 2 <= len(question.strip()) <= 1000:
         raise HTTPException(422, "请输入 2 到 1000 字的问题")
     user_id_for_username(db, context.username)
@@ -198,7 +203,8 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         check()
         if len(json.dumps(messages, ensure_ascii=False)) > MAX_CONTEXT_CHARACTERS:
             raise HTTPException(422, "本次读取内容过多，请缩小课次范围")
-        message = complete(messages, tool_schemas(include_actions=context.generate_quiz is not None, practice_only=context.practice_only, allowed_actions=context.actions), timeout=max(0.1, min(20, (deadline - monotonic()) / 4)))
+        with span("agent.round", round=round_index + 1):
+            message = complete(messages, tool_schemas(include_actions=context.generate_quiz is not None, practice_only=context.practice_only, allowed_actions=context.actions), timeout=max(0.1, min(20, (deadline - monotonic()) / 4)))
         check()
         calls = message.get("tool_calls")
         if not calls:
@@ -217,6 +223,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 not evidence.catalog_complete(catalog_kinds) if group == "catalog" else not getattr(evidence, group).queries)]
             if missing_queries and not actions.results and not repaired and not requested_clarification:
                 repaired = True
+                trace_event("agent.repair", reason="missing_queries", round=round_index + 1)
                 messages.append(message)
                 messages.append({"role": "system", "content": "本条还有查询未完成：" + "、".join(sorted(missing_queries)) +
                     "。请完成可执行的读取并保留所有查询编号；失败的写入不能妨碍独立读取，也不要重复执行已经成功的动作。"})
@@ -224,6 +231,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             # 合法澄清和实际工具失败是停止条件，不能为了“未执行”再催促模型盲目尝试。
             if unperformed and not repaired and not requested_clarification and not actions.errors:
                 repaired = True
+                trace_event("agent.repair", reason="missing_actions", round=round_index + 1)
                 messages.append(message)
                 messages.append({"role": "system", "content": "本条仍有操作未实际执行：" + "、".join(sorted(unperformed)) + "。目标和参数明确且业务条件允许时实际执行；缺少信息、范围不允许或来源不可用时明确澄清，不声称已完成。已经成功的操作不得重复执行。"})
                 continue
@@ -233,6 +241,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 missing = [group for group in groups if (not evidence.catalog_complete(catalog_kinds) if group == "catalog" else not getattr(evidence, group).queries)]
                 if missing and not repaired:
                     repaired = True
+                    trace_event("agent.repair", reason="missing_queries_after_write", round=round_index + 1)
                     messages.append(message)
                     messages.append({"role":"system","content":"操作已经实际执行，不要重复写入。本条还有查询要求尚未完成：" + "、".join(sorted(missing)) + "。请补齐这些读取，目录用 catalog 返回，业务查询用相应查询编号返回；有下一页时继续读取，不能重复写入。"})
                     continue
@@ -308,6 +317,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 if repaired:
                     # 已实际完成的业务读取可以由后端重建；不采纳模型的无效文本或虚构引用。
                     if groups and not missing_queries and not unperformed:
+                        trace_event("answer.fallback", reason="verified_reads")
                         verified = {"claims": []}
                         for group in groups:
                             verified[group] = (evidence.catalog_selection(catalog_kinds) if group == "catalog"
@@ -322,11 +332,13 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                                         ("progress", "workflow", "learning", "quiz_results"))):
                         name, args, data = named_reads[-1]
                         if not args.get("offset", 0) and data.get("total") == 0 and not data.get("items"):
+                            trace_event("answer.fallback", reason="empty_lookup")
                             label = "课程" if name == "list_courses" else "课次"
                             return {"answer": f"按本次名称条件未找到匹配的{label}，后续查询尚未完成。请确认{label}名称后重试？",
                                     "citations": [], "outcome": "needs_input", "steps": steps}
                     raise
                 repaired = True
+                trace_event("agent.repair", reason="invalid_final", round=round_index + 1)
                 messages.append(message)
                 messages.append({"role": "system", "content": REPAIR_INSTRUCTION})
                 continue
@@ -348,7 +360,8 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             step = {"id": call["id"], "tool": name, "status": "running"}
             if on_step:
                 on_step(dict(step))
-            result = execute_tool(db, context, name, call["function"]["arguments"])
+            with span("tool.dispatch", tool_call_id=call["id"], round=round_index + 1):
+                result = execute_tool(db, context, name, call["function"]["arguments"])
             if name in {"generate_quiz", "generate_practice_quiz"} and result["ok"]:
                 if on_check:
                     on_check()
@@ -384,6 +397,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
     raise HTTPException(502, "Agent 执行轮次超过限制，请缩小问题范围")
 
 
+@traced("answer.validate")
 def finalize(db: Session, context: ToolContext, content: str | None, evidence: EvidenceStore, steps: list) -> dict:
     try:
         payload = parse_response(content)

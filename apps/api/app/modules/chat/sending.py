@@ -3,6 +3,7 @@ import json
 from fastapi import HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
+from ...core.telemetry import bind_request, request_trace, span, trace_event, traced
 from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_utc
 from ..agent.loop import run_agent
 from ..agent.tools import ToolContext
@@ -25,6 +26,7 @@ from .knowledge_actions import actions_for_message as knowledge_actions
 from .action_verification import verify_actions
 
 
+@traced("request.fail_persist")
 def _finish_failed(db: Session, conversation_id: str, request_id: str, token: str, error: str):
     db.rollback()
     conversations = ChatConversation.__table__
@@ -39,10 +41,17 @@ def _finish_failed(db: Session, conversation_id: str, request_id: str, token: st
 
 
 def send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None, on_step=None) -> dict:
+    with request_trace(request_id, conversation_id):
+        return _send_message(db, conversation_id, username, content, request_id,
+                             on_progress=on_progress, on_started=on_started, on_step=on_step)
+
+
+def _send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None, on_step=None) -> dict:
     question = content.strip()
     if not 2 <= len(question) <= 1000:
         raise HTTPException(422, "请输入 2 到 1000 字的问题")
     conversation = owned_conversation(db, conversation_id, username, lock=True)
+    bind_request(user_id=conversation.user_id, course_id=conversation.course_id, lesson_id=conversation.lesson_id)
     if conversation.is_archived:
         raise HTTPException(409, "请恢复归档对话后再提问")
     existing = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == conversation_id,
@@ -50,6 +59,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
     if existing is not None and existing.content != question:
         raise HTTPException(409, "请求编号已用于其他问题")
     if existing is not None and existing.status in ("completed", "cancelled"):
+        bind_request(cached=True, outcome="cancelled" if existing.status == "cancelled" else "replayed")
         db.commit()
         return read_messages(db, conversation_id, username)
     if is_generating(conversation):
@@ -61,10 +71,12 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
     if existing is not None and existing.position != last_position:
         raise HTTPException(409, "这条问题之后已有新消息，请作为新问题重新发送")
     if existing is None:
+        bind_request(retry=False, cached=False)
         existing = ChatMessage(conversation_id=conversation_id, request_id=request_id, position=last_position + 1,
                                role="user", content=question, status="pending")
         db.add(existing)
     else:
+        bind_request(retry=True, cached=False)
         existing.status = "pending"
         existing.error_message = None
         existing.agent_steps_json = "[]"
@@ -85,6 +97,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
     intent_snapshot = start_request(existing, conversation)
     db.commit()
     question_id = existing.id
+    bind_request(message_id=question_id)
     try:
         if on_started is not None:
             on_started()
@@ -103,19 +116,23 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
             progress = save_agent_step(db, conversation_id, username, request_id, token, raw)
             if on_step is not None:
                 on_step(progress)
-        bound_course = owned_course(db, course_id, username).name if course_id else None
-        bound_lesson = owned_lesson(db, lesson_id, username).title if lesson_id else None
-        pending = valid_pending(intent_snapshot.get("pending"), conversation, position)
-        entities = intent_entities(db, conversation.user_id, course_id, lesson_id)
+        with span("intent.context"):
+            bound_course = owned_course(db, course_id, username).name if course_id else None
+            bound_lesson = owned_lesson(db, lesson_id, username).title if lesson_id else None
+            pending = valid_pending(intent_snapshot.get("pending"), conversation, position)
+            entities = intent_entities(db, conversation.user_id, course_id, lesson_id)
         db.rollback()  # 模型理解期间不持有数据库事务。
         # 每条消息都做语义规划；只从后端待办续接，普通历史不能恢复写权限。
         # 同请求失败重试复用已验证计划，不因模型重判而改变动作或参数。
-        if intent_snapshot.get("decision"):
-            decision = TurnDecision.model_validate(intent_snapshot["decision"])
-        else:
-            intent_snapshot["pending"] = pending
-            decision = resolve_turn_intent(question, context, pending=pending,
-                bound_course=bound_course, bound_lesson=bound_lesson, entities=entities)
+        with span("intent.plan", cached=bool(intent_snapshot.get("decision")), pending=bool(pending)) as planning:
+            if intent_snapshot.get("decision"):
+                decision = TurnDecision.model_validate(intent_snapshot["decision"])
+            else:
+                intent_snapshot["pending"] = pending
+                decision = resolve_turn_intent(question, context, pending=pending,
+                    bound_course=bound_course, bound_lesson=bound_lesson, entities=entities)
+            planning.set(relation=decision.relation)
+        if not intent_snapshot.get("decision"):
             check()
             current = owned_conversation(db, conversation_id, username, lock=True)
             if current.generation_token != token:
@@ -164,28 +181,32 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
             result = run_agent(db, agent_context, question, history=context, on_check=check, on_step=publish_step)
         if verification and not verification_only:
             result["answer"] = verification + "\n\n" + result["answer"]
+        bind_request(outcome=result.get("outcome", "answered"), citation_count=len(result.get("citations", [])))
         if (decision.relation == "continue" and intent_snapshot["pending"]["turns"] >= MAX_CLARIFICATIONS
                 and (result.get("outcome") == "needs_input" or result.get("clarification"))):
             result["answer"] += "\n\n本次补充次数已达到上限，请重新完整描述操作、目标和参数。"
         if on_progress is not None:
             publish(result)
-        db.rollback()
-        conversation = owned_conversation(db, conversation_id, username, lock=True)
-        if conversation.generation_token != token:
-            raise GenerationStopped()
-        user_message = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == conversation_id,
-            ChatMessage.request_id == request_id, ChatMessage.role == "user"))
-        user_message.status = "completed"
-        user_message.error_message = None
-        conversation.pending_task_json = next_pending(db, conversation, user_message, intent_snapshot, decision, result)
-        db.add(ChatMessage(conversation_id=conversation_id, request_id=request_id, position=position + 1,
-            role="assistant", content=result["answer"], citations_json=json.dumps(result["citations"], ensure_ascii=False)))
-        conversation.generation_token = None
-        conversation.generation_preview_json = None
-        conversation.generating_at = None
-        conversation.updated_at = now_utc()
-        db.commit()
+        with span("request.persist"):
+            db.rollback()
+            conversation = owned_conversation(db, conversation_id, username, lock=True)
+            if conversation.generation_token != token:
+                raise GenerationStopped()
+            user_message = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == conversation_id,
+                ChatMessage.request_id == request_id, ChatMessage.role == "user"))
+            user_message.status = "completed"
+            user_message.error_message = None
+            conversation.pending_task_json = next_pending(db, conversation, user_message, intent_snapshot, decision, result)
+            db.add(ChatMessage(conversation_id=conversation_id, request_id=request_id, position=position + 1,
+                role="assistant", content=result["answer"], citations_json=json.dumps(result["citations"], ensure_ascii=False)))
+            conversation.generation_token = None
+            conversation.generation_preview_json = None
+            conversation.generating_at = None
+            conversation.updated_at = now_utc()
+            db.commit()
     except GenerationStopped:
+        bind_request(outcome="cancelled")
+        trace_event("request.cancelled", reason="generation_stopped")
         db.rollback()
         return read_messages(db, conversation_id, username)
     except Exception as exc:

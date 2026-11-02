@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ...core.config import get_settings
 from ...core.ownership import user_id_for_username
 from ...core.embeddings import embed_texts
+from ...core.telemetry import annotate, record_usage, span, trace_event, traced
 from ...shared.models import Course, DocumentChunk, Lesson
 from ..agent.completion import complete
 from .streaming import stream_completion
@@ -41,6 +42,7 @@ def _normalize_query(value: str) -> str:
     return re.sub(r"\s+", " ", query).strip()
 
 
+@traced("rag.rewrite")
 def _rewrite_query(value: str) -> str:
     """调用模型提取检索表达；模型故障时必须无感回退原问题。"""
     original = _normalize_query(value)
@@ -60,8 +62,10 @@ def _rewrite_query(value: str) -> str:
         rewritten = payload.get("query") if isinstance(payload, dict) else None
         if isinstance(rewritten, str) and 1 <= len(rewritten.strip()) <= 120 and _tokens(rewritten):
             return _normalize_query(rewritten)
-    except (HTTPException, httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
-        pass
+    except (HTTPException, httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        trace_event("rag.fallback", reason="rewrite_failed", error_type=type(exc).__name__)
+        return original
+    trace_event("rag.fallback", reason="invalid_rewrite")
     return original
 
 
@@ -106,27 +110,38 @@ def _cross_encoder_rerank(query: str, ranked: list[tuple[str, float]], rows: dic
     """调用云端 Cross-Encoder；不可用时返回 None，由本地重排接管。"""
     settings = get_settings()
     if not settings.rerank_enabled or not settings.dashscope_api_key or not ranked:
+        trace_event("rag.rerank_skipped", reason="disabled" if not settings.rerank_enabled else
+                    "unconfigured" if not settings.dashscope_api_key else "empty_candidates")
         return None
     candidates = ranked[:max(RERANK_CANDIDATES, MIN_CANDIDATES)]
     try:
-        response = httpx.post(
-            settings.rerank_base_url,
-            headers={"Authorization": f"Bearer {settings.dashscope_api_key}", "Content-Type": "application/json"},
-            json={"model": settings.rerank_model,
-                  "input": {"query": query, "documents": [rows[identity].content[:3000] for identity, _ in candidates]},
-                  "parameters": {"return_documents": False, "top_n": len(candidates)}},
-            timeout=15,
-        )
-        response.raise_for_status()
-        results = response.json().get("output", {}).get("results", [])
-        scored = [(candidates[item["index"]][0], float(item["relevance_score"]))
-                  for item in results if isinstance(item, dict) and isinstance(item.get("index"), int)
-                  and 0 <= item["index"] < len(candidates) and isinstance(item.get("relevance_score"), (int, float))]
+        with span("model.rerank", kind="model", provider="dashscope", model=settings.rerank_model,
+                  batch_size=len(candidates), timeout_seconds=15):
+            response = httpx.post(
+                settings.rerank_base_url,
+                headers={"Authorization": f"Bearer {settings.dashscope_api_key}", "Content-Type": "application/json"},
+                json={"model": settings.rerank_model,
+                      "input": {"query": query, "documents": [rows[identity].content[:3000] for identity, _ in candidates]},
+                      "parameters": {"return_documents": False, "top_n": len(candidates)}},
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            record_usage(payload.get("usage"))
+            results = payload.get("output", {}).get("results", [])
+            scored = [(candidates[item["index"]][0], float(item["relevance_score"]))
+                      for item in results if isinstance(item, dict) and isinstance(item.get("index"), int)
+                      and 0 <= item["index"] < len(candidates) and isinstance(item.get("relevance_score"), (int, float))]
+            if not scored:
+                annotate(error_code="empty_rerank")
+                trace_event("rag.fallback", reason="empty_rerank")
         return scored or None
-    except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError):
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError) as exc:
+        trace_event("rag.fallback", reason="rerank_failed", error_type=type(exc).__name__)
         return None
 
 
+@traced("rag.bm25")
 def _bm25_scores(query: str, rows: list[DocumentChunk]) -> dict[str, float]:
     query_terms = set(_tokens(query))
     if not query_terms or not rows:
@@ -177,30 +192,36 @@ def _rerank_with_exact_signals(query: str, ranked: list[tuple[str, float]], rows
     return sorted(rescored, key=lambda item: item[1], reverse=True)
 
 
+@traced("rag.retrieve")
 def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, lesson_id: str | None = None, limit: int = 8) -> list[DocumentChunk]:
     """在后端权限范围内融合向量召回和 BM25 词法召回。"""
     owned_course(db, course_id, username)
+    annotate(course_id=course_id, lesson_id=lesson_id)
     original_query = _normalize_query(query)
     rewritten_query = _rewrite_query(query)
     variants = _query_variants(original_query, rewritten_query)
+    annotate(variant_count=len(variants))
     if not variants or not any(_tokens(item) for item in variants):
         return []
     scope = chunk_scope(course_id, lesson_id)
-    rows = list(db.scalars(select(DocumentChunk).where(
-        *scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))))
+    with span("rag.load_candidates"):
+        rows = list(db.scalars(select(DocumentChunk).where(
+            *scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))))
     if not rows:
         return []
     vector_rows = []
     candidate_limit = max(limit * RECALL_MULTIPLIER, MIN_CANDIDATES)
+    annotate(candidate_limit=candidate_limit)
     try:
-        vectors = embed_texts(variants)
-        for vector in vectors:
-            vector_rows.append(list(db.scalars(select(DocumentChunk).where(
-                *scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))
-                .order_by(DocumentChunk.embedding.cosine_distance(vector)).limit(candidate_limit))))
-    except (HTTPException, RuntimeError, httpx.HTTPError):
+        with span("rag.vector_recall"):
+            vectors = embed_texts(variants)
+            for vector in vectors:
+                vector_rows.append(list(db.scalars(select(DocumentChunk).where(
+                    *scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))
+                    .order_by(DocumentChunk.embedding.cosine_distance(vector)).limit(candidate_limit))))
+    except (HTTPException, RuntimeError, httpx.HTTPError) as exc:
         # 向量服务短暂不可用时仍返回 BM25 结果，避免检索整体不可用；下次请求自动恢复混合召回。
-        pass
+        trace_event("rag.fallback", reason="vector_failed", error_type=type(exc).__name__)
     # 词法分数取各路查询的最大值，保留原始数字/术语的精确匹配能力。
     lexical_by_variant = [_bm25_scores(item, rows) for item in variants]
     lexical_scores = {row.id: max((scores.get(row.id, 0.0) for scores in lexical_by_variant), default=0.0)
@@ -214,17 +235,22 @@ def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, l
     by_id = {row.id: row for row in rows}
     fused: dict[str, float] = {}
     vector_weight = 0.6 / max(len(vector_rows), 1)
-    for variant_rows in vector_rows:
-        for rank, row in enumerate(variant_rows):
-            fused[row.id] = fused.get(row.id, 0.0) + vector_weight / (RRF_K + rank + 1)
-    for rank, (identity, _score) in enumerate(lexical):
-        fused[identity] = fused.get(identity, 0.0) + 0.4 / (RRF_K + rank + 1)
-    # 先按融合分排序，再限制同一父块的数量，避免 Top-K 被一个长父块占满。
-    ranked = sorted(fused.items(), key=lambda item: item[1], reverse=True)
+    with span("rag.fusion"):
+        for variant_rows in vector_rows:
+            for rank, row in enumerate(variant_rows):
+                fused[row.id] = fused.get(row.id, 0.0) + vector_weight / (RRF_K + rank + 1)
+        for rank, (identity, _score) in enumerate(lexical):
+            fused[identity] = fused.get(identity, 0.0) + 0.4 / (RRF_K + rank + 1)
+        # 先按融合分排序，再限制同一父块的数量，避免 Top-K 被一个长父块占满。
+        ranked = sorted(fused.items(), key=lambda item: item[1], reverse=True)
     rerank_query = rewritten_query or original_query
-    cross_ranked = _cross_encoder_rerank(rerank_query, ranked, by_id)
-    ranked = (_rerank_with_exact_signals(rerank_query, cross_ranked, by_id, lexical_scores)
-              if cross_ranked else _rerank(rerank_query, ranked, by_id, lexical_scores))
+    with span("rag.rerank") as ranking:
+        cross_ranked = _cross_encoder_rerank(rerank_query, ranked, by_id)
+        ranked = (_rerank_with_exact_signals(rerank_query, cross_ranked, by_id, lexical_scores)
+                  if cross_ranked else _rerank(rerank_query, ranked, by_id, lexical_scores))
+        ranking.set(strategy="cross_encoder" if cross_ranked else "local", rerank_count=len(ranked))
+    annotate(vector_count=len({row.id for group in vector_rows for row in group}),
+             lexical_count=len(lexical), fused_count=len(fused), rerank_count=len(ranked))
     selected, parent_counts, seen_sources = [], {}, set()
     for identity, _score in ranked:
         row = by_id[identity]
@@ -240,6 +266,7 @@ def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, l
             seen_sources.add(source_ids)
         if len(selected) >= limit:
             break
+    annotate(selected_count=len(selected))
     return selected
 
 

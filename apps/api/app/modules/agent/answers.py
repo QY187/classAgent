@@ -1,8 +1,10 @@
 """组合已核验的读取结果；每类业务保持自己的查询和权限校验。"""
 import re
 from fastapi import HTTPException
+from ...core.telemetry import traced
 
 
+@traced("answer.compose")
 def compose_answer(db, context, payload, evidence, steps):
     parts, citations, unavailable = [], [], []
 

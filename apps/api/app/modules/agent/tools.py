@@ -110,9 +110,12 @@ def search_course(db: Session, context: ToolContext, args: SearchArguments) -> d
             raise HTTPException(404, "课次不存在")
     rows = hybrid_retrieve(db, args.course_id, context.username, args.query, lesson_id=lesson_id, limit=args.limit)
     if not rows:
+        from ...core.telemetry import span, trace_event
+        trace_event("rag.fallback", reason="no_chunks_keyword_search")
         # 尚未建立向量索引时保留可用的精确词法回退，重建索引后自动走混合召回。
-        legacy = search_all(db, args.query, context.username, course_id=args.course_id,
-                            kind="transcript", lesson_id=lesson_id)["transcript"]
+        with span("rag.keyword_fallback"):
+            legacy = search_all(db, args.query, context.username, course_id=args.course_id,
+                                kind="transcript", lesson_id=lesson_id)["transcript"]
         return {"course_id": args.course_id, "lesson_id": lesson_id, "query": args.query,
                 "retrieval_method": "keyword", "has_more": len(legacy) > args.limit or len(legacy) == 30,
                 "items": [{"segment_id": row["segment_id"], "lesson_id": row["lesson_id"],

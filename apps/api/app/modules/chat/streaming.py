@@ -29,7 +29,7 @@ async def message_events(conversation_id, username, content, request_id):
             queue.put(("error", {"detail": detail}))
 
     Thread(target=generate, daemon=True).start()
-    yield encode_event("status", {"message": "正在查找课堂依据并整理回答…"})
+    yield encode_event("status", {"message": "正在查找课堂依据并整理回答…", "request_id": request_id})
     while True:
         try:
             event, data = await asyncio.to_thread(queue.get, True, 10)

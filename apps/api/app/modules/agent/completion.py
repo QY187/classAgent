@@ -2,10 +2,13 @@
 import httpx
 from fastapi import HTTPException
 from ...core.config import get_settings
+from ...core.telemetry import annotate, record_usage, traced
 
 
+@traced("model.chat", kind="model")
 def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
     settings = get_settings()
+    annotate(provider="deepseek", model=settings.summary_model, timeout_seconds=timeout)
     if not settings.deepseek_api_key:
         raise HTTPException(503, "未配置 AI 服务，暂时无法执行 Agent")
     try:
@@ -19,7 +22,9 @@ def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
             timeout=timeout,
         )
         response.raise_for_status()
-        choice = response.json()["choices"][0]
+        payload = response.json()
+        record_usage(payload.get("usage"))
+        choice = payload["choices"][0]
         message = choice["message"]
         if choice.get("finish_reason") not in {"stop", "tool_calls"} or message.get("role") != "assistant":
             raise ValueError("Incomplete response")
