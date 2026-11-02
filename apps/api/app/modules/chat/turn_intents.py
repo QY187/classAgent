@@ -3,7 +3,7 @@ import json
 from hashlib import sha256
 from time import monotonic
 
-from fastapi import HTTPException
+from ...core.chat_failures import ChatRequestFailure
 from pydantic import ValidationError
 
 from .dates import current_day, normalize_lesson_date
@@ -105,7 +105,7 @@ def resolve_turn_intent(question, history=None, *, pending=None, bound_course=No
         annotate(attempt=attempt + 1)
         remaining = deadline - monotonic()
         if remaining <= 0:
-            raise HTTPException(504, "操作意图解析超时，请稍后重试")
+            raise ChatRequestFailure("intent_timeout")
         response = complete(messages, [], timeout=min(15, remaining))
         try:
             decision = TurnDecision.model_validate(json.loads(response.get("content") or ""))
@@ -122,7 +122,7 @@ def resolve_turn_intent(question, history=None, *, pending=None, bound_course=No
             return decision
         except (ValueError, TypeError, KeyError, ValidationError) as exc:
             if attempt:
-                raise HTTPException(502, "本次请求暂时无法可靠解析，未新增操作，请重新说明") from None
+                raise ChatRequestFailure("invalid_intent") from None
             trace_event("intent.repair", reason="invalid_plan", attempt=attempt + 1)
             messages.append({"role": "assistant", "content": str(response.get("content") or "")[:16000]})
             errors = ([{"field": list(item["loc"]), "reason": item["msg"]}
@@ -134,7 +134,7 @@ def resolve_turn_intent(question, history=None, *, pending=None, bound_course=No
                 "若错误指出创建目标已存在，重新区分给已有实体设值与新建同名实体，按原始用户语义修正动作；不清楚时只保留 issue。"
                 "只能续接有效 task_id 的未完成动作。"
                 "没有有效待办时按当前独立输入解析，不能从历史恢复写入。信息不足则保留已有字段并澄清。"})
-    raise HTTPException(502, "本次请求暂时无法可靠解析")
+    raise ChatRequestFailure("invalid_intent")
 
 
 def normalize_planned_dates(decision, question, pending, reference_day):

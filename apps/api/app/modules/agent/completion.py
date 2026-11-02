@@ -1,7 +1,7 @@
 """模型协议适配，不向外返回密钥、供应商异常或思考内容。"""
 import httpx
-from fastapi import HTTPException
 from ...core.config import get_settings
+from ...core.chat_failures import ChatRequestFailure, public_failure
 from ...core.telemetry import annotate, record_usage, traced
 
 
@@ -10,7 +10,7 @@ def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
     settings = get_settings()
     annotate(provider="deepseek", model=settings.summary_model, timeout_seconds=timeout)
     if not settings.deepseek_api_key:
-        raise HTTPException(503, "未配置 AI 服务，暂时无法执行 Agent")
+        raise ChatRequestFailure("ai_not_configured")
     try:
         response = httpx.post(
             "https://api.deepseek.com/chat/completions",
@@ -33,6 +33,8 @@ def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
         return {"role": "assistant", "content": message.get("content"),
                 **({"tool_calls": message["tool_calls"]} if message.get("tool_calls") else {})}
     except httpx.TimeoutException as exc:
-        raise HTTPException(504, "Agent 模型请求超时，请稍后重试") from exc
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
-        raise HTTPException(502, "Agent 模型暂时无法返回有效结果") from exc
+        raise ChatRequestFailure("model_timeout") from exc
+    except httpx.HTTPError as exc:
+        raise ChatRequestFailure(public_failure(exc)) from exc
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+        raise ChatRequestFailure("invalid_model_response") from exc

@@ -10,6 +10,7 @@ import ChatTitleEditor from "./ChatTitleEditor";
 import ChatArchiveButton from "./ChatArchiveButton";
 import ChatDeleteButton from "./ChatDeleteButton";
 import { streamAnswer, type AnswerPreview } from "../../lib/chat-stream";
+import { chatFailureMessage } from "../../lib/chat-errors";
 
 export default function ChatThread({ conversationId, onLoaded, onChanged, onDeleted }: { conversationId: string; onLoaded: (item: Conversation) => void; onChanged: () => void; onDeleted: () => void }) {
   const [history, setHistory] = useState<ChatHistory | null>(null);
@@ -76,7 +77,7 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
       if (mounted.current) {
         setPreview(null);
         await load();
-        if (mounted.current) setError(errorMessage(err));
+        if (mounted.current) setError(chatFailureMessage(err));
       }
       return false;
     } finally {

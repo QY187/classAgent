@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from ...core.telemetry import bind_request, request_trace, span, trace_event, traced
+from ...core.chat_failures import ChatRequestFailure, public_failure
 from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_utc
 from ..agent.loop import run_agent
 from ..agent.tools import ToolContext
@@ -42,8 +43,17 @@ def _finish_failed(db: Session, conversation_id: str, request_id: str, token: st
 
 def send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None, on_step=None) -> dict:
     with request_trace(request_id, conversation_id):
-        return _send_message(db, conversation_id, username, content, request_id,
-                             on_progress=on_progress, on_started=on_started, on_step=on_step)
+        try:
+            return _send_message(db, conversation_id, username, content, request_id,
+                                 on_progress=on_progress, on_started=on_started, on_step=on_step)
+        except ChatRequestFailure:
+            raise
+        except Exception as exc:
+            if isinstance(exc, HTTPException) and exc.status_code < 500:
+                raise
+            failure = public_failure(exc, stage="preparing")
+            bind_request(error_code=failure.code)
+            raise ChatRequestFailure(failure) from exc
 
 
 def _send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None, on_step=None) -> dict:
@@ -98,6 +108,7 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
     db.commit()
     question_id = existing.id
     bind_request(message_id=question_id)
+    failure_stage = "context"
     try:
         if on_started is not None:
             on_started()
@@ -124,6 +135,7 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         db.rollback()  # 模型理解期间不持有数据库事务。
         # 每条消息都做语义规划；只从后端待办续接，普通历史不能恢复写权限。
         # 同请求失败重试复用已验证计划，不因模型重判而改变动作或参数。
+        failure_stage = "planning"
         with span("intent.plan", cached=bool(intent_snapshot.get("decision")), pending=bool(pending)) as planning:
             if intent_snapshot.get("decision"):
                 decision = TurnDecision.model_validate(intent_snapshot["decision"])
@@ -140,6 +152,7 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
             save_decision(db.get(ChatMessage, question_id), intent_snapshot, decision)
             db.commit()
         semantic = decision.intent.legacy()
+        failure_stage = "tools"
         check()
         quiz_intent = semantic.get("quiz", "none") if semantic else "none"
         generate = (lambda args: generate_for_message(db, conversation_id, username, question_id, token, args,
@@ -178,7 +191,9 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         elif verification_only:
             result = {"answer": verification, "citations": [], "outcome": "answered", "steps": []}
         else:
+            failure_stage = "execution"
             result = run_agent(db, agent_context, question, history=context, on_check=check, on_step=publish_step)
+        failure_stage = "answer"
         if verification and not verification_only:
             result["answer"] = verification + "\n\n" + result["answer"]
         bind_request(outcome=result.get("outcome", "answered"), citation_count=len(result.get("citations", [])))
@@ -187,6 +202,7 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
             result["answer"] += "\n\n本次补充次数已达到上限，请重新完整描述操作、目标和参数。"
         if on_progress is not None:
             publish(result)
+        failure_stage = "saving"
         with span("request.persist"):
             db.rollback()
             conversation = owned_conversation(db, conversation_id, username, lock=True)
@@ -204,15 +220,19 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
             conversation.generating_at = None
             conversation.updated_at = now_utc()
             db.commit()
+        failure_stage = "history"
+        return read_messages(db, conversation_id, username)
     except GenerationStopped:
         bind_request(outcome="cancelled")
         trace_event("request.cancelled", reason="generation_stopped")
         db.rollback()
         return read_messages(db, conversation_id, username)
     except Exception as exc:
-        detail = exc.detail if isinstance(exc, HTTPException) and isinstance(exc.detail, str) else "回答失败，请稍后重试"
-        _finish_failed(db, conversation_id, request_id, token, detail)
-        if isinstance(exc, HTTPException):
-            raise
-        raise HTTPException(502, detail) from exc
-    return read_messages(db, conversation_id, username)
+        failure = public_failure(exc, stage=failure_stage)
+        bind_request(error_code=failure.code)
+        try:
+            _finish_failed(db, conversation_id, request_id, token, failure.message)
+        except Exception as persistence_error:
+            # 保存失败原因失败时，仍向前端报告原始分类，避免二次异常掩盖真正原因。
+            trace_event("request.failure_record_failed", reason="storage_unavailable", error_type=type(persistence_error).__name__)
+        raise ChatRequestFailure(failure) from exc

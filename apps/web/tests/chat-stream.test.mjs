@@ -35,6 +35,11 @@ test("错误事件和没有完成标记的连接不会误认为成功", async ()
   await assert.rejects(client([bytes('event: answer\ndata: {"answer":"部分回答","citations":[]}\n\n')])("c", "问题", "r", () => {}), /连接已中断/);
 });
 
+test("结构化失败事件保留后端原因，损坏的流数据不泄漏原文", async () => {
+  await assert.rejects(client([bytes('event: error\ndata: {"detail":"理解问题阶段失败：AI 服务认证失败。","error_code":"model_authentication","stage":"planning","request_id":"r"}\n\n')])("c", "问题", "r", () => {}), /理解问题阶段失败：AI 服务认证失败/);
+  await assert.rejects(client([bytes('event: answer\ndata: PRIVATE_SERVER_BODY\n\n')])("c", "问题", "r", () => {}), error => error.message === "回答数据格式异常，请重新加载查看处理结果。");
+});
+
 test("兼容 CRLF 事件和连续回答快照", async () => {
   const previews = [];
   const data = bytes('event: answer\r\ndata: {"answer":"一","citations":[]}\r\n\r\nevent: answer\r\ndata: {"answer":"一二","citations":[]}\r\n\r\nevent: done\r\ndata: {"messages":[]}\r\n\r\n');

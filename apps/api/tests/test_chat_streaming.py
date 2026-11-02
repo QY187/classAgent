@@ -36,7 +36,9 @@ class ChatStreamTransportTest(unittest.TestCase):
         async def collect():
             return [event async for event in message_events("c", "owner", "问题", "r")]
         events = asyncio.run(collect())
-        self.assertEqual(events[-1], 'event: error\ndata: {"detail": "正在回答"}\n\n')
+        self.assertTrue(events[-1].startswith("event: error\n"))
+        self.assertEqual(json.loads(events[-1].split("data: ", 1)[1]),
+                         {"detail": "正在回答", "error_code": "request_rejected", "stage": None, "request_id": "r"})
 
 
 class ChatStreamPersistenceTest(unittest.TestCase):

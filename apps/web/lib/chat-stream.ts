@@ -27,14 +27,17 @@ export async function streamAnswer(conversationId: string, content: string, requ
         const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
         const data = lines.filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
         if (!data) continue;
-        const payload = JSON.parse(data);
+        let payload;
+        try { payload = JSON.parse(data); }
+        catch { throw new Error("回答数据格式异常，请重新加载查看处理结果。"); }
+        if (!payload || typeof payload !== "object") throw new Error("回答数据格式异常，请重新加载查看处理结果。");
         if (event === "status" && payload.ready === true) options?.onReady?.();
         if (event === "answer") onPreview(payload as AnswerPreview);
         if (event === "step" && payload.request_id === requestId && Array.isArray(payload.steps)) options?.onSteps?.(payload.steps);
-        if (event === "error") throw new Error(payload.detail || "回答失败，请重试。");
+        if (event === "error") throw new Error(typeof payload.detail === "string" && payload.detail ? payload.detail : "回答失败，请重试。");
         if (event === "done") return payload as ChatHistory;
       }
-      if (done) throw new Error("回答连接已中断，可重新加载查看结果或重试。");
+      if (done) throw new Error("回答连接已中断，暂时无法确认处理结果，请重新加载查看。");
     }
   } finally {
     await reader.cancel().catch(() => undefined);

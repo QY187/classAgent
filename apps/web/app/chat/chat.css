@@ -217,3 +217,9 @@
 .chat-group-chevron { flex: none; width: 14px; height: 14px; color: #8b97ad; transition: transform .15s; }
 .chat-group-toggle[aria-expanded="true"] .chat-group-chevron { transform: rotate(90deg); }
 .chat-global-section h2 .chat-group-title, .chat-courses-label h2 .chat-group-title { padding: 0; background: transparent; border-radius: 0; font: inherit; color: inherit; }
+.chat-failure-card { margin-top: 12px; padding: 14px 16px; border: 1px solid #f1cdcd; border-radius: 12px; background: #fff7f7; color: #8b3c3c; font-size: 13px; line-height: 1.8; }
+.chat-failure-card strong { display: block; color: #a13939; font-weight: 650; }
+.chat-failure-card p { margin: 6px 0 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.chat-failure-card p > span { font-weight: 600; }
+.chat-failure-card small { display: block; color: #9a7474; font-size: 11px; overflow-wrap: anywhere; }
+.chat-failure-card code { font-family: ui-monospace, monospace; }

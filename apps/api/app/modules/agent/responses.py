@@ -2,13 +2,13 @@
 import json
 from typing import Annotated, Literal
 
-from fastapi import HTTPException
+from ...core.chat_failures import ChatRequestFailure
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 
-class InvalidFinalResponse(HTTPException):
+class InvalidFinalResponse(ChatRequestFailure):
     def __init__(self):
-        super().__init__(502, "Agent 未返回可核对的回答，请重试")
+        super().__init__("invalid_answer")
 
 
 class ResponseModel(BaseModel):

@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
+from ...core.chat_failures import ChatRequestFailure
 from ...core.telemetry import annotate, span, trace_event, traced
 from .completion import complete
 from .evidence import EvidenceStore
@@ -194,7 +195,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         if on_check:
             on_check()  # 取消异常直接向上传播，不转成工具错误。
         if monotonic() >= deadline:
-            raise HTTPException(504, "Agent 执行超时，请稍后重试")
+            raise ChatRequestFailure("execution_timeout")
 
     # 格式修复可额外占一轮，工具次数和总时限仍遵循原预算。
     for round_index in range(MAX_ROUNDS + 1):
@@ -342,8 +343,10 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 messages.append(message)
                 messages.append({"role": "system", "content": REPAIR_INSTRUCTION})
                 continue
-        if not isinstance(calls, list) or not calls or calls_used + len(calls) > MAX_CALLS:
-            raise HTTPException(502, "Agent 工具调用次数超过限制，请缩小问题范围")
+        if not isinstance(calls, list) or not calls:
+            raise ChatRequestFailure("invalid_tool_call")
+        if calls_used + len(calls) > MAX_CALLS:
+            raise ChatRequestFailure("tool_call_limit")
         # 整批校验协议，避免执行半批后才发现响应无效。
         for call in calls:
             if (not isinstance(call, dict) or call.get("type") != "function"
@@ -351,7 +354,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                     or call["id"] in seen_ids or not isinstance(call.get("function"), dict)
                     or not isinstance(call["function"].get("name"), str)
                     or not isinstance(call["function"].get("arguments"), str)):
-                raise HTTPException(502, "Agent 返回了无效工具调用")
+                raise ChatRequestFailure("invalid_tool_call")
             seen_ids.add(call["id"])
         messages.append(message)
         for call in calls:
@@ -394,7 +397,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             messages.append({"role": "tool", "tool_call_id": call["id"],
                              "content": json.dumps(result, ensure_ascii=False)})
             calls_used += 1
-    raise HTTPException(502, "Agent 执行轮次超过限制，请缩小问题范围")
+    raise ChatRequestFailure("round_limit")
 
 
 @traced("answer.validate")
