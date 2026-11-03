@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ...core.config import get_settings
 from ...core.ownership import user_id_for_username
 from ...core.telemetry import annotate, record_usage, traced
+from ...core.model_budget import quota_chat_post, user_budget
 from ...shared.models import Course, Lesson, Quiz, QuizAnswer, QuizAttempt, QuizQuestion, QuizQuestionRetry, ReviewCard, TranscriptSegment
 from ..summaries.service import _parse_json
 from .schemas import QuizGenerate, QuizSubmit, WrongQuestionRetry
@@ -84,11 +85,11 @@ def _generate_questions(segments: list[TranscriptSegment], count: int, question_
         "evidence 必须是所选 source_index 对应原文中的连续原字，不要改写。\n\n课堂记录：\n" + sources
     )
     try:
-        response = httpx.post(
+        response = quota_chat_post(httpx.post,
             "https://api.deepseek.com/chat/completions",
             headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
             json={"model": settings.summary_model, "messages": [{"role": "system", "content": "你是谨慎的课堂出题员。只输出 JSON。"}, {"role": "user", "content": prompt}], "temperature": 0.1},
-            timeout=120,
+            timeout=120, purpose="quiz",
         )
         response.raise_for_status()
         response_payload = response.json()
@@ -148,6 +149,7 @@ def _quiz_lesson_ids(quiz: Quiz) -> list[str]:
     return json.loads(quiz.lesson_ids_json) if quiz.lesson_ids_json else ([quiz.lesson_id] if quiz.lesson_id else [])
 
 
+@user_budget
 def generate_quiz(db: Session, course_id: str, payload: QuizGenerate, username: str, *, agent_request_key: str | None = None, before_save=None, practice: PracticeSelection | None = None) -> dict:
     course = _owned_course(db, course_id, username)
     if agent_request_key:

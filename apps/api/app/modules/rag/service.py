@@ -9,6 +9,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
+from ...core.chat_failures import ChatRequestFailure
+from ...core.model_budget import quota_chat_post, user_budget
 from ...core.ownership import user_id_for_username
 from ...core.embeddings import embed_texts
 from ...core.telemetry import annotate, record_usage, span, trace_event, traced
@@ -63,6 +65,8 @@ def _rewrite_query(value: str) -> str:
         if isinstance(rewritten, str) and 1 <= len(rewritten.strip()) <= 120 and _tokens(rewritten):
             return _normalize_query(rewritten)
     except (HTTPException, httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        if isinstance(exc, ChatRequestFailure) and exc.failure.code.startswith("quota_"):
+            raise
         trace_event("rag.fallback", reason="rewrite_failed", error_type=type(exc).__name__)
         return original
     trace_event("rag.fallback", reason="invalid_rewrite")
@@ -193,6 +197,7 @@ def _rerank_with_exact_signals(query: str, ranked: list[tuple[str, float]], rows
 
 
 @traced("rag.retrieve")
+@user_budget
 def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, lesson_id: str | None = None, limit: int = 8) -> list[DocumentChunk]:
     """在后端权限范围内融合向量召回和 BM25 词法召回。"""
     owned_course(db, course_id, username)
@@ -294,6 +299,7 @@ def chunk_scope(course_id: str, lesson_id: str | None = None):
     return conditions
 
 
+@user_budget
 def ask_course(db: Session, course_id: str, username: str, question: str, *, lesson_id: str | None = None, history: list[dict] | None = None, on_progress=None, on_check=None) -> dict:
     owned_course(db, course_id, username)
     if lesson_id is not None:
@@ -348,7 +354,7 @@ def ask_course(db: Session, course_id: str, username: str, question: str, *, les
                     on_progress(result)
             raw = stream_completion(url, headers, body, publish, on_check=on_check)
         else:
-            response = httpx.post(url, headers=headers, json=body, timeout=120)
+            response = quota_chat_post(httpx.post, url, headers=headers, json=body, timeout=120, purpose="rag_answer")
             response.raise_for_status()
             raw = response.json()["choices"][0]["message"]["content"]
         match = re.search(r"\{.*\}", raw, re.DOTALL)

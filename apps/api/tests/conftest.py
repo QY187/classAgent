@@ -6,6 +6,14 @@ import pytest
 from semantic_fixtures import semantic_fixture
 
 
+@pytest.fixture(autouse=True)
+def isolate_legacy_tests_from_quota(request, monkeypatch):
+    # 既有业务单测不连接全局额度库；新专项用真实账本开启配额并验证调用边界。
+    if not Path(request.module.__file__).stem.startswith("test_token_quota"):
+        from app.core.config import get_settings
+        monkeypatch.setattr(get_settings(), "token_quota_enabled", False)
+
+
 LEGACY_TOOL_TESTS = {
     "test_agent_adversarial", "test_agent_authorization_boundaries", "test_agent_combined_actions",
     "test_agent_combined_answers", "test_agent_create_course", "test_agent_create_lesson",

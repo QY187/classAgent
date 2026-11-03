@@ -123,7 +123,12 @@ def generate_summary(lesson_id: str) -> None:
             }
             for index, segment in enumerate(transcript_segments, start=1)
         ]
-        generated_content = build_summary(payload)
+        from ..shared.models import Course
+        from ..core.model_budget import quota_user
+        owner_id = db.get(Course, lesson.course_id).owner_id
+        db.rollback()  # 模型调用期间不保留业务事务。
+        with quota_user(db, owner_id):
+            generated_content = build_summary(payload)
         db.expire_all()
         current_segments = list(db.scalars(select(TranscriptSegment).where(TranscriptSegment.lesson_id == lesson_id).order_by(TranscriptSegment.start_ms)))
         if transcript_snapshot == [(segment.id, segment.text) for segment in current_segments]:

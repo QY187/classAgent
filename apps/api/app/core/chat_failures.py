@@ -7,6 +7,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 
 REASONS = {
+    "quota_exhausted": (429, "今日大模型 Token 剩余额度不足以完成本次调用，请减少上下文，或等待北京时间零点额度重置；也可联系管理员调整额度。"),
+    "quota_identity_required": (503, "无法确认本次模型调用的用户归属，已停止调用，请联系管理员。"),
+    "quota_storage_unavailable": (503, "暂时无法核对 Token 额度，已停止新的模型调用，请稍后重试。"),
     "ai_not_configured": (503, "尚未配置 AI 服务，请联系管理员完成配置。"),
     "model_timeout": (504, "AI 服务未在规定时间内响应，请稍后重试。"),
     "model_connection": (502, "服务器暂时无法连接 AI 服务，请稍后重试。"),

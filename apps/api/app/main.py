@@ -26,6 +26,7 @@ from .modules.chat.migrations import prepare_chat_scope, prepare_chat_cancellati
 from .modules.chat.migrations import prepare_chat_intent_state
 from .modules.monitoring.controller import router as monitoring_router
 from .modules.monitoring.persistence import start_persistence
+from .modules.quotas.controller import router as quotas_router
 
 
 configure_trace_logging()
@@ -165,3 +166,4 @@ app.include_router(quizzes_router)
 app.include_router(recycle_bin_router)
 app.include_router(chat_router)
 app.include_router(monitoring_router)
+app.include_router(quotas_router)

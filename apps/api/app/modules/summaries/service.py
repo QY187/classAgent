@@ -69,7 +69,8 @@ def generate_summary(segments: list[dict[str, Any]]) -> str:
         "纪要要有足够信息帮助复习，但不要为了充实而编造内容。\n\n"
         f"课堂文字记录：\n{transcript}"
     )
-    response = httpx.post(
+    from ...core.model_budget import quota_chat_post
+    response = quota_chat_post(httpx.post,
         "https://api.deepseek.com/chat/completions",
         headers={"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"},
         json={
@@ -77,7 +78,7 @@ def generate_summary(segments: list[dict[str, Any]]) -> str:
             "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             "temperature": 0.2,
         },
-        timeout=120,
+        timeout=120, purpose="summary",
     )
     if response.status_code >= 400:
         detail = response.text[:500]

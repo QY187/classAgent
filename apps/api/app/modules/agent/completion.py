@@ -2,6 +2,7 @@
 import httpx
 from ...core.config import get_settings
 from ...core.chat_failures import ChatRequestFailure, public_failure
+from ...core.model_budget import quota_chat_post
 from ...core.telemetry import annotate, record_usage, traced
 
 
@@ -12,7 +13,7 @@ def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
     if not settings.deepseek_api_key:
         raise ChatRequestFailure("ai_not_configured")
     try:
-        response = httpx.post(
+        response = quota_chat_post(httpx.post,
             "https://api.deepseek.com/chat/completions",
             headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
             json={"model": settings.summary_model, "messages": messages,

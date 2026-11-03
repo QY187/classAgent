@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
+from ...core.chat_failures import ChatRequestFailure
 from ...core.telemetry import annotate, span
 from .registry import TOOLS
 from .tools import ToolContext, check_course, check_lesson
@@ -50,6 +51,8 @@ def _execute_tool(db: Session, context: ToolContext, name: str, arguments: dict 
         return {"tool": name, "ok": True, "data": tool.handler(db, context, payload),
                 "content_trust": "untrusted_classroom_data"}
     except HTTPException as exc:
+        if isinstance(exc, ChatRequestFailure) and exc.failure.code.startswith("quota_"):
+            raise
         annotate(error_type=type(exc).__name__, http_status=exc.status_code)
         if name in context.actions and exc.status_code in {400, 403, 409}:
             return failure(name, "action_rejected", exc.detail if isinstance(exc.detail, str) else "操作未执行，请检查目标")

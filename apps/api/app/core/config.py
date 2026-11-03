@@ -1,6 +1,7 @@
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 class Settings(BaseSettings):
@@ -27,6 +28,8 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     summary_model: str = "deepseek-chat"
     summary_provider: str = "deepseek"
+    token_quota_enabled: bool = True
+    daily_token_limit: int = Field(default=100000, ge=0, le=1000000000)
     secret_key: str = "dev-secret-change-me"
     admin_username: str = "root"
     admin_password: str = "123456"

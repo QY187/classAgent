@@ -5,6 +5,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from ...core.telemetry import bind_request, request_trace, span, trace_event, traced
 from ...core.chat_failures import ChatRequestFailure, public_failure
+from ...core.model_budget import user_budget
 from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_utc
 from ..agent.loop import run_agent
 from ..agent.tools import ToolContext
@@ -41,6 +42,7 @@ def _finish_failed(db: Session, conversation_id: str, request_id: str, token: st
     db.commit()
 
 
+@user_budget
 def send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None, on_step=None) -> dict:
     with request_trace(request_id, conversation_id):
         try:
