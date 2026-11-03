@@ -168,6 +168,7 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
                         "update_lesson": edit_action_hint(question, context, semantic)}
         if semantic is not None:
             action_hints.update({"semantic_queries": semantic.get("queries", []),
+                                 "answer_mode": semantic.get("answer_mode", "standard"),
                                  "semantic_catalog": semantic.get("catalog", []),
                                  "retry_transcription": semantic.get("retry", {}),
                                  "quiz_request": semantic.get("quiz_spec", {})})

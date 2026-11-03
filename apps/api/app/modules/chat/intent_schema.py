@@ -66,6 +66,8 @@ class QuizIntent(IntentModel):
 
 
 class IntentPayload(IntentModel):
+    answer_mode: Literal["standard", "source_location"] = Field(default="standard",
+        description="source_location仅用于用户只问课堂主题在哪门课程、哪个课次或时间点；不含学习状态或内容解释要求。混合请求用standard。")
     create_course: CreateCourseIntent | None = None
     create_lesson: CreateLessonIntent | None = None
     edit: EditIntent | None = None
@@ -79,6 +81,8 @@ class IntentPayload(IntentModel):
 
     @model_validator(mode="after")
     def coherent_actions(self):
+        if self.answer_mode == "source_location" and (self.write_keys() or self.queries or self.catalog or self.verify):
+            raise ValueError("仅定位课堂内容不能同时要求业务清单或写操作；混合请求使用standard")
         families = sum(item is not None for item in (self.edit, self.knowledge, self.retry))
         families += bool(self.create_course is not None or self.create_lesson is not None)
         if families > 1:
@@ -104,6 +108,8 @@ class IntentPayload(IntentModel):
         """连接既有业务处理器；主入口始终传 dict，不再回落到关键词授权。"""
         value = {key: item for key, item in self.model_dump().items()
                  if item is not None and (item or key not in {"queries", "catalog"})}
+        if self.answer_mode == "standard":
+            value.pop("answer_mode", None)
         if self.quiz:
             value["quiz"] = self.quiz.mode
             value["quiz_spec"] = self.quiz.model_dump(exclude={"mode"})

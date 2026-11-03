@@ -35,6 +35,9 @@ def compose_answer(db, context, payload, evidence, steps):
     if payload.get("workflow") is not None:
         append_result("处理与小测记录", lambda: evidence.workflow.answer(db, context, payload["workflow"]))
     verified_business = bool(parts)
+    if payload.get("locations") is not None:
+        append_result("内容位置", lambda: evidence.location_answer(
+            db, context, payload["locations"], citation_offset=len(citations)))
     if payload["claims"]:
         append_result("课堂结论", lambda: evidence.answer(
             db, context, payload["claims"], citation_offset=len(citations)))

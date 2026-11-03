@@ -44,6 +44,9 @@ SYSTEM_PROMPT = """你是课堂学习 Agent，只使用提供的工具完成用�
 查询还没做的小测使用 list_unanswered_quizzes，返回 workflow.query_ids。仅可答且本人没有提交记录的小测计入，未提交不代表从未打开，不提前展示答案。
 查询待处理课次及失败原因使用 list_pending_lessons，返回 {"claims":[],"workflow":{"query_ids":["本次 workflow_query_id"]}}，后端复核记录；主对话省略课程查询所有课程，课程对话只查当前课程。不把等待上传或缺少纪要说成转写失败。
 按需要查找课次、读取纪要和文字记录或搜索；查询失败可修正参数，不要无限重复。
+区分内容定位与学习状态：问某个主题在哪门课、哪节课时，最终用locations返回本次核实的原文来源，不能因为用了知识点工具辅助定位就展示整份状态清单。
+主对话未指定课程时，可先用list_knowledge_points跨课程查找候选，再读取匹配课次的当前原文或search_course核实主题；没有知识点记录时继续查询课程并搜索，不能把候选空结果当成内容不存在。
+只给已核实的相关课次，保留实际课次标题，不猜“第几讲”。不要把课程位置写成claims，位置属于资料元数据，不是课堂原文句子。
 文字记录有 next_offset 时可以继续分页，truncated 表示内容不完整。
 纪要用于定位主题，事实结论必须进一步读取文字记录并引用工具返回的 evidence_id。
 课堂事实优先使用本次原文的完整句子，保留否定、条件、范围和单位；不要凭引用编号把自由改写当作已核对的结论。不受原文直接支持的改写由后端回退原文。
@@ -259,7 +262,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                     if queries:
                         payload[group] = {"query_ids":list(queries)}
                 combined = None
-                if payload.get("claims") or any(payload.get(key) is not None for key in ("workflow","progress","learning","quiz_results","catalog")):
+                if payload.get("claims") or any(payload.get(key) is not None for key in ("workflow","progress","learning","quiz_results","catalog","locations")):
                     try:
                         combined = compose_answer(db, context, payload, evidence, steps)
                     except (ValueError, TypeError):
@@ -404,6 +407,12 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
 def finalize(db: Session, context: ToolContext, content: str | None, evidence: EvidenceStore, steps: list) -> dict:
     try:
         payload = parse_response(content)
+        if context.action_hints.get("answer_mode") == "source_location":
+            if payload.get("locations"):
+                # 内部定位可能读取学习记录或目录；只呈现用户所问的位置。
+                payload = {"claims": [], "locations": payload["locations"]}
+            elif payload.get("outcome") not in {"needs_input", "insufficient_evidence"}:
+                raise ValueError("本次仅询问内容位置，请用locations.source_ids返回实际匹配的本次原文证据")
         if context.course_id is None and payload.get("outcome") == "needs_input" and re.search(
                 r"进入主对话|当前对话.{0,15}(?:未绑定|不是|限定|绑定)|对话范围不是", payload.get("question", "")):
             raise ValueError("主对话不需要绑定课程才能查询；重新按本条课程名称调用工具")

@@ -48,6 +48,10 @@ quiz.course、lessons 为明确的课程名称和课次标题数组；count 明�
 用户只是查询已有小测时不生成；不要根据历史话题把本次整门课程出题缩小到历史课次。
 verify: target 要核对的已执行操作目标，可为 null；不能恢复旧写权限。
 queries: catalog/progress/learning/quiz_results/workflow；只标记用户要求展示的最终查询，不标记工具内部定位。
+answer_mode：仅询问某个课堂主题在哪门课程、哪节课、哪个时间点时用 source_location，queries/catalog为空。
+这是内容来源定位，不是课程目录或学习记录查询；即使提到“知识点”，也不代表要展示学习状态清单。
+例如“我的二叉树的特点是在哪个课程的第几个课次”“老师在哪一讲讲过叶子结点”均为 source_location。
+明确查询掌握状态、错题或知识点列表时仍用 standard 和 learning；要求位置同时解释知识或查询状态等混合请求用 standard，保留明确的业务查询。
 catalog 对应目录类别 list_courses/list_lessons；progress 是课程进度，learning 是知识点和错题，
 quiz_results 是已提交成绩及逐题作答，workflow 是处理进度、待处理课次、未作答小测。
 不要遗漏用户同一句话中的多项要求。纯课堂内容问答可以输出 intent={}，后续 Agent 会查询原文。

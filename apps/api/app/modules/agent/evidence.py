@@ -55,6 +55,10 @@ class EvidenceStore:
             row["evidence_id"] = key
 
     def answer(self, db: Session, context: ToolContext, claims: list, *, citation_offset: int = 0) -> dict:
+        evidence, lessons = self.current_evidence(db, context)
+        return ground_claims(verified_claims(claims, evidence), evidence, lessons, citation_offset=citation_offset)
+
+    def current_evidence(self, db: Session, context: ToolContext):
         evidence, lessons = {}, {}
         for key, entry in self.entries.items():
             segment = db.scalar(select(TranscriptSegment).where(TranscriptSegment.id == entry["segment_id"])
@@ -70,7 +74,31 @@ class EvidenceStore:
             evidence[key] = SimpleNamespace(lesson_id=lesson.id, start_ms=segment.start_ms,
                 end_ms=segment.end_ms, content=entry["content"], full_content=segment.text, source_segment_ids=json.dumps([segment.id]))
             lessons[lesson.id] = lesson
-        return ground_claims(verified_claims(claims, evidence), evidence, lessons, citation_offset=citation_offset)
+        return evidence, lessons
+
+    def location_answer(self, db: Session, context: ToolContext, selection: dict, *, citation_offset: int = 0):
+        from .tools import check_course
+        ids = selection["source_ids"]
+        if any(key not in self.entries for key in ids):
+            raise ValueError("位置引用必须来自本次实际读取的原文")
+        db.expire_all()
+        evidence, lessons = self.current_evidence(db, context)
+        claims, seen = [], set()
+        for key in dict.fromkeys(ids):
+            if key not in evidence:
+                continue
+            lesson = lessons[evidence[key].lesson_id]
+            if lesson.id in seen:
+                continue
+            course = check_course(db, context, lesson.course_id)
+            claims.append({"text": f"《{course.name}》 · {lesson.title}", "source_ids": [key]})
+            seen.add(lesson.id)
+        if not claims:
+            return {"answer": "目前没有足够的有效原文依据定位到具体课程和课次。", "citations": []}
+        # 只使用重新核验的数据库元数据，绕过课堂原文逐句匹配；不接受模型自由填写名称或序号。
+        result = ground_claims(claims, evidence, lessons, citation_offset=citation_offset)
+        result["answer"] = "找到相关内容：\n\n" + result["answer"]
+        return result
 
     def catalog_selection(self, kinds):
         selected = {"course_ids":[], "lesson_ids":[]}
