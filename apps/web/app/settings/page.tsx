@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { errorMessage, request } from "../../lib/api";
 import { clearSession, getStoredUser, type AuthUser } from "../../lib/auth";
 import UserAvatar, { avatarUpdatedEvent } from "../../components/UserAvatar";
-import TokenQuotaSettings from "../../components/settings/TokenQuotaSettings";
 
 const maxAvatarSize = 2 * 1024 * 1024;
 
@@ -117,8 +116,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
-
-      <TokenQuotaSettings isAdmin={user?.role === "admin"} />
 
       <section className="settings-card settings-security" aria-labelledby="settings-security-title">
         <div className="settings-section-heading"><div><span className="settings-kicker">账号安全</span><h2 id="settings-security-title">登录与安全</h2><p>管理用户名和登录密码，修改后需要重新登录。</p></div></div>

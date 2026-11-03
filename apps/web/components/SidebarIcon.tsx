@@ -1,7 +1,8 @@
-type IconName = "library" | "search" | "knowledge" | "chat" | "notebook" | "trash" | "folder" | "settings" | "logout" | "more" | "monitor";
+type IconName = "library" | "search" | "knowledge" | "chat" | "notebook" | "trash" | "folder" | "settings" | "logout" | "more" | "monitor" | "quota";
 
 export default function SidebarIcon({ name }: { name: IconName }) {
   const paths: Record<Exclude<IconName, "search" | "more">, string> = {
+    quota: "M5 19a10 10 0 1 1 14 0M12 13l4-4M5 13h1M7 7l1 1M12 3v2M17 7l-1 1M18 13h1",
     monitor: "M3 3v18h18M6 15l4-5 4 3 6-8M16 5h4v4",
     library: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
     knowledge: "M9 5h11M9 12h11M9 19h11M3 5l1 1 2-2M3 12l1 1 2-2M3 19l1 1 2-2",

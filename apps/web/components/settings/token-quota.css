@@ -1,33 +1,171 @@
-.token-quota-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.token-quota-heading h3 { margin: 0; }
-.token-quota-numbers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 0; padding: 24px 30px; }
-.token-quota-numbers div { border: 1px solid #e5ebf5; border-radius: 14px; padding: 18px; background: #fbfcff; min-width: 0; }
-.token-quota-numbers dt { color: #758099; font-size: 12px; }
-.token-quota-numbers dd { margin: 10px 0 0; font-size: 24px; font-weight: 650; color: #263b76; overflow-wrap: anywhere; }
-.token-quota-notes { padding: 0 30px 22px; font-size: 12px; line-height: 1.8; color: #758099; }
-.token-quota-notes p { margin: 0 0 8px; }
-.token-quota-error { color: #b43b3b; font-size: 13px; padding: 0 30px; line-height: 1.7; }
-.token-quota-search { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; padding: 20px 30px; }
-.token-quota-search .field-label { flex: 1; min-width: 160px; }
-.token-quota-table { max-width: 100%; overflow-x: auto; padding: 0 30px 16px; }
-.token-quota-table table { min-width: 730px; width: 100%; border-collapse: collapse; font-size: 13px; }
-.token-quota-table th, .token-quota-table td { padding: 14px 12px; border-bottom: 1px solid #e8edf5; text-align: left; vertical-align: middle; }
-.token-quota-table th { color: #758099; background: #fbfcff; font-weight: 500; white-space: nowrap; }
-.token-quota-table input { width: 170px; }
-.token-quota-actions { display: flex; align-items: center; gap: 8px; }
-.token-quota-actions button { white-space: nowrap; }
-.token-quota-pagination { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding: 16px 30px 24px; font-size: 12px; color: #758099; }
-.token-quota-pagination span { margin-right: auto; }
-.token-quota-ledger { padding: 24px 30px; border-top: 1px solid #e8edf5; font-size: 12px; line-height: 1.8; }
-.token-quota-ledger > .field-label { max-width: 250px; margin-top: 18px; }
-.token-quota-ledger .token-quota-table, .token-quota-ledger .token-quota-pagination { padding-left: 0; padding-right: 0; }
-@media (max-width: 900px) { .token-quota-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 640px) {
-  .token-quota-heading { align-items: flex-start; flex-wrap: wrap; }
-  .token-quota-numbers { gap: 10px; padding: 18px 22px; }
-  .token-quota-numbers div { padding: 14px 10px; }
-  .token-quota-numbers dd { font-size: 21px; }
-  .token-quota-notes, .token-quota-search, .token-quota-ledger { padding-left: 22px; padding-right: 22px; }
-  .token-quota-error { padding-left: 22px; padding-right: 22px; }
-  .token-quota-table { padding-left: 22px; padding-right: 22px; }
+.token-quota-page.content { max-width: 1180px; }
+.token-quota-page-heading { margin-bottom: 26px; }
+.token-quota-page-heading h1 { letter-spacing: -.04em; }
+.token-quota-card { margin-bottom: 22px; border: 1px solid #e3e8f1; border-radius: 20px; background: #fff; box-shadow: 0 3px 14px rgba(36, 52, 86, .025); overflow: hidden; }
+.token-quota-overview { background: linear-gradient(115deg, #fff 50%, #f7f8ff); }
+.token-quota-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 26px 28px 0; }
+.token-quota-card-heading h2 { margin: 0; font-size: 18px; font-weight: 650; color: #27354d; }
+.token-quota-card-heading p { margin: 7px 0 0; color: #7a8598; font-size: 12px; line-height: 1.7; }
+.token-quota-title-group { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.token-quota-title-group > div { min-width: 0; }
+.token-quota-section-icon { display: inline-flex; justify-content: center; align-items: center; width: 42px; height: 42px; border-radius: 13px; background: #eeeffc; color: #6868cb; flex: none; }
+.token-quota-section-icon svg { width: 22px; height: 22px; }
+.token-quota-inline-icon { width: 16px; height: 16px; flex: none; }
+.token-quota-refresh { display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; }
+.token-quota-balance-row { display: flex; align-items: center; gap: 36px; padding: 31px 28px 26px; }
+.token-quota-balance { flex: 1; min-width: 0; }
+.token-quota-balance-label { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; color: #6c7890; }
+.token-quota-balance-value { display: flex; align-items: baseline; gap: 10px; margin-top: 12px; }
+.token-quota-balance-value strong { font-size: clamp(34px, 3.5vw, 44px); line-height: 1.2; font-weight: 650; letter-spacing: -.05em; color: #343d70; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.token-quota-balance-value > span { font-size: 12px; color: #8892a6; }
+.token-quota-badge { display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 500; line-height: 1.4; color: #6b7890; background: #f0f3f8; white-space: nowrap; }
+.token-quota-badge.is-success, .token-quota-badge[data-status="settled"] { color: #36856b; background: #edf7f2; }
+.token-quota-badge.is-warning, .token-quota-badge[data-status="uncertain"] { color: #aa762a; background: #fff5e4; }
+.token-quota-badge[data-status="reserved"] { color: #6966ba; background: #f0eefd; }
+.token-quota-badge.is-neutral, .token-quota-badge[data-status="released"] { color: #7a8598; background: #f0f3f8; }
+.token-quota-numbers { flex: 1.4; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; gap: 22px; }
+.token-quota-numbers > div { min-width: 0; border-left: 1px solid #e4e8f1; padding-left: 22px; }
+.token-quota-numbers dt { display: flex; align-items: center; gap: 7px; color: #7b8598; font-size: 12px; }
+.token-quota-numbers dd { margin: 12px 0 0; font-size: 23px; font-weight: 600; color: #374767; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.token-quota-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.token-quota-dot.is-used, .token-quota-progress > .is-used { background: #7777d9; }
+.token-quota-dot.is-reserved, .token-quota-progress > .is-reserved { background: #bac4ed; }
+.token-quota-dot.is-available { background: #e4e8f3; }
+.token-quota-dot.is-total { background: #8a98b5; }
+.token-quota-distribution { padding: 0 28px 24px; }
+.token-quota-distribution-label { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; color: #8a94a8; margin-bottom: 10px; }
+.token-quota-progress { display: flex; width: 100%; height: 8px; border-radius: 8px; overflow: hidden; background: #e9edf6; }
+.token-quota-progress > span { display: block; height: 100%; }
+.token-quota-legend { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 18px; margin-top: 10px; color: #8993a6; font-size: 11px; }
+.token-quota-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.token-quota-help { border-top: 1px solid #e9edf5; background: rgba(248, 250, 254, .6); font-size: 12px; color: #79859a; }
+.token-quota-help > summary { display: flex; align-items: center; gap: 8px; padding: 15px 28px; cursor: pointer; list-style: none; }
+.token-quota-help > summary::-webkit-details-marker { display: none; }
+.token-quota-help > summary > svg:last-child { margin-left: auto; transition: transform .15s ease; }
+.token-quota-help[open] > summary > svg:last-child { transform: rotate(180deg); }
+.token-quota-help-hint { margin-left: 3px; color: #9ca6b7; font-size: 11px; }
+.token-quota-help > div { padding: 0 28px 16px; line-height: 1.9; }
+.token-quota-help p { margin: 0 0 7px; }
+.token-quota-message { margin: 18px 28px; padding: 12px 15px; border-radius: 9px; font-size: 12px; line-height: 1.8; }
+.token-quota-message.is-error { color: #b14b4b; background: #fff1f1; }
+.token-quota-message.is-success { color: #338166; background: #edf8f3; }
+.token-quota-message.is-warning { color: #9b7439; background: #fff6e7; }
+.token-quota-search { display: flex; align-items: center; gap: 10px; padding: 22px 28px; }
+.token-quota-search-field { display: flex; position: relative; align-items: center; flex: 1; min-width: 0; max-width: 420px; margin-right: auto; }
+.token-quota-search-field > svg { position: absolute; left: 13px; width: 17px; height: 17px; color: #98a2b4; pointer-events: none; }
+.token-quota-search-field .field { width: 100%; margin: 0; padding-left: 39px; background: #fafbfe; }
+.token-quota-table { max-width: 100%; overflow-x: auto; }
+.token-quota-table table { min-width: 830px; width: 100%; border-collapse: collapse; font-size: 12px; }
+.token-quota-table th, .token-quota-table td { padding: 18px 22px; text-align: left; vertical-align: middle; }
+.token-quota-table td { border-bottom: 1px solid #edf0f6; }
+.token-quota-table tbody tr:last-child td { border-bottom: 0; }
+.token-quota-table tbody tr:hover { background: #fcfcff; }
+.token-quota-table th { padding-top: 13px; padding-bottom: 13px; color: #8892a5; background: #f8f9fc; font-weight: 500; white-space: nowrap; }
+.token-quota-table td small { display: block; margin-top: 6px; color: #939db0; font-size: 11px; line-height: 1.6; }
+.token-quota-user { display: flex; align-items: center; gap: 10px; min-width: 120px; }
+.token-quota-avatar { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 11px; background: #f0effc; color: #7770c4; font-size: 13px; font-weight: 600; flex: none; }
+.token-quota-user > div { min-width: 0; }
+.token-quota-user strong { display: block; color: #3b4a64; font-weight: 550; overflow-wrap: anywhere; max-width: 180px; }
+.token-quota-user div > span { display: block; margin-top: 5px; font-size: 10px; color: #9ca5b5; }
+.token-quota-table-number { font-size: 14px; font-weight: 550; color: #52627c; font-variant-numeric: tabular-nums; }
+.token-quota-remaining { color: #6262b9; }
+.token-quota-limit-cell .field { width: 145px; padding: 9px 10px; font-size: 12px; background: #fff; }
+.token-quota-actions { display: flex; align-items: center; gap: 12px; }
+.token-quota-actions button { white-space: nowrap; font-size: 11px; }
+.token-quota-actions .button { padding: 9px 12px; }
+.token-quota-detail-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: none; padding: 8px 0; font: inherit; color: #7770c4; cursor: pointer; white-space: nowrap; }
+.token-quota-detail-button:hover { color: #4841a4; }
+.token-quota-detail-button > svg { width: 14px; height: 14px; }
+.token-quota-pagination { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 28px; border-top: 1px solid #edf0f6; font-size: 11px; color: #929caf; }
+.token-quota-pagination > div { display: flex; align-items: center; gap: 12px; }
+.token-quota-pagination .button { padding: 8px 11px; font-size: 11px; }
+.token-quota-admin-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 14px 28px; color: #9aA4b5; background: #fafbfe; font-size: 11px; line-height: 1.8; border-top: 1px solid #f0f2f7; }
+.token-quota-admin-note > svg { margin-top: 2px; width: 14px; height: 14px; }
+.token-quota-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 155px; padding: 32px 20px; text-align: center; color: #98a2b4; font-size: 12px; }
+.token-quota-empty > svg { width: 29px; height: 29px; color: #b3bad0; margin-bottom: 3px; }
+.token-quota-empty > strong { font-size: 13px; font-weight: 500; color: #7f8aa1; }
+.token-quota-dialog { width: min(1100px, calc(100vw - 48px)); max-width: none; max-height: min(850px, calc(100dvh - 48px)); padding: 0; margin: auto; border: 1px solid rgba(224, 229, 242, .7); border-radius: 23px; color: var(--ink); background: #fff; box-shadow: 0 28px 100px rgba(19, 30, 64, .22); overflow: hidden; }
+.token-quota-dialog[open] { display: flex; flex-direction: column; animation: quota-dialog-in .16s ease-out; }
+.token-quota-dialog::backdrop { background: rgba(24, 34, 58, .36); backdrop-filter: blur(4px); }
+.token-quota-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 25px 28px; flex: none; border-bottom: 1px solid #edf0f6; }
+.token-quota-dialog-header h2 { margin: 5px 0 0; font-size: 19px; font-weight: 600; overflow-wrap: anywhere; }
+.token-quota-eyebrow { font-size: 10px; color: #979fb4; letter-spacing: .1em; }
+.token-quota-close { display: inline-flex; align-items: center; justify-content: center; width: 33px; height: 33px; border: 1px solid #e8ebf3; border-radius: 10px; color: #929cb1; background: #fff; cursor: pointer; flex: none; }
+.token-quota-close:hover { background: #f4f5fb; color: #565e8c; }
+.token-quota-close:disabled { opacity: .5; cursor: not-allowed; }
+.token-quota-close:focus-visible, .token-quota-detail-button:focus-visible, .token-quota-help > summary:focus-visible { outline: 2px solid #b5b7ed; outline-offset: 3px; }
+.token-quota-dialog-toolbar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; padding: 20px 28px; flex: none; }
+.token-quota-dialog-toolbar .field-label { font-size: 11px; color: #939caf; }
+.token-quota-dialog-toolbar .field { width: 175px; padding: 9px 11px; margin-top: 5px; font-size: 12px; }
+.token-quota-dialog-toolbar > span { margin: auto 0 9px auto; font-size: 11px; color: #a1aabb; }
+.token-quota-dialog-toolbar > button { font-size: 11px; padding: 10px 12px; }
+.token-quota-dialog-body { min-height: 150px; overflow-y: auto; overscroll-behavior: contain; }
+.token-quota-ledger-table table { min-width: 960px; }
+.token-quota-ledger-table th { position: sticky; top: 0; z-index: 1; }
+.token-quota-time { white-space: nowrap; color: #8b96aa; font-variant-numeric: tabular-nums; font-size: 11px; }
+.token-quota-model { display: block; max-width: 180px; overflow-wrap: anywhere; color: #596982; font-weight: 500; }
+.token-quota-reconcile-cell .field { width: 110px; padding: 9px 10px; font-size: 11px; }
+.token-quota-reconcile-cell .token-quota-actions { gap: 8px; }
+.token-quota-settled-note { font-size: 11px; color: #a0a9ba; white-space: nowrap; }
+.token-quota-ledger-help > summary { font-size: 11px; }
+.token-quota-ledger-help > div { font-size: 11px; }
+.token-quota-dialog-footer { flex: none; background: #fff; }
+@keyframes quota-dialog-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 1050px) {
+  .token-quota-balance-row { gap: 26px; align-items: flex-start; flex-direction: column; }
+  .token-quota-numbers { width: 100%; gap: 18px; }
+  .token-quota-numbers > div { border-left: 0; padding-left: 0; }
 }
+@media (max-width: 700px) {
+  .token-quota-page-heading h1 { font-size: 28px; }
+  .token-quota-page-heading p { font-size: 12px; line-height: 1.8; }
+  .token-quota-card-heading { padding: 20px 19px 0; flex-wrap: wrap; gap: 16px; }
+  .token-quota-card-heading h2 { font-size: 16px; }
+  .token-quota-card-heading p { font-size: 11px; }
+  .token-quota-title-group { gap: 10px; }
+  .token-quota-section-icon { width: 35px; height: 35px; border-radius: 11px; }
+  .token-quota-section-icon svg { width: 19px; height: 19px; }
+  .token-quota-overview .token-quota-refresh { font-size: 11px; padding: 9px 11px; }
+  .token-quota-balance-row { padding: 24px 19px; gap: 24px; }
+  .token-quota-balance-value strong { font-size: 38px; }
+  .token-quota-numbers { gap: 9px; }
+  .token-quota-numbers dt { font-size: 10px; gap: 5px; }
+  .token-quota-numbers dd { font-size: 19px; margin-top: 10px; }
+  .token-quota-distribution { padding: 0 19px 20px; }
+  .token-quota-legend { gap: 12px; font-size: 10px; }
+  .token-quota-help > summary { padding: 14px 19px; font-size: 11px; }
+  .token-quota-help > div { padding: 0 19px 16px; }
+  .token-quota-help-hint { display: none; }
+  .token-quota-message { margin: 14px 19px; }
+  .token-quota-search { flex-wrap: wrap; padding: 18px 19px; }
+  .token-quota-search-field { flex: 1 0 100%; max-width: none; }
+  .token-quota-search > button { flex: 1; font-size: 11px; }
+  .token-quota-users, .token-quota-ledger-table { overflow: visible; }
+  .token-quota-users table, .token-quota-ledger-table table { display: block; min-width: 0; width: 100%; }
+  .token-quota-users thead, .token-quota-ledger-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .token-quota-users tbody, .token-quota-ledger-table tbody { display: block; }
+  .token-quota-users tbody tr, .token-quota-ledger-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; padding: 19px; border-top: 1px solid #edf0f6; }
+  .token-quota-users td, .token-quota-ledger-table td { display: block; padding: 0; border: 0; min-width: 0; }
+  .token-quota-users td[data-label]::before, .token-quota-ledger-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 8px; font-size: 10px; color: #939db0; }
+  .token-quota-user-cell, .token-quota-limit-cell, .token-quota-action-cell, .token-quota-reconcile-cell { grid-column: 1 / -1; }
+  .token-quota-user strong { max-width: none; }
+  .token-quota-limit-cell .field { width: 100%; }
+  .token-quota-action-cell .token-quota-actions { justify-content: space-between; }
+  .token-quota-actions .button { font-size: 11px; }
+  .token-quota-admin-note { padding: 14px 19px; font-size: 10px; }
+  .token-quota-pagination { padding: 16px 19px; flex-wrap: wrap; gap: 14px; }
+  .token-quota-pagination > div { margin-left: auto; gap: 8px; }
+  .token-quota-pagination .button { padding: 8px 10px; }
+  .token-quota-dialog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); border-radius: 18px; }
+  .token-quota-dialog-header { padding: 19px; gap: 12px; }
+  .token-quota-dialog-header h2 { font-size: 15px; line-height: 1.6; }
+  .token-quota-dialog-toolbar { padding: 17px 19px; gap: 10px; }
+  .token-quota-dialog-toolbar > span { display: none; }
+  .token-quota-dialog-toolbar .field { width: 168px; }
+  .token-quota-dialog-toolbar > button { padding: 10px; }
+  .token-quota-ledger-table td:first-child { grid-column: 1 / -1; }
+  .token-quota-reconcile-cell .field { flex: 1; min-width: 0; }
+  .token-quota-model { max-width: none; }
+  .token-quota-dialog-footer > span { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .token-quota-dialog[open] { animation: none; } .token-quota-help > summary > svg:last-child { transition: none; } }
