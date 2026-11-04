@@ -42,21 +42,50 @@ class EvidenceStore:
             return
         data = result["data"]
         for row in data.get("items", []):
-            segment = db.scalar(select(TranscriptSegment).where(TranscriptSegment.id == row["segment_id"]))
-            if segment is None:
-                continue
-            lesson = check_lesson(db, context, segment.lesson_id)
             content = row.get("text") or row.get("snippet")
             if not content:
                 continue
-            key = f"E{len(self.entries) + 1}"
-            self.entries[key] = {"segment_id": segment.id, "snapshot": segment.text,
-                                 "lesson_id": lesson.id, "content": content}
-            row["evidence_id"] = key
+            # 父块只是检索上下文，不能把整个父块都绑定到第一个（常为标题）片段。
+            source_ids = row.get("source_segment_ids") or [row["segment_id"]]
+            sources = []
+            for identity in dict.fromkeys(source_ids):
+                segment = db.get(TranscriptSegment, identity)
+                if segment is None or segment.lesson_id != row.get("lesson_id", data.get("lesson_id")):
+                    continue
+                try:
+                    lesson = check_lesson(db, context, segment.lesson_id)
+                except HTTPException:
+                    continue
+                if data.get("course_id") and lesson.course_id != data["course_id"]:
+                    continue
+                # 只认证模型本轮确实读到的文字，不从父块 ID 列表偷偷补入截断外的原文。
+                excerpt = content.strip("…")
+                visible = segment.text if segment.text in content else (
+                    excerpt if len(source_ids) == 1 and excerpt and excerpt in segment.text else None)
+                if not visible:
+                    continue
+                key = next((key for key, entry in self.entries.items()
+                            if entry["segment_id"] == segment.id and entry["content"] == visible
+                            and entry["snapshot"] == segment.text), None)
+                if key is None:
+                    key = f"E{len(self.entries) + 1}"
+                    self.entries[key] = {"segment_id": segment.id, "snapshot": segment.text,
+                                         "lesson_id": lesson.id, "content": visible}
+                sources.append({"evidence_id": key, "text": visible,
+                                "start_ms": segment.start_ms, "end_ms": segment.end_ms})
+            row["evidence"] = sources
+            if sources:
+                row["evidence_id"] = sources[0]["evidence_id"]
 
     def answer(self, db: Session, context: ToolContext, claims: list, *, citation_offset: int = 0) -> dict:
+        from .goals import requested_outputs
         evidence, lessons = self.current_evidence(db, context)
-        return ground_claims(verified_claims(claims, evidence), evidence, lessons, citation_offset=citation_offset)
+        compact = requested_outputs(context) is not None
+        verified = verified_claims(claims, evidence, fallback=not compact)
+        result = ground_claims(verified, evidence, lessons, citation_offset=citation_offset)
+        if compact and len(verified) > 1:
+            result["answer"] = "\n\n".join("- " + line for line in result["answer"].split("\n\n"))
+        return result
 
     def current_evidence(self, db: Session, context: ToolContext):
         evidence, lessons = {}, {}
@@ -76,7 +105,7 @@ class EvidenceStore:
             lessons[lesson.id] = lesson
         return evidence, lessons
 
-    def location_answer(self, db: Session, context: ToolContext, selection: dict, *, citation_offset: int = 0):
+    def location_answer(self, db: Session, context: ToolContext, selection: dict, *, citation_offset: int = 0, concise=False):
         from .tools import check_course
         ids = selection["source_ids"]
         if any(key not in self.entries for key in ids):
@@ -97,7 +126,8 @@ class EvidenceStore:
             return {"answer": "目前没有足够的有效原文依据定位到具体课程和课次。", "citations": []}
         # 只使用重新核验的数据库元数据，绕过课堂原文逐句匹配；不接受模型自由填写名称或序号。
         result = ground_claims(claims, evidence, lessons, citation_offset=citation_offset)
-        result["answer"] = "找到相关内容：\n\n" + result["answer"]
+        if not concise:
+            result["answer"] = "找到相关内容：\n\n" + result["answer"]
         return result
 
     def catalog_selection(self, kinds):

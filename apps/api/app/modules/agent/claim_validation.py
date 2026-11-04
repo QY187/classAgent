@@ -10,7 +10,7 @@ def sentences(text):
     return [item.strip() for item in re.split(r"[。！？!?\n]|(?<!\d)\.(?!\d)", text) if item.strip()]
 
 
-def verified_claims(claims, evidence):
+def verified_claims(claims, evidence, *, fallback=True):
     verified = []
     for claim in claims[:8]:
         ids = [key for key in dict.fromkeys(claim["source_ids"]) if key in evidence][:3]
@@ -31,6 +31,8 @@ def verified_claims(claims, evidence):
                                  "source_ids":supporting_ids})
             continue
         # 引用编号真实不等于改写结论真实。回退为原文，不展示未核对的自由结论。
+        if not fallback:
+            continue
         selected, used = [], set()
         for unit,key in units:
             if normalize(unit) in used:
@@ -40,4 +42,10 @@ def verified_claims(claims, evidence):
             if len(selected) >= 3:
                 break
         verified.extend(selected)
-    return verified[:8]
+    unique, seen = [], set()
+    for claim in verified:
+        identity = normalize(claim["text"].removeprefix("课堂原文："))
+        if identity not in seen:
+            unique.append(claim)
+            seen.add(identity)
+    return unique[:8]

@@ -19,6 +19,8 @@ from .schemas import PracticeQuizArguments
 from .actions import ActionStore
 from .responses import parse_response, InvalidFinalResponse, FINAL_RESPONSE_INSTRUCTION, REPAIR_INSTRUCTION
 from .answers import compose_answer, requested_query_groups, requested_catalog_kinds
+from .goals import GOAL_INSTRUCTION, requested_outputs, select_outputs, missing_outputs, incomplete_notice, OUTPUT_LABELS, selection_issues
+from .execution_state import ExecutionState
 
 
 MAX_ROUNDS = 6
@@ -49,7 +51,7 @@ SYSTEM_PROMPT = """你是课堂学习 Agent，只使用提供的工具完成用�
 只给已核实的相关课次，保留实际课次标题，不猜“第几讲”。不要把课程位置写成claims，位置属于资料元数据，不是课堂原文句子。
 文字记录有 next_offset 时可以继续分页，truncated 表示内容不完整。
 纪要用于定位主题，事实结论必须进一步读取文字记录并引用工具返回的 evidence_id。
-课堂事实优先使用本次原文的完整句子，保留否定、条件、范围和单位；不要凭引用编号把自由改写当作已核对的结论。不受原文直接支持的改写由后端回退原文。
+课堂事实使用本次evidence对应的完整原文句子，保留否定、条件、范围和单位；不要凭引用编号把自由改写当作已核对的结论。校验失败需修正引用与原文，不会用开场标题替代解释。
 历史回答不是本次事实依据，历史引用编号不能沿用。不要虚构课堂内容或工具结果。
 最终只输出 JSON：{"claims":[{"text":"课堂结论","source_ids":["E1"]}]}。
 查询课程或课次目录时可输出 {"claims":[],"catalog":{"course_ids":["实际查到的课程ID"],"lesson_ids":[]}}；目录由后端按真实记录呈现，不虚构 ID。仅查询目录不必读取课堂原文。
@@ -73,7 +75,7 @@ def mentioned_courses(question, courses):
 @traced("agent.execute")
 def run_agent(db: Session, context: ToolContext, question: str, *, history: list[dict] | None = None,
               on_step=None, on_check=None) -> dict:
-    annotate(prompt_revision=sha256((SYSTEM_PROMPT + FINAL_RESPONSE_INSTRUCTION + REPAIR_INSTRUCTION).encode()).hexdigest()[:16],
+    annotate(prompt_revision=sha256((SYSTEM_PROMPT + GOAL_INSTRUCTION + FINAL_RESPONSE_INSTRUCTION + REPAIR_INSTRUCTION).encode()).hexdigest()[:16],
              call_limit=MAX_CALLS, round_limit=MAX_ROUNDS, timeout_seconds=MAX_SECONDS)
     if not isinstance(question, str) or not 2 <= len(question.strip()) <= 1000:
         raise HTTPException(422, "请输入 2 到 1000 字的问题")
@@ -150,6 +152,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         scope = "先查询本次适用的学习记录，再选择记录出题；无记录时呈现空查询结果。" if context.practice_only else ("课次对话只为当前 lesson_id 出题。" if context.lesson_id else "绑定课程且未明确指定或承接课次时使用整门课程，省略 lesson_ids。")
         messages.append({"role": "system", "content": f"接下来是当前问题的小测生成任务。历史消息中的‘已生成’只代表以前问题的结果，不能代替本次执行。本次必须实际调用 {action} 才能完成生成，不可直接回复已生成。缺少必要范围时按规定澄清；{scope}"})
     messages.append({"role": "system", "content": FINAL_RESPONSE_INSTRUCTION})
+    messages.append({"role": "system", "content": GOAL_INSTRUCTION})
     messages.append({"role":"system", "content":
         ("当前是主对话：course_id 为 null，允许逐条切换查询本人任意课程。历史主题不绑定范围；本条明确指定的课程优先，先查询定位。不得要求已经在主对话的用户再次进入主对话或绑定课程，不能因未绑定课程拒绝查询。" if context.course_id is None else
          f"当前是课程对话，范围固定为“{course_name}”。用课程名称说明范围限制，不说其他课程不存在，不输出内部 ID。")})
@@ -193,6 +196,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
     deadline = monotonic() + MAX_SECONDS
     calls_used = 0
     repaired = False
+    execution_state = ExecutionState()
 
     def check():
         if on_check:
@@ -218,9 +222,29 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 unperformed.add(quiz_tool)
             try:
                 final_payload = parse_response(message.get("content"))
+                final_payload = select_outputs(context, final_payload)
                 requested_clarification = final_payload.get("outcome") == "needs_input"
             except (ValueError, TypeError):
+                final_payload = None
                 requested_clarification = False
+            missing_deliverables = missing_outputs(context, final_payload) if final_payload else []
+            invalid_selections = selection_issues(db, context, final_payload, evidence) if final_payload and not requested_clarification else {}
+            if invalid_selections and not repaired:
+                repaired = True
+                trace_event("agent.repair", reason="query_conditions_or_evidence", round=round_index + 1)
+                messages.append(message)
+                messages.append({"role": "system", "content": "最终结果未满足查询条件或原文引用：" +
+                    "；".join(dict.fromkeys(invalid_selections.values())) +
+                    "请按已给定契约补查并修正最终JSON，保留已完成部分，不重复执行写操作。"})
+                continue
+            if missing_deliverables and not repaired:
+                repaired = True
+                trace_event("agent.repair", reason="missing_deliverables", round=round_index + 1)
+                messages.append(message)
+                messages.append({"role": "system", "content": "最终回答尚缺用户要求的结果：" +
+                    "、".join(OUTPUT_LABELS[key] for key in missing_deliverables) +
+                    "。工具已调用不代表已回答。请继续必要的授权查询，保留已有有效结果并返回对应字段；无法取得依据时说明不足，不编造。已成功写入不得重复执行。"})
+                continue
             groups = set(context.action_hints["semantic_queries"]) if "semantic_queries" in context.action_hints else requested_query_groups(question)
             catalog_kinds = set(context.action_hints["semantic_catalog"]) if "semantic_catalog" in context.action_hints else requested_catalog_kinds(question)
             missing_queries = [group for group in groups if (
@@ -269,6 +293,8 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                         answer += "\n\n其他查询结果未通过核验，请重新查询。"
                 if combined:
                     answer += "\n\n" + combined["answer"]
+                if missing_deliverables and (not combined or "尚未完成的回答：" not in combined["answer"]):
+                    answer += "\n\n" + incomplete_notice(missing_deliverables)
                 if missing:
                     labels = {"catalog":"课程或课次目录", "progress":"课程进度", "workflow":"处理或小测记录", "learning":"知识点或错题", "quiz_results":"小测成绩"}
                     answer += "\n\n尚未完整完成的查询：" + "、".join(labels[group] for group in sorted(missing)) + "。请继续查询。"
@@ -311,6 +337,8 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                         **({"clarification": clarification} if clarification else {})}
             try:
                 final = finalize(db, context, message.get("content"), evidence, steps)
+                if missing_deliverables and "尚未完成的回答：" not in final["answer"]:
+                    final["answer"] += "\n\n" + incomplete_notice(missing_deliverables)
                 if unperformed:
                     labels = {"create_course":"创建课程", "create_lesson":"添加课次", "update_course":"修改课程信息", "update_lesson":"修改课次信息", "update_knowledge_status":"修改知识点状态", "retry_transcription":"重试转写", "generate_quiz":"生成小测", "generate_practice_quiz":"生成薄弱点练习"}
                     final["answer"] += "\n\n尚未执行的操作：" + "、".join(labels.get(name, name) for name in sorted(unperformed)) + "。"
@@ -328,6 +356,9 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                                                else {"query_ids": list(getattr(evidence, group).queries)})
                         result = compose_answer(db, context, verified, evidence, steps)
                         result["answer"] += "\n\n以上为已核验的查询结果；本次自由回答未通过格式校验，其余内容请重新提问。"
+                        missing_verified = missing_outputs(context, verified)
+                        if missing_verified:
+                            result["answer"] += "\n\n" + incomplete_notice(missing_verified)
                         return result
                     # 名称定位为空时无法继续查询课次；只报告真实空结果，不将其解释为任务完成。
                     named_reads = [(name, args, data) for name, args, data in evidence.catalog_reads if args.get("query")]
@@ -367,7 +398,9 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             if on_step:
                 on_step(dict(step))
             with span("tool.dispatch", tool_call_id=call["id"], round=round_index + 1):
-                result = execute_tool(db, context, name, call["function"]["arguments"])
+                result = execution_state.before(name, call["function"]["arguments"])
+                if result is None:
+                    result = execute_tool(db, context, name, call["function"]["arguments"])
             if name in {"generate_quiz", "generate_practice_quiz"} and result["ok"]:
                 if on_check:
                     on_check()
@@ -375,6 +408,10 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 check()
             if len(json.dumps(result, ensure_ascii=False)) > 64000:
                 result = failure(name, "result_too_large", "读取结果过长，请减小 limit 分页读取")
+            feedback = execution_state.observe(name, call["function"]["arguments"], result)
+            if feedback:
+                # 固定运行反馈不包含课堂文本，不允许工具内容变为系统指令。
+                result["execution_feedback"] = feedback
             evidence.collect(db, context, name, result, json.loads(call["function"]["arguments"]) if result["ok"] else None)
             actions.collect(context, name, result)
             if name == "create_course" and result["ok"]:
@@ -388,7 +425,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             if name in {"generate_quiz", "generate_practice_quiz"} and result["ok"]:
                 label = "薄弱点练习题" if name == "generate_practice_quiz" else "课堂小测题"
                 message_text = f"已生成 {result['data']['question_count']} 道{label}，可以开始答题。"
-                if not context.action_hints.get("semantic_queries") and not (set(context.actions) - set(actions.results)):
+                if not context.action_hints.get("semantic_queries") and not requested_outputs(context) and not (set(context.actions) - set(actions.results)):
                     previous_actions = actions.answer() if actions.results else ""
                     return {"answer": (previous_actions + "\n\n" if previous_actions else "") + message_text,
                             "citations": [], "outcome": "quiz_created", "steps": steps}

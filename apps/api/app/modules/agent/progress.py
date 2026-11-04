@@ -33,7 +33,7 @@ class ProgressStore:
         self.queries[key] = CourseProgressArguments.model_validate(result["data"]["filters"])
         result["data"]["progress_query_id"] = key
 
-    def answer(self, db, context, selection):
+    def answer(self, db, context, selection, *, view="progress"):
         keys = selection.get("query_ids")
         if not isinstance(keys, list) or not keys or len(keys) > 8 or any(
                 not isinstance(key, str) or key not in self.queries for key in keys):
@@ -44,7 +44,11 @@ class ProgressStore:
             args = self.queries[key]
             data = get_course_progress(db, context, args)
             cards, missing = data["review_cards"], data["missing_summaries"]
-            lines.extend([f"{data['course_name']} · 课程进度",
+            if view == "missing_summaries":
+                lines.append(f"《{data['course_name']}》目前没有缺少可用纪要的课次。" if not missing["total"] else
+                             f"《{data['course_name']}》有 {missing['total']} 节课尚无可用纪要：")
+            else:
+                lines.extend([f"{data['course_name']} · 课程进度",
                 f"共 {data['lesson_total']} 节课；有文字记录 {data['transcript_lessons']} 节，可用纪要 {data['summary_lessons']} 节。",
                 f"知识点共 {cards['total']} 个：未学习 {cards['new']} 个、需要复习 {cards['review']} 个、已掌握 {cards['mastered']} 个。状态由你手动标记。",
                 f"缺少可用纪要的课次：{missing['total']} 节。"])

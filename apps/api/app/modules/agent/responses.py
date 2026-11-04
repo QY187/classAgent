@@ -74,6 +74,8 @@ FINAL_RESPONSE_INSTRUCTION = """最终响应必须是一个完整 JSON 对象，
 需要补充信息或提示进入正确对话时，输出 {"claims":[],"outcome":"needs_input","question":"简短的澄清或范围提示"}。
 没有资料依据时输出 {"claims":[],"outcome":"insufficient_evidence"}。
 有课堂事实时输出 {"claims":[{"text":"结论","source_ids":["本次原文 evidence_id"]}]}。
+claims的text选择直接回答用户问题的完整原文句子及相关例子，evidence数组逐段对应文字和编号，不能把父块首段编号当成所有正文的编号。不要输出开场标题或重复同一句话充数。
+只选解释所需的最少句子，同一事实不要重复；定义和例子已说明后不再附加内容重复的课堂总结句。省略“今天这一讲”“下面回答几个问题”等课堂组织语所在的句子。
 目录和业务统计使用前述 catalog、progress、quiz_results、learning、workflow 对象，里面只能填写本次实际查询的 ID。
 课堂内容位置使用 {"claims":[],"locations":{"source_ids":["本次原文 evidence_id"]}}，课程与课次名称由后端核验呈现。
 只问内容在哪门课程、哪节课或时间点时，查找匹配主题并核实原文后只返回locations；不输出知识点状态、课程目录或课堂解释。

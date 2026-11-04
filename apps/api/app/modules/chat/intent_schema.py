@@ -65,7 +65,31 @@ class QuizIntent(IntentModel):
     question_type: Literal["mixed", "single_choice", "true_false"] | None = None
 
 
+class ReadRequirement(IntentModel):
+    output: Literal["learning", "progress"]
+    view: Literal["knowledge_points", "wrong_questions", "progress", "missing_summaries"]
+    scope: Literal["requested", "located_courses"] = "requested"
+    status: Literal["all", "new", "review", "mastered", "pending"] | None = None
+    query: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = Field(default="",
+        description="用于数据库关键词筛选的简短核心术语，不是完整问题或主题概述；如二叉树基本性质的相关知识点用二叉树。")
+
+    @model_validator(mode="after")
+    def coherent_view(self):
+        if (self.output == "learning") != (self.view in {"knowledge_points", "wrong_questions"}):
+            raise ValueError("查询视图与结果类别不匹配")
+        allowed = ({"all", "new", "review", "mastered"} if self.view == "knowledge_points" else
+                   {"all", "pending", "mastered"} if self.view == "wrong_questions" else {None})
+        if self.status not in allowed | {None} or (self.output == "progress" and self.query):
+            raise ValueError("查询条件与业务类型不匹配")
+        return self
+
+
 class IntentPayload(IntentModel):
+    goal: Question | None = Field(default=None, description="用一句话概括用户要获得的结果，不写思考过程或假定结果")
+    outputs: list[Literal["claims", "locations", "catalog", "progress", "learning", "quiz_results", "workflow"]] | None = Field(
+        default=None, max_length=7, description="仅包含用户要求展示的结果；内部查询不列入。纯写操作为空数组；null兼容旧快照。")
+    requirements: list[ReadRequirement] = Field(default_factory=list, max_length=8,
+        description="用户要求的学习/进度查询条件。内部辅助查询不填；located_courses 表示限定到本轮原文定位的课程。")
     answer_mode: Literal["standard", "source_location"] = Field(default="standard",
         description="source_location仅用于用户只问课堂主题在哪门课程、哪个课次或时间点；不含学习状态或内容解释要求。混合请求用standard。")
     create_course: CreateCourseIntent | None = None
@@ -81,6 +105,18 @@ class IntentPayload(IntentModel):
 
     @model_validator(mode="after")
     def coherent_actions(self):
+        if any(item.output not in self.queries for item in self.requirements):
+            raise ValueError("查询条件必须属于已声明的业务查询")
+        if any(item.scope == "located_courses" for item in self.requirements) and (
+                self.outputs is None or "locations" not in self.outputs):
+            raise ValueError("定位课程范围必须同时要求内容位置")
+        if self.outputs is not None:
+            if len(set(self.outputs)) != len(self.outputs):
+                raise ValueError("回答目标不能重复")
+            if set(self.outputs) & {"catalog", "progress", "learning", "quiz_results", "workflow"} != set(self.queries):
+                raise ValueError("回答目标中的业务结果必须与queries一致；内部定位不要放进queries")
+            if self.answer_mode == "source_location" and self.outputs != ["locations"]:
+                raise ValueError("仅内容定位的回答目标必须为locations")
         if self.answer_mode == "source_location" and (self.write_keys() or self.queries or self.catalog or self.verify):
             raise ValueError("仅定位课堂内容不能同时要求业务清单或写操作；混合请求使用standard")
         families = sum(item is not None for item in (self.edit, self.knowledge, self.retry))
@@ -110,6 +146,10 @@ class IntentPayload(IntentModel):
                  if item is not None and (item or key not in {"queries", "catalog"})}
         if self.answer_mode == "standard":
             value.pop("answer_mode", None)
+        # 回答契约由sending直接读取；不进入既有写授权和回执核验参数。
+        value.pop("goal", None)
+        value.pop("outputs", None)
+        value.pop("requirements", None)
         if self.quiz:
             value["quiz"] = self.quiz.mode
             value["quiz_spec"] = self.quiz.model_dump(exclude={"mode"})

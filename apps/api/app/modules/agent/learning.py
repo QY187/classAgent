@@ -97,7 +97,7 @@ class LearningStore:
         if set(args.knowledge_point_ids) - self.knowledge_ids or set(args.wrong_question_ids) - self.wrong_ids:
             raise HTTPException(400, "请先查询本次要练习的知识点或错题")
 
-    def answer(self, db, context, selection):
+    def answer(self, db, context, selection, *, compact=False):
         keys = selection.get("query_ids")
         if not isinstance(keys, list) or not keys or len(keys) > 8 or any(not isinstance(key, str) or key not in self.queries for key in keys):
             raise ValueError("未读取的学习记录")
@@ -112,6 +112,28 @@ class LearningStore:
             statuses = CARD_STATUSES if knowledge else WRONG_STATUSES
             noun, unit = ("知识点", "个") if knowledge else ("错题", "道")
             label = statuses.get(args.status, "全部状态")
+            if compact:
+                topic = f"与“{args.query}”相关" if args.query else ""
+                condition = f"被你标记为“{label}”的" if knowledge and args.status != "all" else (
+                    f"状态为“{label}”的" if args.status != "all" else "")
+                if not data["total"]:
+                    relation = "且" if condition else "的"
+                    lines.append(f"《{scope}》中，没有找到{topic}{relation}{condition}{noun}。" if topic else
+                                 f"《{scope}》中，没有找到{condition}{noun}。")
+                    continue
+                lines.append(f"《{scope}》{label + '的' if args.status != 'all' else '相关'}{noun}（{data['total']} {unit}）：")
+                for row in data["items"]:
+                    if knowledge:
+                        lines.append(f"- {row['title']} · {row['lesson_title']}" +
+                                     (f" · {row['course_name']}" if not data["filters"]["course_id"] else "") +
+                                     (f" · {statuses[row['status']]}" if args.status == "all" else ""))
+                    else:
+                        lines.append(f"- {row['stem']} · {row['course_name']} / {row['quiz_title']} · {statuses[row['status']]}")
+                if not data["items"]:
+                    lines.append("当前分页没有记录。")
+                if args.offset or data["next_offset"] is not None:
+                    lines.append(f"本次显示第 {args.offset + 1}–{args.offset + len(data['items'])} 条，可继续查看。")
+                continue
             heading = f"{scope} · {noun}（{label}）：{data['total']} {unit}"
             if args.query:
                 heading += f"，搜索：{args.query}"

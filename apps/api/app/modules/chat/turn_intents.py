@@ -32,6 +32,17 @@ pending_task 由后端提供，包括未完成的 intent、用户原始请求和
 每次可同时生成一组小测，也可组合多个只读查询。组合创建时 create_lesson.course 等于 create_course.name，均未知时均为 null。
 
 intent 各字段：
+goal：用一句话描述用户最终想得到什么，不猜答案，不列思考过程。outputs：本轮实际要展示的结果数组，必须填写。
+outputs可选claims课堂内容解答、locations主题所在课程课次/时间点、catalog课程课次目录、learning学习记录、progress课程进度、quiz_results成绩作答、workflow处理或小测记录。
+例如“二叉树的特点在哪讲过”outputs=[locations]；“在哪讲过并解释特点”outputs=[locations,claims]；“列出需要复习的知识点”outputs=[learning]。
+工具内部定位目标、核对权限或辅助选题不是交付结果，不因会用知识点/课程查询就加入learning/catalog。纯创建、修改、出题的outputs=[]，操作结果由真实回执负责。
+业务outputs必须与queries一致；多项结果逐项保留。只有咨询能力、闲聊或无需课堂事实的问题可outputs=[]；当前工具不支持的请求如实说明。
+requirements：对用户要求展示的learning/progress逐项记录筛选条件，不能只有结果类别却丢失条件。
+学习记录用output=learning、view=knowledge_points或wrong_questions，status为明确要求的new/review/mastered/pending/all，query为用户要筛选的主题关键词；未指定状态可为null。
+query是字面包含匹配的数据库筛选词，应提取简短核心术语，不拼接“的基本性质、在哪讲过”等问法。例如查“二叉树的基本性质”的相关学习记录，query填“二叉树”，不是“二叉树的基本性质”。不猜测用户课程名称。
+查询课程总体进度用output=progress、view=progress；只问哪些课次没有可用纪要用view=missing_summaries、queries=[progress]，不能用一般待处理workflow替代。
+scope=requested表示用户指定或当前绑定的范围；先定位主题、再问“这门课/相关课程”的学习或纪要情况时scope=located_courses，后续必须查询定位出的课程，而不是所有课程。
+例如“找二叉树在哪讲过，看看相关知识点里需要复习的，以及这门课没有纪要的课次”：outputs=[locations,learning,progress]，requirements=[{"output":"learning","view":"knowledge_points","scope":"located_courses","status":"review","query":"二叉树"},{"output":"progress","view":"missing_summaries","scope":"located_courses"}]。
 create_course: name 用户明确的课程名称、semester 明确学期。学期可选，未指定则 null，不能追问学期。
 不要把标识性的“课程”后缀放进名称。必填信息已齐全就执行，不要求用户重复确认。
 create_lesson: course 所属课程名称、title 课次标题、lesson_date 日期；没指定日期保持 null。
@@ -54,7 +65,7 @@ answer_mode：仅询问某个课堂主题在哪门课程、哪节课、哪个时
 明确查询掌握状态、错题或知识点列表时仍用 standard 和 learning；要求位置同时解释知识或查询状态等混合请求用 standard，保留明确的业务查询。
 catalog 对应目录类别 list_courses/list_lessons；progress 是课程进度，learning 是知识点和错题，
 quiz_results 是已提交成绩及逐题作答，workflow 是处理进度、待处理课次、未作答小测。
-不要遗漏用户同一句话中的多项要求。纯课堂内容问答可以输出 intent={}，后续 Agent 会查询原文。
+不要遗漏用户同一句话中的多项要求。纯课堂内容问答outputs=[claims]、queries=[]，后续 Agent 会查询原文。
 
 涉及日期时 date_source 必须逐字复制当前输入或有效待办中的日期表达，不得把自己的推断写成原文。
 current_date 是 Asia/Shanghai 权威日期。明天、下周一等明确相对日期据此计算；完整中文年月日转为 YYYY-MM-DD。
