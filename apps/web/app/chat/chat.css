@@ -92,6 +92,9 @@
 .chat-message.assistant .chat-message-role time { margin-left: 4px; }
 .chat-message.assistant .chat-message-content { width: fit-content; max-width: 100%; padding: 18px 22px; background: #f8faff; border: 1px solid #e8edf7; border-radius: 4px 16px 16px 16px; color: #26354f; line-height: 1.85; }
 .chat-message.assistant .chat-message-content:empty { display: none; }
+.chat-message.assistant .markdown-body { white-space: normal; color: inherit; line-height: inherit; }
+.chat-message.assistant .markdown-body > :first-child { margin-top: 0; }
+.chat-message.assistant .markdown-body > :last-child { margin-bottom: 0; }
 .chat-message-error { color: #bc4b4b; font-size: 12px; }
 .chat-message-status { color: var(--muted); font-size: 12px; }
 .chat-evidence { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
