@@ -74,7 +74,7 @@ def mentioned_courses(question, courses):
 
 @traced("agent.execute")
 def run_agent(db: Session, context: ToolContext, question: str, *, history: list[dict] | None = None,
-              on_step=None, on_check=None) -> dict:
+              on_step=None, on_check=None, on_answer=None) -> dict:
     annotate(prompt_revision=sha256((SYSTEM_PROMPT + GOAL_INSTRUCTION + FINAL_RESPONSE_INSTRUCTION + REPAIR_INSTRUCTION).encode()).hexdigest()[:16],
              call_limit=MAX_CALLS, round_limit=MAX_ROUNDS, timeout_seconds=MAX_SECONDS)
     if not isinstance(question, str) or not 2 <= len(question.strip()) <= 1000:
@@ -203,6 +203,11 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             on_check()  # 取消异常直接向上传播，不转成工具错误。
         if monotonic() >= deadline:
             raise ChatRequestFailure("execution_timeout")
+
+    def finish_read(result, payload):
+        if on_answer and result.get("outcome") == "answered" and result.get("answer_materials"):
+            return on_answer(result, lambda: compose_answer(db, context, payload, evidence, steps))
+        return result
 
     # 格式修复可额外占一轮，工具次数和总时限仍遵循原预算。
     for round_index in range(MAX_ROUNDS + 1):
@@ -344,7 +349,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                     final["answer"] += "\n\n尚未执行的操作：" + "、".join(labels.get(name, name) for name in sorted(unperformed)) + "。"
                     final["clarification"] = final["answer"] if final.get("outcome") == "needs_input" else "请补充尚未执行操作的目标或参数？"
                     final["outcome"] = "needs_input"
-                return final
+                return finish_read(final, final_payload)
             except InvalidFinalResponse:
                 if repaired:
                     # 已实际完成的业务读取可以由后端重建；不采纳模型的无效文本或虚构引用。
@@ -359,7 +364,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                         missing_verified = missing_outputs(context, verified)
                         if missing_verified:
                             result["answer"] += "\n\n" + incomplete_notice(missing_verified)
-                        return result
+                        return finish_read(result, verified)
                     # 名称定位为空时无法继续查询课次；只报告真实空结果，不将其解释为任务完成。
                     named_reads = [(name, args, data) for name, args, data in evidence.catalog_reads if args.get("query")]
                     if (named_reads and not unperformed and not evidence.entries

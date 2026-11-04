@@ -36,6 +36,7 @@ class GoalExecutionTest(unittest.TestCase):
             final(locations={"source_ids": ["E1"]}),
             final(locations={"source_ids": ["E1"]}, claims=[{"text": "二叉树每个节点最多有两个孩子。", "source_ids": ["E1"]}])]
         with patch("app.modules.chat.sending.resolve_turn_intent", return_value=decision), \
+             patch("app.modules.chat.sending.synthesize_result", side_effect=lambda question, result, **kw: result), \
              patch("app.modules.agent.loop.complete", side_effect=responses) as model:
             reply = send_message(self.db, chat["id"], "owner", "二叉树在哪讲过，也说说特点", "goal")['messages'][-1]
         self.assertEqual(model.call_count, 3)

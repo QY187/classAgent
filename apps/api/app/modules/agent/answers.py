@@ -8,7 +8,7 @@ from .goals import select_outputs, requested_outputs, incomplete_notice, require
 @traced("answer.compose")
 def compose_answer(db, context, payload, evidence, steps):
     payload = select_outputs(context, payload)
-    parts, citations, unavailable = {}, [], []
+    parts, citations, unavailable, materials = {}, [], [], []
     completed = set()
     invalid = selection_issues(db, context, payload, evidence)
     compact = requested_outputs(context) is not None
@@ -26,9 +26,12 @@ def compose_answer(db, context, payload, evidence, steps):
         if isinstance(result, str):
             if result:
                 parts[output] = result
+                materials.append({"id": output, "content": result, "citation_ids": []})
                 completed.add(output)
         else:
             parts[output] = result["answer"]
+            materials.append({"id": output, "content": result["answer"],
+                              "citation_ids": [item["id"] for item in result["citations"]]})
             citations.extend(result["citations"])
             if result["citations"]:
                 completed.add(output)
@@ -71,7 +74,10 @@ def compose_answer(db, context, payload, evidence, steps):
         order = ([key for key in ("locations", "claims", "learning", "progress", "quiz_results", "workflow", "catalog") if key in parts]
                  if compact else list(parts))
         blocks = [f"**{titles[key]}**\n\n{parts[key]}" if compact and len(parts) > 1 else parts[key] for key in order]
+        if unavailable:
+            materials.append({"id": "limitations", "content": "\n".join(unavailable), "citation_ids": []})
         return {"answer": "\n\n".join(blocks + unavailable), "citations": citations,
+                "answer_materials": materials,
                 "outcome": ("answered" if verified_business or citations else
                             "insufficient_evidence" if parts else "operation_failed"), "steps": steps}
     if payload.get("outcome") == "needs_input":

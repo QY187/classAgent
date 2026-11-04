@@ -9,6 +9,7 @@ from ...core.model_budget import user_budget
 from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_utc
 from ..agent.loop import run_agent
 from ..agent.tools import ToolContext
+from ..agent.synthesis import synthesize_result
 from .access import owned_conversation, owned_course, owned_lesson
 from .messages import read_messages
 from .generation import is_generating, GenerationStopped
@@ -198,8 +199,22 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
             result = {"answer": verification, "citations": [], "outcome": "answered", "steps": []}
         else:
             failure_stage = "execution"
-            result = run_agent(db, agent_context, question, history=context, on_check=check, on_step=publish_step)
+            def summarize_verified(read_result, refresh):
+                nonlocal failure_stage
+                failure_stage = "answer"
+                summarized = synthesize_result(question, read_result, on_check=check)
+                check()
+                current = refresh()
+                if (current.get("answer_materials") != read_result.get("answer_materials")
+                        or current.get("citations") != read_result.get("citations")):
+                    raise ChatRequestFailure("answer_sources_changed")
+                return summarized
+
+            result = run_agent(db, agent_context, question, history=context, on_check=check, on_step=publish_step,
+                on_answer=summarize_verified if decision.intent.outputs is not None else None)
         failure_stage = "answer"
+        # 只发布模型组织的回答和公开引用，内部证据包不进入预览或消息接口。
+        result.pop("answer_materials", None)
         if verification and not verification_only:
             result["answer"] = verification + "\n\n" + result["answer"]
         bind_request(outcome=result.get("outcome", "answered"), citation_count=len(result.get("citations", [])))
