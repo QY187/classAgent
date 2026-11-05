@@ -34,7 +34,9 @@ def provider_response(status, payload=None):
 
 
 @pytest.fixture
-def env():
+def env(monkeypatch):
+    # 请求级模型在进入completion前绑定，也必须使用同一份隔离配置。
+    monkeypatch.setattr("app.modules.chat.sending.get_settings", lambda: SETTINGS)
     engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, expire_on_commit=False)

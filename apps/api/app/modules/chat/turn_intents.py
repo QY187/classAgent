@@ -33,10 +33,12 @@ pending_task 由后端提供，包括未完成的 intent、用户原始请求和
 
 intent 各字段：
 goal：用一句话描述用户最终想得到什么，不猜答案，不列思考过程。outputs：本轮实际要展示的结果数组，必须填写。
-outputs可选claims课堂内容解答、locations主题所在课程课次/时间点、catalog课程课次目录、learning学习记录、progress课程进度、quiz_results成绩作答、workflow处理或小测记录。
+outputs可选claims课堂内容解答、locations主题所在课程课次/时间点、catalog课程课次目录、learning学习记录、progress课程进度、quiz_results成绩作答、workflow处理或小测记录、assistant产品身份/能力/使用帮助与礼貌交流。
+询问“你是谁”“能帮我做什么”“怎么用这个助手”、问候、致谢或超出已支持能力的咨询，使用assistant，由项目说明回答，不查询课堂资料里的助手身份。
+课堂知识问题仍用claims并检索依据；“老师在课上说你是谁”是在问课堂内容，不是产品介绍。身份介绍同时要求解释课堂知识时保留assistant和claims；功能咨询不授权写入。
 例如“二叉树的特点在哪讲过”outputs=[locations]；“在哪讲过并解释特点”outputs=[locations,claims]；“列出需要复习的知识点”outputs=[learning]。
 工具内部定位目标、核对权限或辅助选题不是交付结果，不因会用知识点/课程查询就加入learning/catalog。纯创建、修改、出题的outputs=[]，操作结果由真实回执负责。
-业务outputs必须与queries一致；多项结果逐项保留。只有咨询能力、闲聊或无需课堂事实的问题可outputs=[]；当前工具不支持的请求如实说明。
+业务outputs必须与queries一致；多项结果逐项保留。产品介绍和礼貌交流使用assistant，不加入queries；纯操作才outputs=[]。当前工具不支持的请求如实说明，不编造功能。
 requirements：对用户要求展示的learning/progress逐项记录筛选条件，不能只有结果类别却丢失条件。
 学习记录用output=learning、view=knowledge_points或wrong_questions，status为明确要求的new/review/mastered/pending/all，query为用户要筛选的主题关键词；未指定状态可为null。
 query是字面包含匹配的数据库筛选词，应提取简短核心术语，不拼接“的基本性质、在哪讲过”等问法。例如查“二叉树的基本性质”的相关学习记录，query填“二叉树”，不是“二叉树的基本性质”。不猜测用户课程名称。

@@ -245,8 +245,9 @@ class RequestTraceIntegrationTest(CaptureCase):
             db.get(TranscriptSegment, "s").text = "二叉树最多两个孩子。"
             db.commit()
             chat = create_course_conversation(db, "c", "owner")
-            with patch("app.modules.agent.completion.get_settings", return_value=SimpleNamespace(
-                    deepseek_api_key="private-secret", summary_model="test-model")), patch(
+            settings = SimpleNamespace(deepseek_api_key="private-secret", summary_model="test-model")
+            with patch("app.modules.agent.completion.get_settings", return_value=settings), patch(
+                    "app.modules.chat.sending.get_settings", return_value=settings), patch(
                     "app.modules.agent.completion.httpx.post", side_effect=replies) as provider:
                 first = send_message(db, chat["id"], "owner", "private-question", "business-r")
                 second = send_message(db, chat["id"], "owner", "private-question", "business-r")

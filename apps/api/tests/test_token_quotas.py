@@ -37,6 +37,11 @@ def env(tmp_path, monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "token_quota_enabled", True)
     monkeypatch.setattr(settings, "daily_token_limit", 100000)
+    # 目录与请求注入不能依赖开发机是否配置了真实模型密钥。
+    for key, value in {"agent_provider": "deepseek", "agent_base_url": "", "agent_api_key": "",
+                       "agent_model": "", "agent_models": [], "deepseek_api_key": "quota-fixture",
+                       "summary_model": "fixture-model", "dashscope_api_key": ""}.items():
+        monkeypatch.setattr(settings, key, value)
     engine = create_engine("sqlite:///" + str(tmp_path / "quota.db"), connect_args={"check_same_thread": False, "timeout": 15})
     @event.listens_for(engine, "connect")
     def configure(connection, _):

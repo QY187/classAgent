@@ -47,11 +47,12 @@ class FinalResponse(ResponseModel):
     learning: QuerySelection | None = None
     catalog: CatalogSelection | None = None
     locations: LocationSelection | None = None
+    assistant: Literal[True] | None = None
 
     @model_validator(mode="after")
     def coherent_result(self):
         has_results = bool(self.claims) or any(item is not None for item in (
-            self.progress, self.quiz_results, self.learning, self.catalog, self.workflow, self.locations))
+            self.progress, self.quiz_results, self.learning, self.catalog, self.workflow, self.locations, self.assistant))
         if self.outcome == "needs_input":
             if not self.question or has_results:
                 raise ValueError("澄清不能混入未核验的回答")
@@ -73,6 +74,7 @@ FINAL_RESPONSE_INSTRUCTION = """最终响应必须是一个完整 JSON 对象，
 课程对话遇到明确指定的其他课程时，先核实当前课程名称，提示进入主对话或对应课程对话；不要把范围受限说成课程资料缺失。
 需要补充信息或提示进入正确对话时，输出 {"claims":[],"outcome":"needs_input","question":"简短的澄清或范围提示"}。
 没有资料依据时输出 {"claims":[],"outcome":"insufficient_evidence"}。
+助手身份、产品能力、使用帮助和礼貌交流按服务端项目说明输出 {"claims":[],"assistant":true}；它们不需要课堂原文引用，不得误报为课堂资料不足。混合课堂问题仍须实际检索并保留有依据的claims/locations或业务结果。
 有课堂事实时输出 {"claims":[{"text":"结论","source_ids":["本次原文 evidence_id"]}]}。
 此处JSON是内部事实选择，后续还有独立的AI综合回答阶段，不是最终展示文案。claims的text选择直接支持用户问题的完整原文句子及相关例子，evidence数组逐段对应文字和编号，不能把父块首段编号当成所有正文的编号。不要输出开场标题或重复同一句话充数。
 只选解释所需的最少句子，同一事实不要重复；定义和例子已说明后不再附加内容重复的课堂总结句。省略“今天这一讲”“下面回答几个问题”等课堂组织语所在的句子。

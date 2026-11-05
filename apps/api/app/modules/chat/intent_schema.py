@@ -86,8 +86,8 @@ class ReadRequirement(IntentModel):
 
 class IntentPayload(IntentModel):
     goal: Question | None = Field(default=None, description="用一句话概括用户要获得的结果，不写思考过程或假定结果")
-    outputs: list[Literal["claims", "locations", "catalog", "progress", "learning", "quiz_results", "workflow"]] | None = Field(
-        default=None, max_length=7, description="仅包含用户要求展示的结果；内部查询不列入。纯写操作为空数组；null兼容旧快照。")
+    outputs: list[Literal["claims", "locations", "catalog", "progress", "learning", "quiz_results", "workflow", "assistant"]] | None = Field(
+        default=None, max_length=8, description="仅包含用户要求展示的结果；assistant用于产品身份、能力、使用帮助和礼貌交流。内部查询不列入。纯写操作为空数组；null兼容旧快照。")
     requirements: list[ReadRequirement] = Field(default_factory=list, max_length=8,
         description="用户要求的学习/进度查询条件。内部辅助查询不填；located_courses 表示限定到本轮原文定位的课程。")
     answer_mode: Literal["standard", "source_location"] = Field(default="standard",

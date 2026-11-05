@@ -3,6 +3,7 @@ import re
 from fastapi import HTTPException
 from ...core.telemetry import traced
 from .goals import select_outputs, requested_outputs, incomplete_notice, requirements_for, selection_issues
+from .assistant_profile import ASSISTANT_PROFILE
 
 
 @traced("answer.compose")
@@ -63,6 +64,8 @@ def compose_answer(db, context, payload, evidence, steps):
     if not compact and payload["claims"]:
         append_result("课堂结论", lambda: evidence.answer(
             db, context, payload["claims"], citation_offset=len(citations)), "claims")
+    if payload.get("assistant") and "assistant" in (requested_outputs(context) or ()):
+        append_result("助手介绍", lambda: ASSISTANT_PROFILE, "assistant")
     verified_business = bool(set(parts) - {"claims", "locations"})
     if parts or unavailable:
         missing = [key for key in (requested_outputs(context) or ()) if key not in completed]
@@ -70,8 +73,8 @@ def compose_answer(db, context, payload, evidence, steps):
         if missing:
             unavailable.append(incomplete_notice(missing))
         titles = {"locations": "内容出处", "claims": "课堂说明", "learning": "学习记录", "progress": "纪要与进度",
-                  "workflow": "处理记录", "catalog": "课程与课次", "quiz_results": "小测结果"}
-        order = ([key for key in ("locations", "claims", "learning", "progress", "quiz_results", "workflow", "catalog") if key in parts]
+                  "workflow": "处理记录", "catalog": "课程与课次", "quiz_results": "小测结果", "assistant": "助手介绍"}
+        order = ([key for key in ("assistant", "locations", "claims", "learning", "progress", "quiz_results", "workflow", "catalog") if key in parts]
                  if compact else list(parts))
         blocks = [f"**{titles[key]}**\n\n{parts[key]}" if compact and len(parts) > 1 else parts[key] for key in order]
         if unavailable:

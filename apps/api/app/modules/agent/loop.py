@@ -21,6 +21,7 @@ from .responses import parse_response, InvalidFinalResponse, FINAL_RESPONSE_INST
 from .answers import compose_answer, requested_query_groups, requested_catalog_kinds
 from .goals import GOAL_INSTRUCTION, requested_outputs, select_outputs, missing_outputs, incomplete_notice, OUTPUT_LABELS, selection_issues
 from .execution_state import ExecutionState
+from .assistant_profile import ASSISTANT_INSTRUCTION
 
 
 MAX_ROUNDS = 6
@@ -75,7 +76,7 @@ def mentioned_courses(question, courses):
 @traced("agent.execute")
 def run_agent(db: Session, context: ToolContext, question: str, *, history: list[dict] | None = None,
               on_step=None, on_check=None, on_answer=None) -> dict:
-    annotate(prompt_revision=sha256((SYSTEM_PROMPT + GOAL_INSTRUCTION + FINAL_RESPONSE_INSTRUCTION + REPAIR_INSTRUCTION).encode()).hexdigest()[:16],
+    annotate(prompt_revision=sha256((SYSTEM_PROMPT + ASSISTANT_INSTRUCTION + GOAL_INSTRUCTION + FINAL_RESPONSE_INSTRUCTION + REPAIR_INSTRUCTION).encode()).hexdigest()[:16],
              call_limit=MAX_CALLS, round_limit=MAX_ROUNDS, timeout_seconds=MAX_SECONDS)
     if not isinstance(question, str) or not 2 <= len(question.strip()) <= 1000:
         raise HTTPException(422, "请输入 2 到 1000 字的问题")
@@ -151,6 +152,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
         action = "generate_practice_quiz" if context.practice_only else "generate_quiz"
         scope = "先查询本次适用的学习记录，再选择记录出题；无记录时呈现空查询结果。" if context.practice_only else ("课次对话只为当前 lesson_id 出题。" if context.lesson_id else "绑定课程且未明确指定或承接课次时使用整门课程，省略 lesson_ids。")
         messages.append({"role": "system", "content": f"接下来是当前问题的小测生成任务。历史消息中的‘已生成’只代表以前问题的结果，不能代替本次执行。本次必须实际调用 {action} 才能完成生成，不可直接回复已生成。缺少必要范围时按规定澄清；{scope}"})
+    messages.append({"role": "system", "content": ASSISTANT_INSTRUCTION})
     messages.append({"role": "system", "content": FINAL_RESPONSE_INSTRUCTION})
     messages.append({"role": "system", "content": GOAL_INSTRUCTION})
     messages.append({"role":"system", "content":
@@ -291,9 +293,11 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                     if queries:
                         payload[group] = {"query_ids":list(queries)}
                 combined = None
-                if payload.get("claims") or any(payload.get(key) is not None for key in ("workflow","progress","learning","quiz_results","catalog","locations")):
+                if payload.get("claims") or any(payload.get(key) is not None for key in ("workflow","progress","learning","quiz_results","catalog","locations","assistant")):
                     try:
                         combined = compose_answer(db, context, payload, evidence, steps)
+                        if payload.get("assistant"):
+                            combined = finish_read(combined, payload)
                     except (ValueError, TypeError):
                         answer += "\n\n其他查询结果未通过核验，请重新查询。"
                 if combined:
@@ -318,6 +322,8 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 answer = "；".join(actions.errors.values())
                 citations = []
                 selections = {"claims": []}
+                if final_payload and final_payload.get("assistant"):
+                    selections["assistant"] = True
                 for group in groups:
                     if group == "catalog":
                         if evidence.catalog_complete(catalog_kinds):
@@ -329,6 +335,8 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                 if len(selections) > 1:
                     try:
                         independent = compose_answer(db, context, selections, evidence, steps)
+                        if selections.get("assistant"):
+                            independent = finish_read(independent, selections)
                         answer += "\n\n" + independent["answer"]
                         citations = independent["citations"]
                     except (ValueError, TypeError):

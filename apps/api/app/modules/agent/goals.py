@@ -2,7 +2,7 @@
 
 OUTPUT_LABELS = {"claims": "课堂内容解答", "locations": "课程课次位置", "catalog": "课程课次目录",
                  "learning": "知识点或错题记录", "progress": "课程进度", "quiz_results": "小测成绩与作答",
-                 "workflow": "处理或小测记录"}
+                 "workflow": "处理或小测记录", "assistant": "助手介绍与使用帮助"}
 
 
 def requested_outputs(context):
@@ -95,7 +95,7 @@ GOAL_INSTRUCTION = """围绕用户要获得的结果执行，不以调用过某�
 response_contract.goal 是本次交付目标；outputs 是用户实际要展示的结果类别。内部定位、核对、选题用到的查询不是额外展示要求。
 requirements明确学习/进度查询的状态、主题、视图与范围，必须逐项遵循。scope=located_courses时先核实内容位置，再以匹配课程ID查询。只问需要复习就用status=review，不展示all候选；缺少可用纪要查询get_course_progress，最终返回progress。
 每轮根据工具返回的数据判断下一步：范围内可继续查询时不要过早澄清；无匹配时调整关键词、查询来源或分页；权限限制不能通过换用户或越过绑定范围规避。
-最终保留outputs中的每一项：claims课堂解答、locations内容位置、catalog目录、learning学习记录、progress进度、quiz_results成绩、workflow处理记录。
+最终保留outputs中的每一项：claims课堂解答、locations内容位置、catalog目录、learning学习记录、progress进度、quiz_results成绩、workflow处理记录、assistant助手介绍与使用帮助。
 必须结合真实工具结果及来源判断相关性，不能把某类工具已调用等同于该项已经回答。没有有效依据时如实说明不足，不编造结果以凑齐字段。
 已成功写入不重复执行；部分完成时保留有效结果，缺失部分明确说明。不要附加用户没要求的状态、目录或统计。
 原文工具返回的evidence数组把文字和引用编号逐段对应；snippet只是上下文。解释时选择直接回答用户问题的句子及例子，不能引用标题代替性质说明，不能重复同一句充数。
