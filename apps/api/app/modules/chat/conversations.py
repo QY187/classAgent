@@ -5,10 +5,26 @@ from ...core.ownership import user_id_for_username
 from ...shared.models import ChatConversation, Lesson
 from .access import owned_lesson, owned_course, owned_conversation
 from .generation import is_generating
+from ...core.config import get_settings
+from ..agent.model_selection import select_chat_model
+
+
+def set_conversation_model(db: Session, identity: str, username: str, model_id: str) -> dict:
+    item = owned_conversation(db, identity, username, lock=True)
+    if item.is_archived or is_generating(item):
+        raise HTTPException(409, "请在恢复对话并等待回答结束后切换模型")
+    option = select_chat_model(get_settings(), model_id)
+    if not option.public()["available"]:
+        raise HTTPException(503, "所选模型尚未配置服务凭证，请联系管理员")
+    db.execute(update(ChatConversation).where(ChatConversation.id == item.id).values(
+        agent_model_id=model_id, updated_at=ChatConversation.updated_at))
+    db.commit(); db.refresh(item)
+    return conversation_read(item)
 
 
 def conversation_read(item: ChatConversation) -> dict:
     return {"id": item.id, "lesson_id": item.lesson_id, "course_id": item.course_id,
+            "model_id": item.agent_model_id,
             "scope": "lesson" if item.lesson_id else "course" if item.course_id else "global", "title": item.title,
             "is_pinned": item.is_pinned, "is_archived": item.is_archived, "created_at": item.created_at, "updated_at": item.updated_at, "generating": is_generating(item)}
 

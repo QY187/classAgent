@@ -5,12 +5,13 @@ from ...core.chat_failures import ChatRequestFailure, public_failure
 from ...core.model_budget import quota_chat_post
 from ...core.telemetry import annotate, record_usage, traced
 from .providers import resolve_chat_model
+from .model_selection import active_chat_model
 
 
 @traced("model.chat", kind="model")
 def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
     settings = get_settings()
-    model = resolve_chat_model(settings)
+    model = active_chat_model() or resolve_chat_model(settings)
     annotate(provider=model.provider, model=model.model, timeout_seconds=timeout)
     if not model.api_key:
         raise ChatRequestFailure("ai_not_configured")

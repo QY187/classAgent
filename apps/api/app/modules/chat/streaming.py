@@ -13,13 +13,14 @@ def encode_event(event, data):
     return f"event: {event}\ndata: {json.dumps(jsonable_encoder(data), ensure_ascii=False)}\n\n"
 
 
-async def message_events(conversation_id, username, content, request_id):
+async def message_events(conversation_id, username, content, request_id, *, model_id=None):
     queue = Queue()
 
     def generate():
         try:
             with SessionLocal() as db:
                 result = send_message(db, conversation_id, username, content, request_id,
+                                      model_id=model_id,
                                       on_progress=lambda data: queue.put(("answer", data)),
                                       on_step=lambda data: queue.put(("step", data)),
                                       on_started=lambda: queue.put(("status", {"ready": True})))

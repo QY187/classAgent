@@ -3,17 +3,36 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { errorMessage, request } from "../../lib/api";
 import { getStoredUser, type AuthUser } from "../../lib/auth";
-import type { ChatHistory, Conversation } from "../../lib/chat";
+import type { AgentModelCatalog, ChatHistory, Conversation } from "../../lib/chat";
 import ChatMessageList from "./ChatMessageList";
 import ChatComposer from "./ChatComposer";
+import ChatModelSelect from "./ChatModelSelect";
 import ChatTitleEditor from "./ChatTitleEditor";
 import ChatArchiveButton from "./ChatArchiveButton";
 import ChatDeleteButton from "./ChatDeleteButton";
 import { streamAnswer, type AnswerPreview } from "../../lib/chat-stream";
 import { chatFailureMessage } from "../../lib/chat-errors";
+import { chatRequestIdentity } from "../../lib/chat-models";
 
 export default function ChatThread({ conversationId, onLoaded, onChanged, onDeleted }: { conversationId: string; onLoaded: (item: Conversation) => void; onChanged: () => void; onDeleted: () => void }) {
   const [history, setHistory] = useState<ChatHistory | null>(null);
+  const [catalog, setCatalog] = useState<AgentModelCatalog | null>(null);
+  const [modelId, setModelId] = useState("default");
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelsError, setModelsError] = useState("");
+  const [modelsRevision, setModelsRevision] = useState(0);
+  const [switchingModel, setSwitchingModel] = useState(false);
+  const switchingRef = useRef(false);
+  const selectionLoaded = useRef(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    setModelsLoading(true); setModelsError("");
+    request<AgentModelCatalog>("/chat/models", { signal: controller.signal })
+      .then((result) => { if (!controller.signal.aborted) setCatalog(result); })
+      .catch((err) => { if (!controller.signal.aborted) setModelsError(errorMessage(err)); })
+      .finally(() => { if (!controller.signal.aborted) setModelsLoading(false); });
+    return () => controller.abort();
+  }, [modelsRevision]);
   const [username, setUsername] = useState("我的账号");
   useEffect(() => {
     const controller = new AbortController();
@@ -39,6 +58,7 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
     try {
       const result = await request<ChatHistory>(`/chat/conversations/${conversationId}/messages`, { signal });
       if (signal?.aborted || !mounted.current) return;
+      if (!selectionLoaded.current) { setModelId(result.conversation.model_id || "default"); selectionLoaded.current = true; }
       setHistory(result); onLoaded(result.conversation); setError("");
     } catch (err) { if (!signal?.aborted) setError(errorMessage(err)); }
     finally { if (!signal?.aborted) setLoading(false); }
@@ -51,26 +71,49 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
     return () => { window.clearInterval(timer); controller.abort(); };
   }, [history?.conversation.generating, load, sending]);
   useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [history?.messages.length]);
+  async function chooseModel(id: string) {
+    if (switchingRef.current || sendingRef.current || !history || history.conversation.generating || history.conversation.is_archived) return;
+    const previous = modelId;
+    switchingRef.current = true; setSwitchingModel(true); setModelId(id); setError("");
+    try {
+      const updated = await request<Conversation>(`/chat/conversations/${conversationId}/model`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model_id: id }),
+      });
+      if (mounted.current) { setHistory((current) => current ? { ...current, conversation: updated } : current); onLoaded(updated); }
+    } catch (err) { if (mounted.current) { setModelId(previous); setError(errorMessage(err)); } }
+    finally { switchingRef.current = false; if (mounted.current) setSwitchingModel(false); }
+  }
   async function send(content: string, retryRequest?: string) {
-    if (sendingRef.current || stopRef.current || !history || history.conversation.is_archived) return false;
+    if (sendingRef.current || switchingRef.current || stopRef.current || !history || history.conversation.is_archived) return false;
+    const last = history.messages.at(-1);
+    let requestId: string, requestModel: string;
+    try {
+      const identity = chatRequestIdentity(last, content, modelId, retryRequest);
+      requestId = identity.requestId; requestModel = identity.modelId;
+    } catch (err) { setError(errorMessage(err)); return false; }
+    const selected = catalog?.items.find((model) => model.id === requestModel);
+    if (modelsLoading || modelsError || !selected?.available) {
+      setError(retryRequest ? "原问题使用的模型当前不可用。请选择可用模型后作为新问题发送。" : "请选择已配置的可用模型，或重新加载模型列表。");
+      return false;
+    }
     const run = { controller: new AbortController(), stopped: false };
     activeRun.current = run;
     sendingRef.current = true; setSending(true); setError(""); setPreview(null); setReadyRequestId(null);
-    const last = history.messages.at(-1);
-    const requestId = retryRequest || (last?.role === "user" && last.content === content && (last.status === "failed" || last.status === "pending") ? last.request_id : crypto.randomUUID());
     if (last?.request_id !== requestId) setHistory({ ...history, conversation: { ...history.conversation, generating: true }, messages: [...history.messages, {
       id: requestId, request_id: requestId, position: (last?.position || 0) + 1, role: "user", content, status: "pending", citations: [], error_message: null, created_at: new Date().toISOString(),
+      model: selected,
     }] });
     else setHistory({ ...history, conversation: { ...history.conversation, generating: true }, messages: history.messages.map((item) => item.request_id === requestId && item.role === "user" ? { ...item, status: "pending", error_message: null, steps: [] } : item) });
     try {
       const result = await streamAnswer(conversationId, content, requestId, (value) => {
         if (mounted.current && activeRun.current === run && !run.stopped) setPreview(value);
       }, {
+        modelId: requestModel,
         signal: AbortSignal.any([run.controller.signal, AbortSignal.timeout(240000)]),
         onReady: () => { if (mounted.current && activeRun.current === run && !run.stopped) { setReadyRequestId(requestId); onChanged(); } },
         onSteps: (steps) => { if (mounted.current && activeRun.current === run && !run.stopped) setHistory((current) => current ? { ...current, messages: current.messages.map((message) => message.role === "user" && message.request_id === requestId ? { ...message, steps } : message) } : current); },
       });
-      if (mounted.current && activeRun.current === run && !run.stopped) { setPreview(null); setHistory(result); onLoaded(result.conversation); onChanged(); window.dispatchEvent(new Event("classagent:courses-updated")); }
+      if (mounted.current && activeRun.current === run && !run.stopped) { setPreview(null); setHistory(result); setModelId(result.conversation.model_id || requestModel); onLoaded(result.conversation); onChanged(); window.dispatchEvent(new Event("classagent:courses-updated")); }
       return true;
     } catch (err) {
       if (run.stopped) return true;
@@ -108,12 +151,13 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
     id: "stream-preview", request_id: last?.request_id || "", position: (last?.position || 0) + 1,
     role: "assistant" as const, content: preview.answer, status: "pending" as const,
     citations: preview.citations, error_message: null, created_at: last?.created_at || new Date().toISOString(),
+    model: last?.model,
   }] : [])] : [];
   const retryable = last?.role === "user" && (last.status === "failed" || (last.status === "pending" && !history?.conversation.generating));
   const canStop = !stopping && (sending ? !!readyRequestId : !!history?.conversation.generating && history.messages.some((item) => item.role === "user" && item.status === "pending"));
   return <><header className="chat-thread-header"><div><span className="eyebrow">{history?.conversation.scope === "global" ? "主对话 · 全部课程" : history?.conversation.scope === "course" ? "课程对话 · 全部课次" : "课次对话 · 仅本课次"}</span>{history ? <ChatTitleEditor conversation={history.conversation} disabled={sending || history.conversation.generating} onRenamed={(item) => { setHistory({ ...history, conversation: item }); onChanged(); }} /> : <h2>正在读取对话</h2>}</div>{history && <div className="chat-thread-actions">{history.conversation.scope !== "global" && <Link className="button button-quiet" href={history.conversation.scope === "course" ? `/courses/${history.conversation.course_id}` : `/lessons/${history.conversation.lesson_id}/summary`}>{history.conversation.scope === "course" ? "查看课程 ↗" : "查看本课纪要 ↗"}</Link>}<ChatArchiveButton conversation={history.conversation} onChanged={(item) => { setHistory({ ...history, conversation: item }); onChanged(); }} /><ChatDeleteButton conversation={history.conversation} disabled={sending || history.conversation.generating} onDeleted={onDeleted} /></div>}</header>
-    {error && <div className="chat-thread-notice"><p role="alert">{error}</p><button className="button button-secondary" onClick={() => void load()}>重新加载</button></div>}
+    {error && <div className="chat-thread-notice"><p role="alert">{error}</p><button className="button button-secondary" onClick={() => { void load(); setModelsRevision((value) => value + 1); }}>重新加载</button></div>}
     <div className="chat-message-scroll"><div className="chat-message-column">{loading ? <p role="status">正在读取消息…</p> : history?.messages.length ? <ChatMessageList conversationId={conversationId} username={username} messages={visibleMessages} generating={history.conversation.generating} /> : !error && <div className="chat-empty-conversation"><h3>有什么想弄明白的？</h3><p>{history?.conversation.scope === "global" ? "可以查询所有课程的学习进度、课堂内容和错题，创建课程与课次，或按名称标记知识点状态。也可以选择一门课生成练习。" : history?.conversation.scope === "course" ? "可以查询这门课的学习进度、课堂内容和错题，添加课次，或明确标记知识点状态。课堂回答附上原文来源，小测生成后开始答题。" : "回答会依据本课次的文字记录与纪要，并附上原文时间点。"}</p></div>}{retryable && !history?.conversation.is_archived && <button className="button button-secondary" disabled={sending} onClick={() => void send(last.content, last.request_id)}>重试这条问题</button>}<div ref={bottom} /></div></div>
     {history?.conversation.is_archived && <p className="chat-thread-notice" role="status">此对话已归档，全部内容已保留。点击右上方“恢复对话”后继续提问。</p>}
-    {history && !history.conversation.is_archived && <ChatComposer scope={history.conversation.scope} disabled={loading || history.conversation.generating || stopping} busy={sending} onSend={send} onStop={() => void stop()} canStop={canStop} stopping={stopping} />}</>;
+    {history && !history.conversation.is_archived && <ChatComposer scope={history.conversation.scope} disabled={loading || history.conversation.generating || stopping || switchingModel || modelsLoading || !!modelsError || !catalog?.items.some((model) => model.id === modelId && model.available)} busy={sending} onSend={send} onStop={() => void stop()} canStop={canStop} stopping={stopping} modelSelector={<ChatModelSelect models={catalog?.items || []} value={modelId} onChange={(id) => void chooseModel(id)} loading={modelsLoading} error={modelsError} disabled={loading || sending || history.conversation.generating || stopping || switchingModel} onRetry={() => setModelsRevision((value) => value + 1)} />} />}</>;
 }

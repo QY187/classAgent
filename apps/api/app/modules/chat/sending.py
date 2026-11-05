@@ -6,10 +6,12 @@ from sqlalchemy.orm import Session
 from ...core.telemetry import bind_request, request_trace, span, trace_event, traced
 from ...core.chat_failures import ChatRequestFailure, public_failure
 from ...core.model_budget import user_budget
+from ...core.config import get_settings
 from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_utc
 from ..agent.loop import run_agent
 from ..agent.tools import ToolContext
 from ..agent.synthesis import synthesize_result
+from ..agent.model_selection import bind_chat_model, chat_model_scope, select_chat_model
 from .access import owned_conversation, owned_course, owned_lesson
 from .messages import read_messages
 from .generation import is_generating, GenerationStopped
@@ -44,10 +46,11 @@ def _finish_failed(db: Session, conversation_id: str, request_id: str, token: st
 
 
 @user_budget
-def send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None, on_step=None) -> dict:
-    with request_trace(request_id, conversation_id):
+def send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, model_id=None, on_progress=None, on_started=None, on_step=None) -> dict:
+    with chat_model_scope(), request_trace(request_id, conversation_id):
         try:
             return _send_message(db, conversation_id, username, content, request_id,
+                                 model_id=model_id,
                                  on_progress=on_progress, on_started=on_started, on_step=on_step)
         except ChatRequestFailure:
             raise
@@ -59,7 +62,7 @@ def send_message(db: Session, conversation_id: str, username: str, content: str,
             raise ChatRequestFailure(failure) from exc
 
 
-def _send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, on_progress=None, on_started=None, on_step=None) -> dict:
+def _send_message(db: Session, conversation_id: str, username: str, content: str, request_id: str, *, model_id=None, on_progress=None, on_started=None, on_step=None) -> dict:
     question = content.strip()
     if not 2 <= len(question) <= 1000:
         raise HTTPException(422, "请输入 2 到 1000 字的问题")
@@ -69,6 +72,10 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         raise HTTPException(409, "请恢复归档对话后再提问")
     existing = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == conversation_id,
         ChatMessage.request_id == request_id, ChatMessage.role == "user"))
+    prior_model = json.loads(existing.agent_model_json) if existing is not None and existing.agent_model_json else None
+    requested_model = model_id or (prior_model["id"] if prior_model else "default" if existing else conversation.agent_model_id)
+    if existing is not None and requested_model != (prior_model["id"] if prior_model else "default"):
+        raise HTTPException(409, "请求编号已用于其他模型；切换模型请作为新问题发送")
     if existing is not None and existing.content != question:
         raise HTTPException(409, "请求编号已用于其他问题")
     if existing is not None and existing.status in ("completed", "cancelled"):
@@ -77,6 +84,11 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         return read_messages(db, conversation_id, username)
     if is_generating(conversation):
         raise HTTPException(409, "这个对话正在回答，请稍后再试")
+    selected = select_chat_model(get_settings(), requested_model)
+    model_info = selected.public()
+    if prior_model and any(prior_model[key] != model_info[key] for key in ("provider", "model")):
+        raise HTTPException(409, "该请求使用的模型配置已改变，请作为新问题重新发送")
+    bind_chat_model(selected.target)
     # 回收中断或进程退出后，旧占用会过期；旧消息可由用户主动重试。
     db.execute(update(ChatMessage).where(ChatMessage.conversation_id == conversation_id, ChatMessage.status == "pending")
         .values(status="failed", error_message="上次回答中断，请重试"))
@@ -93,6 +105,9 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         existing.status = "pending"
         existing.error_message = None
         existing.agent_steps_json = "[]"
+    if not existing.agent_model_json:
+        existing.agent_model_json = json.dumps(model_info, ensure_ascii=False)
+    conversation.agent_model_id = requested_model
     token = new_id()
     conversation.generation_token = token
     conversation.generation_preview_json = None
@@ -235,7 +250,8 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
             user_message.error_message = None
             conversation.pending_task_json = next_pending(db, conversation, user_message, intent_snapshot, decision, result)
             db.add(ChatMessage(conversation_id=conversation_id, request_id=request_id, position=position + 1,
-                role="assistant", content=result["answer"], citations_json=json.dumps(result["citations"], ensure_ascii=False)))
+                role="assistant", content=result["answer"], citations_json=json.dumps(result["citations"], ensure_ascii=False),
+                agent_model_json=user_message.agent_model_json))
             conversation.generation_token = None
             conversation.generation_preview_json = None
             conversation.generating_at = None

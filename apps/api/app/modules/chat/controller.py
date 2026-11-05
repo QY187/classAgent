@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from uuid import UUID
 from fastapi.responses import StreamingResponse
 from .access import owned_conversation
@@ -8,6 +8,8 @@ from .streaming import message_events
 from .cancellation import stop_generation
 from ...core.db import get_db
 from ...core.deps import get_current_user
+from ...core.config import get_settings
+from ..agent.model_selection import model_catalog
 from . import conversations, messages
 from .sending import send_message
 from .tree import lesson_tree
@@ -16,6 +18,11 @@ from .search import search_conversations
 from .archive import list_archived, set_archived
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+@router.get("/models")
+def available_models(username: str = Depends(get_current_user)):
+    return model_catalog(get_settings())
 
 
 @router.post("/conversations", status_code=201)
@@ -54,12 +61,24 @@ def get_lesson_tree(username: str = Depends(get_current_user), db: Session = Dep
 
 
 class SendMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     content: str = Field(min_length=2, max_length=1000)
     request_id: UUID
+    model_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
 class RenameConversation(BaseModel):
     title: str = Field(min_length=1, max_length=200)
+
+
+class SelectModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    model_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
+@router.patch("/conversations/{conversation_id}/model")
+def select_model(conversation_id: str, body: SelectModel, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return conversations.set_conversation_model(db, conversation_id, username, body.model_id)
 
 
 class ArchiveConversation(BaseModel):
@@ -101,7 +120,7 @@ def rename(conversation_id: str, body: RenameConversation, username: str = Depen
 
 @router.post("/conversations/{conversation_id}/ask")
 def send(conversation_id: str, body: SendMessage, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    return send_message(db, conversation_id, username, body.content, str(body.request_id))
+    return send_message(db, conversation_id, username, body.content, str(body.request_id), model_id=body.model_id)
 
 
 @router.get("/conversations/{conversation_id}/messages")
@@ -113,7 +132,7 @@ def get_messages(conversation_id: str, username: str = Depends(get_current_user)
 def send_stream(conversation_id: str, body: SendMessage, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     owned_conversation(db, conversation_id, username)
     db.rollback()
-    return StreamingResponse(message_events(conversation_id, username, body.content, str(body.request_id)),
+    return StreamingResponse(message_events(conversation_id, username, body.content, str(body.request_id), model_id=body.model_id),
                              media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

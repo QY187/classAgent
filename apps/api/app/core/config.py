@@ -2,7 +2,17 @@ from functools import lru_cache
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class AgentModelConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    label: str = Field(min_length=1, max_length=80)
+    provider: Literal["deepseek", "dashscope", "openai_compatible"]
+    model: str = Field(min_length=1, max_length=100)
+    base_url: str = ""
+    api_key: str = Field(default="", repr=False)
 
 
 class Settings(BaseSettings):
@@ -33,6 +43,16 @@ class Settings(BaseSettings):
     agent_base_url: str = ""
     agent_api_key: str = Field(default="", repr=False)
     agent_model: str = ""
+    agent_models: list[AgentModelConfig] = Field(default_factory=list, repr=False)
+
+    @field_validator("agent_models")
+    @classmethod
+    def unique_agent_models(cls, items):
+        ids = [item.id for item in items]
+        if len(set(ids)) != len(ids) or set(ids) & {"default", "deepseek", "dashscope"}:
+            raise ValueError("模型编号不能重复或使用保留编号 default/deepseek/dashscope")
+        return items
+
     token_quota_enabled: bool = True
     daily_token_limit: int = Field(default=100000, ge=0, le=1000000000)
     secret_key: str = "dev-secret-change-me"

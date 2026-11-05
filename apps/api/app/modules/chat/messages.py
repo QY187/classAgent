@@ -16,6 +16,7 @@ def message_read(item: ChatMessage) -> dict:
     return {"id": item.id, "request_id": item.request_id, "position": item.position, "role": item.role,
             "content": item.content, "status": item.status, "citations": json.loads(item.citations_json),
             "error_message": item.error_message, "created_at": item.created_at,
+            "model": json.loads(item.agent_model_json) if item.agent_model_json else None,
             "steps": json.loads(item.agent_steps_json)}
 
 

@@ -23,7 +23,7 @@ def stop_generation(db: Session, conversation_id: str, username: str, request_id
         preview = json.loads(conversation.generation_preview_json)
         db.add(ChatMessage(conversation_id=conversation_id, request_id=request_id, position=question.position + 1,
             role="assistant", content=preview["answer"], citations_json=json.dumps(preview["citations"], ensure_ascii=False),
-            status="cancelled", error_message="已停止生成，回答未完成"))
+            status="cancelled", error_message="已停止生成，回答未完成", agent_model_json=question.agent_model_json))
     conversation.generation_preview_json = None
     conversation.generation_token = None
     conversation.generating_at = None

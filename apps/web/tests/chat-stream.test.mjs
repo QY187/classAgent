@@ -56,3 +56,10 @@ test("只有后端确认问题开始后才通知可停止，并传递取消信�
   });
   assert.deepEqual(order, ["ready", "answer"]);
 });
+
+test("流式发送只携带已选模型编号，不传供应商地址和密钥", async () => {
+  const data = bytes('event: done\ndata: {"messages":[]}\n\n');
+  await client([data], options => assert.deepEqual(JSON.parse(options.body), {
+    content: "问题", request_id: "r", model_id: "custom-model",
+  }))("c", "问题", "r", () => {}, { modelId: "custom-model" });
+});

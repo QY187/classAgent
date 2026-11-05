@@ -276,6 +276,7 @@ class ChatConversation(Base):
     course_id: Mapped[str | None] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True, nullable=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200), default="新对话")
+    agent_model_id: Mapped[str] = mapped_column(String(64), default="default", server_default="default")
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     generation_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -305,6 +306,7 @@ class ChatMessage(Base):
     citations_json: Mapped[str] = mapped_column(Text, default="[]")
     agent_steps_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
     intent_state_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_model_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 

@@ -1,10 +1,12 @@
 export type ChatLesson = { id: string; title: string; course_id: string; course_name: string };
 export type ChatCourse = { id: string; name: string };
-export type Conversation = { id: string; lesson_id: string | null; course_id: string | null; scope: "global" | "course" | "lesson"; title: string; is_pinned: boolean; is_archived: boolean; created_at: string; updated_at: string; generating: boolean };
+export type AgentModel = { id: string; label: string; provider: string; model: string; available: boolean };
+export type AgentModelCatalog = { default_id: string; items: AgentModel[] };
+export type Conversation = { id: string; lesson_id: string | null; course_id: string | null; scope: "global" | "course" | "lesson"; title: string; model_id?: string; is_pinned: boolean; is_archived: boolean; created_at: string; updated_at: string; generating: boolean };
 export type ChatCitation = { id: number; lesson_id: string; lesson_title: string; start_ms: number; snippet: string };
 export type AgentStep = { id: string; label: string; status: "running" | "completed" | "failed"; error?: string };
 export type QuizArtifact = { kind: "quiz"; id: string; title: string; course_id: string; course_name: string; question_count: number; lesson_ids: string[] };
 export type ActionArtifact = { kind: "action"; operation: string; target: "course" | "lesson" | "knowledge_point"; id: string; title: string; course_id: string; lesson_id?: string; message: string };
-export type ChatMessage = { id: string; request_id: string; position: number; role: "user" | "assistant"; content: string; status: "pending" | "completed" | "failed" | "cancelled"; citations: ChatCitation[]; steps?: AgentStep[]; artifacts?: (QuizArtifact | ActionArtifact)[]; error_message: string | null; created_at: string };
+export type ChatMessage = { id: string; request_id: string; position: number; role: "user" | "assistant"; content: string; status: "pending" | "completed" | "failed" | "cancelled"; model?: AgentModel | null; citations: ChatCitation[]; steps?: AgentStep[]; artifacts?: (QuizArtifact | ActionArtifact)[]; error_message: string | null; created_at: string };
 export type ChatHistory = { conversation: Conversation; messages: ChatMessage[] };
 export type ChatSearchResult = Conversation & { lesson_title: string | null; course_name: string };

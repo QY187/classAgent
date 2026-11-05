@@ -23,7 +23,7 @@ from .modules.recycle_bin.migrations import prepare_deleted_columns
 from .modules.recycle_bin.controller import router as recycle_bin_router
 from .modules.chat.controller import router as chat_router
 from .modules.chat.migrations import prepare_chat_scope, prepare_chat_cancellation, prepare_chat_pinning, prepare_chat_archive
-from .modules.chat.migrations import prepare_chat_intent_state
+from .modules.chat.migrations import prepare_chat_intent_state, prepare_chat_model_selection
 from .modules.monitoring.controller import router as monitoring_router
 from .modules.monitoring.persistence import start_persistence
 from .modules.quotas.controller import router as quotas_router
@@ -55,6 +55,7 @@ def prepare_database() -> None:
     prepare_chat_pinning(engine)
     prepare_chat_archive(engine)
     prepare_chat_intent_state(engine)
+    prepare_chat_model_selection(engine)
     prepare_quiz_scope(engine)
     prepare_document_chunks(engine)
     Base.metadata.create_all(bind=engine)

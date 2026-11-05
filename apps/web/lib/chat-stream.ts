@@ -4,10 +4,10 @@ import type { ChatHistory, ChatCitation, AgentStep } from "./chat";
 export type AnswerPreview = { answer: string; citations: ChatCitation[] };
 
 export async function streamAnswer(conversationId: string, content: string, requestId: string,
-  onPreview: (preview: AnswerPreview) => void, options?: { signal?: AbortSignal; onReady?: () => void; onSteps?: (steps: AgentStep[]) => void }): Promise<ChatHistory> {
+  onPreview: (preview: AnswerPreview) => void, options?: { modelId?: string; signal?: AbortSignal; onReady?: () => void; onSteps?: (steps: AgentStep[]) => void }): Promise<ChatHistory> {
   const response = await authorizedResponse(`/chat/conversations/${conversationId}/ask/stream`, {
     method: "POST", headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ content, request_id: requestId }),
+    body: JSON.stringify({ content, request_id: requestId, ...(options?.modelId ? { model_id: options.modelId } : {}) }),
     signal: options?.signal,
   });
   if (!response.body) throw new Error("浏览器无法读取流式回答，请重试。");

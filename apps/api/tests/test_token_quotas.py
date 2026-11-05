@@ -14,7 +14,7 @@ from sqlalchemy import create_engine, event, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import get_settings
+from app.core.config import AgentModelConfig, get_settings
 from app.core.db import Base, get_db
 from app.core.chat_failures import ChatRequestFailure
 from app.core.model_budget import input_reservation, quota_chat_post, quota_user
@@ -96,6 +96,25 @@ def test_agent_provider_uses_real_ledger_and_selected_model(env, provider):
         complete([], [], 2)
     assert caught.value.failure.code == "quota_exhausted"
     blocked.assert_not_called()
+
+
+def test_user_selected_model_is_billed_and_replay_or_changed_selection_does_not_charge(env, monkeypatch):
+    monkeypatch.setattr(get_settings(), "agent_models", [AgentModelConfig(id="paid", label="可选模型",
+        provider="openai_compatible", model="selected-paid-model", base_url="https://provider.invalid/v1", api_key="fixture")])
+    with env.sessions() as db:
+        chat = create_global_conversation(db, "owner")
+    plan = json.dumps({"relation": "new", "intent": {}})
+    upstream = Mock(return_value=response({"total_tokens": 20}, content=plan))
+    with env.sessions() as db, patch("app.modules.agent.completion.httpx.post", upstream), patch(
+            "app.modules.chat.sending.run_agent", return_value={"answer": "已查询", "citations": []}):
+        send_message(db, chat["id"], "owner", "查询课程", "selected", model_id="paid")
+        send_message(db, chat["id"], "owner", "查询课程", "selected", model_id="paid")
+        with pytest.raises(HTTPException) as changed:
+            send_message(db, chat["id"], "owner", "查询课程", "selected", model_id="default")
+        assert changed.value.status_code == 409
+    assert upstream.call_count == 1 and view(env)["used_tokens"] == 20 and view(env)["reserved_tokens"] == 0
+    with env.sessions() as db:
+        assert db.scalar(select(TokenUsageEntry.model).where(TokenUsageEntry.user_id == "u")) == "selected-paid-model"
 
 
 def test_default_limit_and_independent_users(env):

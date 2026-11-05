@@ -117,7 +117,23 @@
 .chat-composer textarea { display: block; width: 100%; resize: none; border: 0; outline: none; padding: 10px 16px 0; line-height: 1.6; background: transparent; color: var(--ink); font-size: 14px; }
 .chat-composer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 12px 8px 16px; }
 .chat-composer-bottom span { font-size: 11px; color: #929aab; }
-.chat-composer-bottom .button { padding: 9px 16px; font-size: 12px; }
+.chat-composer-bottom .button { padding: 9px 16px; font-size: 12px; flex-shrink: 0; white-space: nowrap; }
+.chat-composer-options { display: flex; flex: 1; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-width: 0; }
+.chat-model-control { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.chat-model-control label { font-size: 12px; color: #69758b; }
+.chat-model-control select { min-width: 120px; max-width: 240px; padding: 6px 25px 6px 9px; border: 1px solid #dce2f0; border-radius: 8px; color: var(--ink); background: #f8f9fd; font: inherit; font-size: 12px; text-overflow: ellipsis; }
+.chat-model-control select:focus-visible { outline: 2px solid #9da9ff; outline-offset: 2px; }
+.chat-model-control select:disabled { opacity: .65; cursor: not-allowed; }
+.chat-model-error { font-size: 11px; color: #b64242; max-width: 260px; }
+.chat-model-error button { margin-left: 6px; padding: 0; border: 0; background: none; color: var(--blue); text-decoration: underline; }
+.chat-message-role .chat-message-model { font-size: 10px; font-weight: 400; color: #69758b; background: #f2f4fa; padding: 2px 7px; border-radius: 6px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) {
+  .chat-composer-bottom .chat-keyboard-hint { display: none; }
+  .chat-model-control { flex: 1; }
+  .chat-model-control select { max-width: 170px; min-width: 0; width: 100%; }
+  .chat-model-control label { display: none; }
+  .chat-message-role .chat-message-model { max-width: 130px; }
+}
 .chat-composer-wrap > p { font-size: 11px; color: #929aab; text-align: center; margin: 6px 0 0; }
 .chat-welcome { margin: auto; padding: 36px; text-align: center; max-width: 480px; }
 .chat-welcome-icon { display: grid; place-items: center; margin: 0 auto 22px; width: 60px; height: 60px; border-radius: 18px; color: var(--blue); background: var(--blue-soft); font-size: 36px; }
