@@ -105,6 +105,8 @@ npm run dev
 
 ### 课程级问答
 
+Agent 可通过服务端 `AGENT_PROVIDER`、`AGENT_BASE_URL`、`AGENT_API_KEY`、`AGENT_MODEL` 独立配置 DeepSeek、百炼或通用兼容接口，详见 [Agent 多模型接入](agent-models.md)。下述旧课程问答接口仍使用 DeepSeek。
+
 课程详情页的“问一问”会检索本课程已整理的课堂内容，并把回答引用链接到文字记录和录音时间点。问答需要在根目录 `.env` 同时配置 `DASHSCOPE_API_KEY`（文本向量）和 `DEEPSEEK_API_KEY`（生成回答）。首次升级后，已有课次在课程详情页点击“整理或更新课程资料”建立索引；新课次的转写和纪要会自动触发索引。索引由 Worker 异步完成，提交后稍等并刷新页面查看片段数量。
 
 ### 复习卡片与知识点清单

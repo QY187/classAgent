@@ -72,6 +72,32 @@ def response(usage=None, *, status=200, content="{}"):
                           request=httpx.Request("POST", "https://provider.invalid"))
 
 
+@pytest.mark.parametrize("provider", ["deepseek", "dashscope", "openai_compatible"])
+def test_agent_provider_uses_real_ledger_and_selected_model(env, provider):
+    settings = SimpleNamespace(agent_provider=provider, agent_base_url="https://provider.invalid/v1",
+        agent_api_key="agent-fixture", agent_model="selected-agent-model",
+        deepseek_api_key="unused-legacy", summary_model="legacy-model", dashscope_api_key="unused-dashscope")
+    upstream = Mock(return_value=response({"prompt_tokens": 13, "completion_tokens": 7, "total_tokens": 20},
+                                         content="模型回答"))
+    with env.sessions() as db, quota_user(db, "u"), patch(
+            "app.modules.agent.completion.get_settings", return_value=settings), patch(
+            "app.modules.agent.completion.httpx.post", upstream):
+        assert complete([{"role": "user", "content": "问题"}], [], 2)["content"] == "模型回答"
+    assert view(env)["used_tokens"] == 20 and view(env)["reserved_tokens"] == 0
+    assert view(env, "v")["used_tokens"] == 0
+    with env.sessions() as db:
+        entry = db.scalar(select(TokenUsageEntry).where(TokenUsageEntry.user_id == "u"))
+        assert entry.model == "selected-agent-model" and entry.purpose == "chat"
+    with env.sessions() as db:
+        service.change_limit(db, "u", 20, "a")
+    with env.sessions() as db, quota_user(db, "u"), patch(
+            "app.modules.agent.completion.get_settings", return_value=settings), patch(
+            "app.modules.agent.completion.httpx.post") as blocked, pytest.raises(ChatRequestFailure) as caught:
+        complete([], [], 2)
+    assert caught.value.failure.code == "quota_exhausted"
+    blocked.assert_not_called()
+
+
 def test_default_limit_and_independent_users(env):
     assert view(env)["daily_limit"] == 100000
     entry = service.reserve(env.sessions, "u", 600, model="fixture", purpose="test")

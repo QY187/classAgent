@@ -4,22 +4,21 @@ from ...core.config import get_settings
 from ...core.chat_failures import ChatRequestFailure, public_failure
 from ...core.model_budget import quota_chat_post
 from ...core.telemetry import annotate, record_usage, traced
+from .providers import resolve_chat_model
 
 
 @traced("model.chat", kind="model")
 def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
     settings = get_settings()
-    annotate(provider="deepseek", model=settings.summary_model, timeout_seconds=timeout)
-    if not settings.deepseek_api_key:
+    model = resolve_chat_model(settings)
+    annotate(provider=model.provider, model=model.model, timeout_seconds=timeout)
+    if not model.api_key:
         raise ChatRequestFailure("ai_not_configured")
     try:
         response = quota_chat_post(httpx.post,
-            "https://api.deepseek.com/chat/completions",
-            headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
-            json={"model": settings.summary_model, "messages": messages,
-                  **({"tools": tools, "tool_choice": "auto"} if tools else {}),
-                  "temperature": 0, "max_tokens": 2500,
-                  "thinking": {"type": "disabled"}},
+            model.url,
+            headers={"Authorization": f"Bearer {model.api_key}"},
+            json=model.request_body(messages, tools),
             timeout=timeout,
         )
         response.raise_for_status()

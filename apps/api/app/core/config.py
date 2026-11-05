@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
@@ -28,6 +29,10 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     summary_model: str = "deepseek-chat"
     summary_provider: str = "deepseek"
+    agent_provider: Literal["deepseek", "dashscope", "openai_compatible"] = "deepseek"
+    agent_base_url: str = ""
+    agent_api_key: str = Field(default="", repr=False)
+    agent_model: str = ""
     token_quota_enabled: bool = True
     daily_token_limit: int = Field(default=100000, ge=0, le=1000000000)
     secret_key: str = "dev-secret-change-me"
@@ -37,7 +42,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 1440
     refresh_token_expire_minutes: int = 43200
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore", hide_input_in_errors=True)
 
 
 @lru_cache
