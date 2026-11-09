@@ -1,4 +1,4 @@
-export type Material = { id: string; course_id: string; lesson_id: string | null; filename: string; size_bytes: number; created_at: string; status: string; processing_status: string; processing_error: string | null; indexed: boolean };
+export type Material = { id: string; course_id: string; lesson_id: string | null; filename: string; size_bytes: number; created_at: string; status: string; processing_status: string; processing_error: string | null; indexed: boolean; replacement_filename?: string | null };
 export type MaterialChunk = { chunk_id: string; material_id: string; course_id: string; lesson_id: string | null; filename: string; version: string; position: number; locator_type: "page" | "slide" | "paragraph"; locator_number: number; locator_label: string; text: string; source_type: "material" };
 export type MaterialContent = { material: Material; source_status: "current" | "changed"; items: MaterialChunk[]; next_offset: number | null };
 

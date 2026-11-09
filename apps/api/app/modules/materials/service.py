@@ -9,13 +9,13 @@ from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
 from ...infrastructure.storage import materialize_file, upload_file
 from ..recycle_bin.service import move_to_bin
-from ...shared.models import Course, CourseMaterial, Lesson
+from ...shared.models import Course, CourseMaterial, Lesson, MaterialReplacement
 
 
 MAX_MATERIAL_BYTES = 25 * 1024 * 1024
@@ -51,10 +51,27 @@ def list_materials(db: Session, course_id: str, username: str) -> list[CourseMat
 
 
 def upload_material(db: Session, course_id: str, lesson_id: str | None, file: UploadFile, username: str) -> CourseMaterial:
+    lesson_id = lesson_id or None
     _owned_course(db, course_id, username)
+    if db.scalar(select(Course).where(Course.id == course_id).with_for_update()) is None:
+        raise HTTPException(404, "课程不存在")
     if lesson_id and db.scalar(select(Lesson.id).where(Lesson.id == lesson_id, Lesson.course_id == course_id)) is None:
         raise HTTPException(status_code=400, detail="所选课次不属于当前课程")
 
+    filename, suffix, size, content_type = validate_material_file(file)
+    # 同名资料需按明确的资料编号替换，避免新旧向量同时命中。
+    ensure_unique_filename(db, course_id, lesson_id, filename)
+    object_key = f"materials/{course_id}/{uuid4()}{suffix}"
+    upload_file(object_key, file.file, size, content_type)
+    material = CourseMaterial(course_id=course_id, lesson_id=lesson_id, filename=filename,
+                              content_type=content_type, object_key=object_key, size_bytes=size)
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+    return material
+
+
+def validate_material_file(file: UploadFile):
     filename = PureWindowsPath(file.filename or "").name
     suffix = PureWindowsPath(filename).suffix.lower()
     if not filename or len(filename) > 255 or suffix not in ALLOWED_TYPES:
@@ -65,15 +82,19 @@ def upload_material(db: Session, course_id: str, lesson_id: str | None, file: Up
     if size == 0 or size > MAX_MATERIAL_BYTES:
         raise HTTPException(status_code=400, detail="资料大小须在 1 字节至 25 MB 之间")
 
-    object_key = f"materials/{course_id}/{uuid4()}{suffix}"
     content_type = ALLOWED_TYPES[suffix]
-    upload_file(object_key, file.file, size, content_type)
-    material = CourseMaterial(course_id=course_id, lesson_id=lesson_id, filename=filename,
-                              content_type=content_type, object_key=object_key, size_bytes=size)
-    db.add(material)
-    db.commit()
-    db.refresh(material)
-    return material
+    return filename, suffix, size, content_type
+
+
+def ensure_unique_filename(db, course_id, lesson_id, filename, *, exclude_id=None):
+    same_scope = CourseMaterial.lesson_id == lesson_id if lesson_id else CourseMaterial.lesson_id.is_(None)
+    query = select(CourseMaterial.id).outerjoin(MaterialReplacement,
+        MaterialReplacement.material_id == CourseMaterial.id).where(CourseMaterial.course_id == course_id,
+        same_scope, or_(CourseMaterial.filename == filename, MaterialReplacement.filename == filename))
+    if exclude_id:
+        query = query.where(CourseMaterial.id != exclude_id)
+    if db.scalar(query.limit(1)):
+        raise HTTPException(409, "该位置已存在同名资料，请使用“替换文件”更新，或重命名后上传")
 
 
 def get_material_file(db: Session, course_id: str, material_id: str, username: str) -> tuple[CourseMaterial, Path, bool]:

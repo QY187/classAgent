@@ -9,12 +9,15 @@ from sqlalchemy.orm import Session
 from ...core.embeddings import embed_texts
 from ...core.visibility import visible_get
 from ...infrastructure.storage import materialize_file
-from ...shared.models import CourseMaterial, MaterialChunk, MaterialProcessing, new_id, now_utc
+from ...shared.models import CourseMaterial, MaterialChunk, MaterialProcessing, MaterialReplacement, PendingFileDeletion, new_id, now_utc
 from .extraction import ExtractionError, SUPPORTED_SUFFIXES, extract_units, make_material_chunks
+from .locking import lock_material
 
 
 def enqueue_material(db: Session, material: CourseMaterial) -> MaterialProcessing:
-    state = db.get(MaterialProcessing, material.id)
+    material, _ = lock_material(db, material.course_id, material.id)
+    state = db.scalar(select(MaterialProcessing).where(MaterialProcessing.material_id == material.id)
+                      .execution_options(populate_existing=True))
     if state and state.status in {"queued", "processing", "indexing"}:
         return state
     if state is None:
@@ -22,7 +25,9 @@ def enqueue_material(db: Session, material: CourseMaterial) -> MaterialProcessin
         db.add(state)
     state.generation = new_id()
     state.error_message = None
-    state.status = "queued" if Path(material.filename).suffix.lower() in SUPPORTED_SUFFIXES else "unsupported"
+    replacement = db.get(MaterialReplacement, material.id)
+    filename = replacement.filename if replacement else material.filename
+    state.status = "queued" if Path(filename).suffix.lower() in SUPPORTED_SUFFIXES else "unsupported"
     if state.status == "unsupported":
         state.error_message = "该格式可预览或下载，问答解析请上传文字型 PDF、PPTX、DOCX、TXT 或 Markdown。"
     state.updated_at = now_utc()
@@ -44,12 +49,12 @@ def dispatch_one(material_id, generation):
 
 def dispatch_pending_materials(db: Session) -> int:
     cutoff = now_utc() - timedelta(minutes=10)
-    stale = list(db.scalars(select(MaterialProcessing).join(CourseMaterial).where(
-        MaterialProcessing.status.in_(["processing", "indexing"]), MaterialProcessing.updated_at < cutoff).limit(50)))
-    for state in stale:
-        state.generation = new_id()
-        state.status = "queued"
-        state.updated_at = now_utc()
+    stale = db.execute(select(MaterialProcessing.material_id, MaterialProcessing.generation).join(CourseMaterial).where(
+        MaterialProcessing.status.in_(["processing", "indexing"]), MaterialProcessing.updated_at < cutoff).limit(50)).all()
+    for material_id, generation in stale:
+        db.execute(update(MaterialProcessing).where(MaterialProcessing.material_id == material_id,
+            MaterialProcessing.generation == generation, MaterialProcessing.status.in_(["processing", "indexing"]),
+            MaterialProcessing.updated_at < cutoff).values(generation=new_id(), status="queued", updated_at=now_utc()))
     db.commit()
     pending = list(db.scalars(select(MaterialProcessing).join(CourseMaterial).where(
         MaterialProcessing.status == "queued").order_by(MaterialProcessing.updated_at).limit(50)))
@@ -60,6 +65,12 @@ def process_material_content(db: Session, material_id: str, generation: str) -> 
     material = visible_get(db, CourseMaterial, material_id)
     if material is None:
         return 0
+    course_id = material.course_id
+    try:
+        material, _ = lock_material(db, course_id, material_id)
+    except HTTPException:
+        db.rollback()
+        return 0
     claimed = db.execute(update(MaterialProcessing).where(
         MaterialProcessing.material_id == material_id, MaterialProcessing.generation == generation,
         MaterialProcessing.status == "queued").values(status="processing", updated_at=now_utc()))
@@ -69,7 +80,9 @@ def process_material_content(db: Session, material_id: str, generation: str) -> 
     path = None
     remove = False
     try:
-        filename, object_key = material.filename, material.object_key
+        replacement = db.get(MaterialReplacement, material_id)
+        source = replacement if replacement else material
+        filename, object_key = source.filename, source.object_key
         db.rollback()
         path, remove = materialize_file(object_key)
         chunks = make_material_chunks(extract_units(path, filename))
@@ -92,8 +105,7 @@ def process_material_content(db: Session, material_id: str, generation: str) -> 
         if len(vectors) != len(chunks) or any(len(vector) != 1536 for vector in vectors):
             raise ValueError("invalid embedding batch")
         db.expire_all()
-        if visible_get(db, CourseMaterial, material_id) is None:
-            return 0
+        material, course = lock_material(db, course_id, material_id)
         switched = db.execute(update(MaterialProcessing).where(
             MaterialProcessing.material_id == material_id, MaterialProcessing.generation == generation,
             MaterialProcessing.status == "indexing").values(
@@ -101,6 +113,15 @@ def process_material_content(db: Session, material_id: str, generation: str) -> 
         if switched.rowcount != 1:
             db.rollback()
             return 0
+        replacement = db.get(MaterialReplacement, material_id)
+        if replacement:
+            if replacement.object_key != object_key:
+                db.rollback()
+                return 0
+            db.add(PendingFileDeletion(user_id=course.owner_id, object_key=material.object_key))
+            material.filename, material.object_key = replacement.filename, replacement.object_key
+            material.content_type, material.size_bytes = replacement.content_type, replacement.size_bytes
+            db.delete(replacement)
         db.execute(delete(MaterialChunk).where(MaterialChunk.material_id == material_id))
         db.add_all(MaterialChunk(material_id=material_id, version=generation, embedding=vector, **chunk)
                    for chunk, vector in zip(chunks, vectors))
@@ -121,11 +142,13 @@ def process_material_content(db: Session, material_id: str, generation: str) -> 
 
 def material_read(db: Session, material: CourseMaterial) -> dict:
     state = db.get(MaterialProcessing, material.id)
+    replacement = db.get(MaterialReplacement, material.id)
     return {key: getattr(material, key) for key in (
         "id", "course_id", "lesson_id", "filename", "content_type", "source", "status", "size_bytes", "created_at")} | {
         "processing_status": state.status if state else "stored",
         "processing_error": state.error_message if state else None,
         "indexed": bool(state and state.active_version),
+        "replacement_filename": replacement.filename if replacement else None,
     }
 
 

@@ -12,13 +12,13 @@ from sqlalchemy.orm import Session
 
 from app.modules.materials.service import cleanup_converted_preview, convert_office_to_pdf, delete_material, get_material_file, list_materials, preview_text, upload_material
 from app.infrastructure.storage import delete_file
-from app.shared.models import Course, CourseMaterial, Lesson, User
+from app.shared.models import Course, CourseMaterial, Lesson, MaterialReplacement, User
 
 
 class CourseMaterialsTest(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
-        for table in (User.__table__, Course.__table__, Lesson.__table__, CourseMaterial.__table__):
+        for table in (User.__table__, Course.__table__, Lesson.__table__, CourseMaterial.__table__, MaterialReplacement.__table__):
             table.create(self.engine)
         with Session(self.engine) as db:
             db.add_all([User(id="u1", username="owner", password_hash="x"), User(id="u2", username="other", password_hash="x")])

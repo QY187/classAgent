@@ -36,6 +36,7 @@ def _criteria():
     rules.append((m.ChatConversation, or_(lesson_active(m.ChatConversation.lesson_id), course_active(m.ChatConversation.course_id),
         and_(m.ChatConversation.lesson_id.is_(None), m.ChatConversation.course_id.is_(None)))))
     rules.append((m.MaterialProcessing, material_active(m.MaterialProcessing.material_id)))
+    rules.append((m.MaterialReplacement, material_active(m.MaterialReplacement.material_id)))
     rules.append((m.MaterialChunk, material_active(m.MaterialChunk.material_id)))
     for model in (m.AudioFile, m.ProcessingJob, m.TranscriptSegment, m.LessonSummary, m.SpeakerAlias, m.DocumentChunk, m.ReviewCard):
         rules.append((model, lesson_active(model.lesson_id)))

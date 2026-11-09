@@ -36,6 +36,14 @@ def index_material(course_id: str, material_id: str,
     return material_read(db, material)
 
 
+@router.put("/courses/{course_id}/materials/{material_id}/file", response_model=CourseMaterialRead, status_code=202)
+def replace_material_file(course_id: str, material_id: str, file: UploadFile = File(...),
+                          username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    from .replacement import replace_material
+    material = replace_material(db, course_id, material_id, file, username)
+    return material_read(db, material)
+
+
 @router.get("/courses/{course_id}/materials/{material_id}/content")
 def material_content(course_id: str, material_id: str, offset: int = Query(0, ge=0, le=100000),
                      limit: int = Query(10, ge=1, le=20), version: str | None = Query(None, max_length=36),

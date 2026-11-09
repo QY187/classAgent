@@ -99,6 +99,18 @@ class MaterialProcessing(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
 
+class MaterialReplacement(Base):
+    """待发布的替换文件；当前文件及活动索引在解析成功前保持一致。"""
+    __tablename__ = "material_replacements"
+
+    material_id: Mapped[str] = mapped_column(ForeignKey("course_materials.id", ondelete="CASCADE"), primary_key=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    object_key: Mapped[str] = mapped_column(String(500), unique=True)
+    content_type: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class MaterialChunk(Base):
     __tablename__ = "material_chunks"
 
