@@ -14,7 +14,7 @@ from ...core.model_budget import quota_chat_post, user_budget
 from ...core.ownership import user_id_for_username
 from ...core.embeddings import embed_texts
 from ...core.telemetry import annotate, record_usage, span, trace_event, traced
-from ...shared.models import Course, DocumentChunk, Lesson
+from ...shared.models import Course, CourseMaterial, DocumentChunk, Lesson, MaterialChunk
 from ..agent.completion import complete
 from .streaming import stream_completion
 
@@ -198,7 +198,8 @@ def _rerank_with_exact_signals(query: str, ranked: list[tuple[str, float]], rows
 
 @traced("rag.retrieve")
 @user_budget
-def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, lesson_id: str | None = None, limit: int = 8) -> list[DocumentChunk]:
+def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, lesson_id: str | None = None,
+                    limit: int = 8, source_type: str = "transcript", material_id: str | None = None) -> list:
     """在后端权限范围内融合向量召回和 BM25 词法召回。"""
     owned_course(db, course_id, username)
     annotate(course_id=course_id, lesson_id=lesson_id)
@@ -209,9 +210,18 @@ def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, l
     if not variants or not any(_tokens(item) for item in variants):
         return []
     scope = chunk_scope(course_id, lesson_id)
+    from ..materials.content import active_chunks
+    material_scope = [CourseMaterial.course_id == course_id]
+    if lesson_id:
+        material_scope.append(CourseMaterial.lesson_id == lesson_id)
+    if material_id:
+        material_scope.append(CourseMaterial.id == material_id)
+    transcript_query = select(DocumentChunk).where(*scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))
+    material_query = active_chunks().where(*material_scope)
     with span("rag.load_candidates"):
-        rows = list(db.scalars(select(DocumentChunk).where(
-            *scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))))
+        rows = list(db.scalars(transcript_query)) if source_type in {"all", "transcript"} and not material_id else []
+        if source_type in {"all", "material"}:
+            rows += list(db.scalars(material_query))
     if not rows:
         return []
     vector_rows = []
@@ -221,9 +231,14 @@ def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, l
         with span("rag.vector_recall"):
             vectors = embed_texts(variants)
             for vector in vectors:
-                vector_rows.append(list(db.scalars(select(DocumentChunk).where(
-                    *scope, or_(DocumentChunk.chunk_level == "child", DocumentChunk.chunk_level == "summary"))
-                    .order_by(DocumentChunk.embedding.cosine_distance(vector)).limit(candidate_limit))))
+                if db.get_bind().dialect.name == "postgresql":
+                    if source_type in {"all", "transcript"} and not material_id:
+                        vector_rows.append(list(db.scalars(transcript_query.order_by(DocumentChunk.embedding.cosine_distance(vector)).limit(candidate_limit))))
+                    if source_type in {"all", "material"}:
+                        vector_rows.append(list(db.scalars(material_query.order_by(MaterialChunk.embedding.cosine_distance(vector)).limit(candidate_limit))))
+                else:
+                    from .indexing import _cosine
+                    vector_rows.append(sorted(rows, key=lambda row: _cosine(row.embedding, vector), reverse=True)[:candidate_limit])
     except (HTTPException, RuntimeError, httpx.HTTPError) as exc:
         # 向量服务短暂不可用时仍返回 BM25 结果，避免检索整体不可用；下次请求自动恢复混合召回。
         trace_event("rag.fallback", reason="vector_failed", error_type=type(exc).__name__)
@@ -259,10 +274,11 @@ def hybrid_retrieve(db: Session, course_id: str, username: str, query: str, *, l
     selected, parent_counts, seen_sources = [], {}, set()
     for identity, _score in ranked:
         row = by_id[identity]
-        source_ids = tuple(json.loads(row.source_segment_ids or "[]"))
+        source_ids = tuple(json.loads(getattr(row, "source_segment_ids", "[]") or "[]"))
         if source_ids and source_ids in seen_sources:
             continue
-        parent_key = row.parent_id or row.id
+        parent_key = (f"material:{row.material_id}:{row.locator_type}:{row.locator_number}" if isinstance(row, MaterialChunk)
+                      else row.parent_id or row.id)
         if parent_counts.get(parent_key, 0) >= 2:
             continue
         selected.append(row)
@@ -380,6 +396,17 @@ def ground_claims(claims: object, evidence: dict, lessons: dict, *, citation_off
         for key in valid[:3]:
             item = evidence[key]
             citation_id = len(citations) + 1 + citation_offset
+            if getattr(item, "source_type", None) == "material":
+                from ..materials.content import locator_label
+                citations.append({"id": citation_id, "source_type": "material", "course_id": item.course_id,
+                    "lesson_id": item.lesson_id, "lesson_title": lessons[item.lesson_id].title if item.lesson_id in lessons else "课程公共资料",
+                    "start_ms": None, "end_ms": None, "material_id": item.material_id, "filename": item.filename,
+                    "chunk_id": item.chunk_id, "version": item.version, "position": item.position,
+                    "locator_type": item.locator_type, "locator_number": item.locator_number,
+                    "locator_label": locator_label(item.locator_type, item.locator_number), "snippet": item.content[:180],
+                    "source_status": "current"})
+                links.append(f"[{citation_id}]")
+                continue
             citations.append({
                 "id": citation_id, "lesson_id": item.lesson_id,
                 "lesson_title": lessons[item.lesson_id].title,
@@ -387,5 +414,7 @@ def ground_claims(claims: object, evidence: dict, lessons: dict, *, citation_off
                 "snippet": item.content[:180], "segment_ids": json.loads(item.source_segment_ids),
             })
             links.append(f"[{citation_id}]")
-        lines.append(f"{claim['text'].strip()[:1200]} {' '.join(links)}")
+        material_sources = [evidence[key] for key in valid[:3] if getattr(evidence[key], "source_type", None) == "material"]
+        provenance = ("课件依据（" + "；".join(f"{item.filename} · {item.locator_number}" for item in material_sources) + "）：") if material_sources else ""
+        lines.append(f"{provenance}{claim['text'].strip()[:1200]} {' '.join(links)}")
     return {"answer": "\n\n".join(lines) if lines else "目前课程资料中没有找到足够依据回答这个问题。", "citations": citations}

@@ -68,7 +68,7 @@ def extract_units(path: Path, filename: str) -> list[dict]:
                             if archive.getinfo(name).file_size > MAX_XML_BYTES:
                                 raise ExtractionError("文档结构过大，无法解析。")
                         rels = ElementTree.fromstring(archive.read("ppt/_rels/presentation.xml.rels"))
-                        targets = {item.get("Id"): normpath("ppt/" + item.get("Target", ""))
+                        targets = {item.get("Id"): normpath(item.get("Target", "").lstrip("/") if item.get("Target", "").startswith("/") else "ppt/" + item.get("Target", ""))
                                    for item in rels if item.get("TargetMode") != "External"}
                         presentation = ElementTree.fromstring(archive.read("ppt/presentation.xml"))
                         ids = presentation.findall(".//{http://schemas.openxmlformats.org/presentationml/2006/main}sldId")

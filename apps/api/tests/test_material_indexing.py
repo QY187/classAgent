@@ -1,7 +1,6 @@
 """真实文件解析与数据库版本切换，网络边界使用模拟。"""
-from io import BytesIO
+from datetime import timedelta
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from zipfile import ZipFile
 
@@ -58,6 +57,34 @@ def test_pdf_and_empty_pdf(tmp_path):
     writer.write(path)
     with pytest.raises(ExtractionError, match="加密"):
         extract_units(path, path.name)
+
+
+def test_pdf_text_keeps_physical_page_number(tmp_path):
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+    writer = PdfWriter()
+    writer.add_blank_page(width=400, height=400)
+    page = writer.add_blank_page(width=400, height=400)
+    font = DictionaryObject({NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"), NameObject("/BaseFont"): NameObject("/Helvetica")})
+    page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): DictionaryObject({NameObject("/F1"): writer._add_object(font)})})
+    stream = DecodedStreamObject()
+    stream.set_data(b"BT /F1 12 Tf 20 300 Td (Binary tree has at most two children.) Tj ET")
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    path = tmp_path / "text.pdf"
+    writer.write(path)
+    units = extract_units(path, path.name)
+    assert len(units) == 1 and units[0]["locator_number"] == 2
+    assert "at most two" in units[0]["content"]
+
+
+def test_pptx_uses_presentation_order(tmp_path):
+    path = tmp_path / "slides.pptx"
+    with ZipFile(path, "w") as archive:
+        archive.writestr("ppt/presentation.xml", '<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="1" r:id="r2"/><p:sldId id="2" r:id="r1"/></p:sldIdLst></p:presentation>')
+        archive.writestr("ppt/_rels/presentation.xml.rels", '<Relationships><Relationship Id="r1" Target="/ppt/slides/slide1.xml"/><Relationship Id="r2" Target="slides/slide2.xml"/></Relationships>')
+        for number in (1, 2):
+            archive.writestr(f"ppt/slides/slide{number}.xml", f'<a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:t>内容{number}</a:t></a:p>')
+    assert [unit["content"] for unit in extract_units(path, path.name)] == ["内容2", "内容1"]
 
 
 def test_parse_retry_and_atomic_version(material_db, tmp_path):
@@ -153,3 +180,39 @@ def test_course_materials_do_not_leak_into_lesson_search(material_db):
     add_ready_chunk(db)
     assert search_all(db, "二叉树", "owner", lesson_id="l")["materials"] == []
     assert len(search_all(db, "二叉树", "owner", course_id="c")["materials"]) == 1
+
+
+def test_superseded_worker_cannot_publish(material_db, tmp_path):
+    db = material_db
+    path = tmp_path / "sample.txt"
+    path.write_text("课件来源。", encoding="utf-8")
+    with patch("app.modules.materials.processing.dispatch_one"):
+        generation = enqueue_material(db, db.get(CourseMaterial, "m")).generation
+    def supersede(texts):
+        state = db.get(MaterialProcessing, "m")
+        state.generation = "new-generation"
+        state.status = "queued"
+        db.commit()
+        return [[0.1] * 1536 for _ in texts]
+    with patch("app.modules.materials.processing.materialize_file", return_value=(path, False)), \
+         patch("app.modules.materials.processing.embed_texts", side_effect=supersede):
+        assert process_material_content(db, "m", generation) == 0
+    db.expire_all()
+    assert db.get(MaterialProcessing, "m").generation == "new-generation"
+    assert db.scalar(select(MaterialChunk)) is None
+
+
+def test_stalled_jobs_are_redispatched_without_deleted_files(material_db):
+    from app.modules.materials.processing import dispatch_pending_materials
+    db = material_db
+    db.add(MaterialProcessing(material_id="m", status="indexing", generation="old",
+                              updated_at=now_utc() - timedelta(minutes=11)))
+    db.commit()
+    with patch("app.modules.materials.processing.dispatch_one", return_value=True) as dispatch:
+        assert dispatch_pending_materials(db) == 1
+        assert dispatch.call_args.args[1] != "old"
+    db.get(CourseMaterial, "m").deleted_at = now_utc()
+    db.commit()
+    with patch("app.modules.materials.processing.dispatch_one") as dispatch:
+        assert dispatch_pending_materials(db) == 0
+        dispatch.assert_not_called()

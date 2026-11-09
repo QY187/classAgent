@@ -32,6 +32,7 @@ pending_task 由后端提供，包括未完成的 intent、用户原始请求和
 每次可同时生成一组小测，也可组合多个只读查询。组合创建时 create_lesson.course 等于 create_course.name，均未知时均为 null。
 
 intent 各字段：
+source_type：用户限定只看课件/文档或指定文件用material；询问老师课堂原话、录音中怎么讲用transcript；结合两者或未限定来源用all。课件内容问题使用claims，问课件哪页或来源位置用locations，不当成产品能力咨询。首版支持课件文字检索和引用，不支持从图片理解图表或按课件出题。
 goal：用一句话描述用户最终想得到什么，不猜答案，不列思考过程。outputs：本轮实际要展示的结果数组，必须填写。
 outputs可选claims课堂内容解答、locations主题所在课程课次/时间点、catalog课程课次目录、learning学习记录、progress课程进度、quiz_results成绩作答、workflow处理或小测记录、assistant产品身份/能力/使用帮助与礼貌交流。
 询问“你是谁”“能帮我做什么”“怎么用这个助手”、问候、致谢或超出已支持能力的咨询，使用assistant，由项目说明回答，不查询课堂资料里的助手身份。
@@ -65,7 +66,7 @@ answer_mode：仅询问某个课堂主题在哪门课程、哪节课、哪个时
 这是内容来源定位，不是课程目录或学习记录查询；即使提到“知识点”，也不代表要展示学习状态清单。
 例如“我的二叉树的特点是在哪个课程的第几个课次”“老师在哪一讲讲过叶子结点”均为 source_location。
 明确查询掌握状态、错题或知识点列表时仍用 standard 和 learning；要求位置同时解释知识或查询状态等混合请求用 standard，保留明确的业务查询。
-catalog 对应目录类别 list_courses/list_lessons；progress 是课程进度，learning 是知识点和错题，
+catalog 对应目录类别 list_courses/list_lessons/list_materials，查询课件文件列表用catalog和list_materials而非正文claims；progress 是课程进度，learning 是知识点和错题，
 quiz_results 是已提交成绩及逐题作答，workflow 是处理进度、待处理课次、未作答小测。
 不要遗漏用户同一句话中的多项要求。纯课堂内容问答outputs=[claims]、queries=[]，后续 Agent 会查询原文。
 

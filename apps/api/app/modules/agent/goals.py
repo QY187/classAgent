@@ -41,7 +41,7 @@ def selection_issues(db, context, payload, store):
     from .tools import check_lesson
     from .claim_validation import verified_claims
     current, lessons = store.current_evidence(db, context)
-    located = {lessons[current[key].lesson_id].course_id
+    located = {current[key].course_id
                for key in (payload.get("locations") or {}).get("source_ids", []) if key in current}
     issues = {}
     for output in ("learning", "progress"):

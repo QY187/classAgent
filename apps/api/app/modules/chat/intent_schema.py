@@ -85,6 +85,8 @@ class ReadRequirement(IntentModel):
 
 
 class IntentPayload(IntentModel):
+    source_type: Literal["all", "transcript", "material"] = Field(default="all",
+        description="知识依据的来源：只问老师课堂讲解/录音用transcript，只看课件或指定文件用material，综合或未限定用all。")
     goal: Question | None = Field(default=None, description="用一句话概括用户要获得的结果，不写思考过程或假定结果")
     outputs: list[Literal["claims", "locations", "catalog", "progress", "learning", "quiz_results", "workflow", "assistant"]] | None = Field(
         default=None, max_length=8, description="仅包含用户要求展示的结果；assistant用于产品身份、能力、使用帮助和礼貌交流。内部查询不列入。纯写操作为空数组；null兼容旧快照。")
@@ -100,7 +102,7 @@ class IntentPayload(IntentModel):
     quiz: QuizIntent | None = None
     verify: VerifyIntent | None = None
     queries: list[Literal["catalog", "progress", "learning", "quiz_results", "workflow"]] = Field(default_factory=list, max_length=5)
-    catalog: list[Literal["list_courses", "list_lessons"]] = Field(default_factory=list, max_length=2)
+    catalog: list[Literal["list_courses", "list_lessons", "list_materials"]] = Field(default_factory=list, max_length=3)
     issue: Question | None = None
 
     @model_validator(mode="after")
@@ -150,6 +152,7 @@ class IntentPayload(IntentModel):
         value.pop("goal", None)
         value.pop("outputs", None)
         value.pop("requirements", None)
+        value.pop("source_type", None)
         if self.quiz:
             value["quiz"] = self.quiz.mode
             value["quiz_spec"] = self.quiz.model_dump(exclude={"mode"})

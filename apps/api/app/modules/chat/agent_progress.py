@@ -6,6 +6,8 @@ from .generation import GenerationStopped
 from ...shared.models import ChatMessage
 
 LABELS = {
+    "list_materials": "查询课件资料",
+    "get_material_content": "读取课件原文",
     "update_course": "修改课程信息",
     "update_lesson": "修改课次信息",
     "retry_transcription": "登记转写重试",

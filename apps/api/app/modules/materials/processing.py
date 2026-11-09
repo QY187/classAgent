@@ -81,6 +81,13 @@ def process_material_content(db: Session, material_id: str, generation: str) -> 
             return 0
         vectors = []
         for start in range(0, len(chunks), 20):
+            # 大文件可能分多批，旧任务被换代后不再继续产生向量调用。
+            active = db.scalar(select(MaterialProcessing.generation).where(
+                MaterialProcessing.material_id == material_id, MaterialProcessing.status == "indexing"))
+            db.rollback()
+            if active != generation or visible_get(db, CourseMaterial, material_id) is None:
+                return 0
+            db.rollback()
             vectors.extend(embed_texts([item["content"] for item in chunks[start:start + 20]]))
         if len(vectors) != len(chunks) or any(len(vector) != 1536 for vector in vectors):
             raise ValueError("invalid embedding batch")

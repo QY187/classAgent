@@ -21,6 +21,7 @@ def message_read(item: ChatMessage) -> dict:
 
 
 def read_messages(db: Session, conversation_id: str, username: str) -> dict:
+    from ..materials.content import refresh_material_citation
     conversation = owned_conversation(db, conversation_id, username)
     items = list(db.scalars(select(ChatMessage).where(ChatMessage.conversation_id == conversation_id).order_by(ChatMessage.position)))
     quizzes = db.scalars(select(Quiz).where(Quiz.agent_request_key.in_([item.id for item in items if item.role == "user"])))
@@ -33,4 +34,10 @@ def read_messages(db: Session, conversation_id: str, username: str) -> dict:
         result = reader(db, json.loads(receipt.result_json), username) if reader else None
         if result:
             action_artifacts.setdefault(receipt.message_id, []).append(result)
-    return {"conversation": conversation_read(conversation), "messages": [{**message_read(item), "artifacts": ([artifacts[item.id]] if item.id in artifacts else []) + action_artifacts.get(item.id, [])} for item in items]}
+    messages = []
+    for item in items:
+        message = message_read(item)
+        message["citations"] = [refresh_material_citation(db, citation, username) for citation in message["citations"]]
+        message["artifacts"] = ([artifacts[item.id]] if item.id in artifacts else []) + action_artifacts.get(item.id, [])
+        messages.append(message)
+    return {"conversation": conversation_read(conversation), "messages": messages}

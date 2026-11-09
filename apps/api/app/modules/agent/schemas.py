@@ -79,6 +79,20 @@ class SearchArguments(ToolArguments):
     query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
     lesson_id: Identity | None = None
     limit: int = Field(default=10, ge=1, le=30)
+    source_type: Literal["all", "transcript", "material"] = "all"
+    material_id: Identity | None = None
+
+
+class MaterialListArguments(PageArguments):
+    course_id: Identity
+    query: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = ""
+
+
+class MaterialContentArguments(PageArguments):
+    course_id: Identity
+    material_id: Identity
+    limit: int = Field(default=5, ge=1, le=10)
+    locator_number: int | None = Field(default=None, ge=1, le=2000)
 
 
 class LearningListArguments(PageArguments):

@@ -37,7 +37,8 @@ def verified_claims(claims, evidence, *, fallback=True):
         for unit,key in units:
             if normalize(unit) in used:
                 continue
-            selected.append({"text":"课堂原文：" + unit, "source_ids":[key]})
+            prefix = "课件原文：" if getattr(evidence[key], "source_type", None) == "material" else "课堂原文："
+            selected.append({"text":prefix + unit, "source_ids":[key]})
             used.add(normalize(unit))
             if len(selected) >= 3:
                 break

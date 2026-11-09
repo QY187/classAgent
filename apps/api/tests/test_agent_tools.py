@@ -46,7 +46,8 @@ class AgentToolTest(unittest.TestCase):
 
     def test_schema_registry_and_strict_parameter_validation(self):
         schemas = tool_schemas()
-        self.assertEqual(len(schemas), 13)
+        self.assertEqual(len(schemas), 15)
+        self.assertTrue({"list_materials", "get_material_content"} <= {schema["function"]["name"] for schema in schemas})
         names = {schema["function"]["name"] for schema in schemas}
         self.assertTrue({"list_pending_lessons", "list_unanswered_quizzes", "get_processing_detail"} <= names)
         self.assertFalse({"retry_transcription", "update_course", "update_lesson"} & names)

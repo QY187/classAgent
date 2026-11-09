@@ -36,3 +36,18 @@ def read_content(db, course_id, material_id, username, *, offset=0, limit=10, ve
 
 def current_material_chunk(db, identity):
     return db.scalar(active_chunks().where(MaterialChunk.id == identity).execution_options(populate_existing=True))
+
+
+def refresh_material_citation(db, citation, username):
+    """旧回答保留快照，但不把已删除或换版的资料显示为有效来源。"""
+    if citation.get("source_type") != "material":
+        return citation
+    from fastapi import HTTPException
+    try:
+        material = owned_material(db, citation.get("course_id"), citation.get("material_id"), username)
+    except HTTPException:
+        return {**citation, "source_status": "unavailable"}
+    chunk = current_material_chunk(db, citation.get("chunk_id"))
+    current = (chunk is not None and chunk.material_id == material.id and chunk.version == citation.get("version")
+               and citation.get("snippet", "") in chunk.content)
+    return {**citation, "source_status": "current" if current else "changed"}

@@ -117,4 +117,6 @@ def requested_catalog_kinds(question):
         kinds.add("list_courses")
     if re.search(r"所有课次|全部课次|课次列表|课次目录|有哪些课次", question) and not re.search(r"待处理|未完成|没有纪要|缺少纪要", question):
         kinds.add("list_lessons")
+    if re.search(r"所有课件|全部课件|课件列表|课件目录|有哪些课件|哪些课件|资料列表|有哪些资料", question):
+        kinds.add("list_materials")
     return kinds

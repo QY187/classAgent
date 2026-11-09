@@ -183,6 +183,7 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
                         "update_course": edit_action_hint(question, context, semantic),
                         "update_lesson": edit_action_hint(question, context, semantic)}
         if semantic is not None:
+            action_hints["source_type"] = decision.intent.source_type
             if decision.intent.outputs is not None:
                 action_hints["response_contract"] = {"goal": decision.intent.goal, "outputs": decision.intent.outputs,
                     "requirements": [item.model_dump() for item in decision.intent.requirements]}

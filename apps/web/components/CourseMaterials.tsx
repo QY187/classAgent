@@ -28,8 +28,11 @@ export default function CourseMaterials({ courseId, lessonId, refreshKey }: { co
   const lessonMaterials = materials.filter((material) => material.lesson_id === (lessonId || null));
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
-    request<Material[]>(`/courses/${courseId}/materials`).then(setMaterials).catch((err) => setError(errorMessage(err))).finally(() => setLoading(false));
+    setError("");
+    request<Material[]>(`/courses/${courseId}/materials`, { signal: controller.signal }).then((items) => { if (!controller.signal.aborted) setMaterials(items); }).catch((err) => { if (!controller.signal.aborted) setError(errorMessage(err)); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, [courseId, refreshKey]);
 
   const processing = materials.some((item) => ["queued", "processing", "indexing"].includes(item.processing_status));

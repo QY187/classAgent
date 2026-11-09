@@ -868,3 +868,10 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .material-source-passage p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
 .material-source-pagination { display: flex; gap: 12px; margin-top: 16px; }
 .material-source-preview { width: 100%; height: 65vh; border: 0; }
+.course-materials-panel > .panel-header { flex-wrap: wrap; gap: 12px; }
+.course-materials-panel .lesson-materials { padding-left: 0; border-top: 0; padding-top: 0; }
+.material-actions { flex-wrap: wrap; }
+.material-actions .button { white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 640px) {
+  .material-actions { padding-left: 0; }
+}

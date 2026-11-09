@@ -9,8 +9,9 @@ import { type MaterialContent, processingLabels } from "../../../../../lib/mater
 function MaterialPageContent() {
   const { courseId, materialId } = useParams<{ courseId: string; materialId: string }>();
   const params = useSearchParams();
-  const initial = Number(params.get("position") || 0);
-  const [offset, setOffset] = useState(Number.isSafeInteger(initial) && initial >= 0 ? initial : 0);
+  const requested = Number(params.get("position") || 0);
+  const initial = Number.isSafeInteger(requested) && requested >= 0 && requested <= 100000 ? requested : 0;
+  const [offset, setOffset] = useState(initial);
   const version = params.get("version");
   const [data, setData] = useState<MaterialContent | null>(null);
   const [error, setError] = useState("");
@@ -19,22 +20,24 @@ function MaterialPageContent() {
   const [refresh, setRefresh] = useState(0);
   const base = `/courses/${courseId}/materials/${materialId}`;
 
+  useEffect(() => { setOffset(initial); }, [base, initial]);
+
   useEffect(() => {
     const controller = new AbortController();
     setError(""); setData(null);
     const query = new URLSearchParams({ offset: String(offset), limit: "10" });
     if (version) query.set("version", version);
-    request<MaterialContent>(`${base}/content?${query}`, { signal: controller.signal }).then(setData)
+    request<MaterialContent>(`${base}/content?${query}`, { signal: controller.signal }).then((value) => { if (!controller.signal.aborted) setData(value); })
       .catch((err) => { if (!controller.signal.aborted) setError(errorMessage(err)); });
     return () => controller.abort();
   }, [base, offset, version, refresh]);
 
   const filename = data?.material.filename || "";
   useEffect(() => {
+    setFileUrl(""); setPreviewError("");
     if (!filename || !/[.](pdf|pptx|docx)$/i.test(filename)) return;
     const controller = new AbortController();
     let url = "";
-    setFileUrl(""); setPreviewError("");
     requestBlob(`${base}/${/[.]pdf$/i.test(filename) ? "file" : "preview.pdf"}`, { signal: controller.signal })
       .then((blob) => { if (!controller.signal.aborted) { url = URL.createObjectURL(blob); setFileUrl(url); } })
       .catch((err) => { if (!controller.signal.aborted) setPreviewError(errorMessage(err)); });

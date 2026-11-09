@@ -27,6 +27,9 @@ class ToolContext:
 
 
 def generate_quiz(db, context, args):
+    from .material_tools import source_preference
+    if source_preference(context) == "material":
+        raise HTTPException(409, "当前小测仅支持课堂文字记录，课件出题尚未接入")
     if context.generate_quiz is None or context.practice_only:
         raise HTTPException(403, "当前问题没有授权生成小测")
     check_course(db, context, args.course_id)
@@ -81,6 +84,9 @@ def list_lessons(db: Session, context: ToolContext, args: LessonListArguments) -
 
 
 def get_transcript(db: Session, context: ToolContext, args: TranscriptArguments) -> dict:
+    from .material_tools import source_preference
+    if source_preference(context) == "material":
+        raise HTTPException(403, "本次问题限定课件来源")
     lesson = check_lesson(db, context, args.lesson_id)
     rows = lessons.get_transcript(db, args.lesson_id, context.username)
     result = page([{"segment_id": row.id, "speaker": row.speaker, "start_ms": row.start_ms,
@@ -102,30 +108,41 @@ def get_summary(db: Session, context: ToolContext, args: SummaryArguments) -> di
 
 
 def search_course(db: Session, context: ToolContext, args: SearchArguments) -> dict:
+    from .material_tools import check_material, source_preference
+    from ..materials.content import chunk_read
+    from ...shared.models import CourseMaterial, MaterialChunk
     check_course(db, context, args.course_id)
     lesson_id = args.lesson_id or context.lesson_id
     if lesson_id is not None:
         lesson = check_lesson(db, context, lesson_id)
         if lesson.course_id != args.course_id:
             raise HTTPException(404, "课次不存在")
-    rows = hybrid_retrieve(db, args.course_id, context.username, args.query, lesson_id=lesson_id, limit=args.limit)
+    preference = source_preference(context)
+    source_type = preference if preference != "all" else args.source_type
+    if args.material_id:
+        check_material(db, context, args.course_id, args.material_id)
+        source_type = "material"
+    rows = hybrid_retrieve(db, args.course_id, context.username, args.query, lesson_id=lesson_id, limit=args.limit,
+                           source_type=source_type, material_id=args.material_id)
     if not rows:
         from ...core.telemetry import span, trace_event
         trace_event("rag.fallback", reason="no_chunks_keyword_search")
         # 尚未建立向量索引时保留可用的精确词法回退，重建索引后自动走混合召回。
         with span("rag.keyword_fallback"):
             legacy = search_all(db, args.query, context.username, course_id=args.course_id,
-                                kind="transcript", lesson_id=lesson_id)["transcript"]
+                                kind="transcript", lesson_id=lesson_id)["transcript"] if source_type != "material" else []
         return {"course_id": args.course_id, "lesson_id": lesson_id, "query": args.query,
                 "retrieval_method": "keyword", "has_more": len(legacy) > args.limit or len(legacy) == 30,
                 "items": [{"segment_id": row["segment_id"], "lesson_id": row["lesson_id"],
                            "lesson_title": row["lesson_title"], "start_ms": row["start_ms"],
                            "snippet": row["snippet"]} for row in legacy[:args.limit]]}
-    lessons_by_id = {row.lesson_id: lessons.get_lesson(db, row.lesson_id, context.username) for row in rows}
+    transcript_rows = [row for row in rows if not isinstance(row, MaterialChunk)]
+    lessons_by_id = {row.lesson_id: lessons.get_lesson(db, row.lesson_id, context.username) for row in transcript_rows}
+    material_rows = [chunk_read(row, db.get(CourseMaterial, row.material_id)) for row in rows if isinstance(row, MaterialChunk)]
     return {"course_id": args.course_id, "lesson_id": lesson_id, "query": args.query,
             "retrieval_method": "hybrid_bm25_vector", "has_more": False,
             "items": [{"segment_id": source_ids[0] if source_ids else row.id, "lesson_id": row.lesson_id,
                        "lesson_title": lessons_by_id[row.lesson_id].title, "start_ms": row.start_ms,
                        "snippet": row.content[:500], "source_segment_ids": source_ids}
-                      for row in rows[:args.limit]
-                      for source_ids in [json.loads(row.source_segment_ids)] ]}
+                      for row in transcript_rows[:args.limit]
+                      for source_ids in [json.loads(row.source_segment_ids)] ] + material_rows}
