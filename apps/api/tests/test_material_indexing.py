@@ -124,6 +124,30 @@ def test_recycled_material_not_processed(material_db):
         read.assert_not_called()
 
 
+def test_reindex_publishes_recursive_chunks_and_embeds_the_same_text(material_db, tmp_path):
+    from app.modules.materials.content import read_content, refresh_material_citation
+    db = material_db
+    add_ready_chunk(db)
+    old_citation = {"source_type": "material", "course_id": "c", "material_id": "m",
+                    "chunk_id": "chunk", "version": "v", "snippet": "二叉树"}
+    text = "".join(f"概念{index}：" + "这是课件对二叉树的完整解释" * 4 + "。" for index in range(80))
+    path = tmp_path / "long.txt"
+    path.write_text(text, encoding="utf-8")
+    with patch("app.modules.materials.processing.dispatch_one"), \
+         patch("app.modules.materials.processing.materialize_file", return_value=(path, False)), \
+         patch("app.modules.materials.processing.embed_texts", side_effect=lambda texts: [[0.1] * 1536 for _ in texts]) as embed:
+        generation = enqueue_material(db, db.get(CourseMaterial, "m")).generation
+        count = process_material_content(db, "m", generation)
+    items = read_content(db, "c", "m", "owner", limit=20)["items"]
+    assert 1 < count == len(items)
+    assert [item["text"] for item in items] == [value for call in embed.call_args_list for value in call.args[0]]
+    assert all(item["text"] in text and item["text"].endswith("。") and len(item["text"]) <= 1400 for item in items)
+    assert all(item["locator_type"] == "paragraph" and item["locator_number"] == 1 for item in items)
+    assert [item["position"] for item in items] == list(range(count))
+    assert all(item["version"] == generation for item in items)
+    assert refresh_material_citation(db, old_citation, "owner")["source_status"] == "changed"
+
+
 def add_ready_chunk(db, *, identity="chunk", material_id="m", version="v", content="二叉树每个结点最多有两个孩子。"):
     db.add(MaterialProcessing(material_id=material_id, status="ready", generation=version, active_version=version))
     db.add(MaterialChunk(id=identity, material_id=material_id, version=version, position=0,

@@ -4,12 +4,13 @@ import re
 from xml.etree import ElementTree
 from zipfile import ZipFile, BadZipFile
 
+from .splitting import recursive_character_chunks
+
 
 SUPPORTED_SUFFIXES = {".pdf", ".pptx", ".docx", ".txt", ".md"}
 MAX_TEXT_CHARS = 1_000_000
 MAX_UNITS = 2000
 MAX_XML_BYTES = 32 * 1024 * 1024
-CHUNK_CHARS = 1400
 
 
 class ExtractionError(ValueError):
@@ -103,8 +104,6 @@ def extract_units(path: Path, filename: str) -> list[dict]:
 def make_material_chunks(units: list[dict]) -> list[dict]:
     chunks = []
     for unit in units:
-        for start in range(0, len(unit["content"]), CHUNK_CHARS - 150):
-            chunks.append({**unit, "content": unit["content"][start:start + CHUNK_CHARS], "position": len(chunks)})
-            if start + CHUNK_CHARS >= len(unit["content"]):
-                break
+        for content in recursive_character_chunks(unit["content"]):
+            chunks.append({**unit, "content": content, "position": len(chunks)})
     return chunks
