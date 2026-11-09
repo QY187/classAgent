@@ -87,6 +87,31 @@ class CourseMaterial(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
+class MaterialProcessing(Base):
+    """课件后台处理与活动版本；重建失败时仍保留上一可用版本。"""
+    __tablename__ = "material_processing"
+
+    material_id: Mapped[str] = mapped_column(ForeignKey("course_materials.id", ondelete="CASCADE"), primary_key=True)
+    status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
+    generation: Mapped[str] = mapped_column(String(36), default=new_id)
+    active_version: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class MaterialChunk(Base):
+    __tablename__ = "material_chunks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    material_id: Mapped[str] = mapped_column(ForeignKey("course_materials.id", ondelete="CASCADE"), index=True)
+    version: Mapped[str] = mapped_column(String(36), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    locator_type: Mapped[str] = mapped_column(String(20))
+    locator_number: Mapped[int] = mapped_column(Integer)
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float]] = mapped_column(VECTOR(1536))
+
+
 class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 

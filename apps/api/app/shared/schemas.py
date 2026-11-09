@@ -86,6 +86,9 @@ class CourseMaterialRead(BaseModel):
     status: str
     size_bytes: int
     created_at: datetime
+    processing_status: str = "stored"
+    processing_error: str | None = None
+    indexed: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 

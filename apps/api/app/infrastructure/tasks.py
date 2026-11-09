@@ -13,7 +13,24 @@ celery_app = Celery("classagent", broker=get_settings().redis_url, backend=get_s
 celery_app.conf.update(task_track_started=True, result_expires=3600, beat_schedule={
     "retry-transcription-dispatch": {"task": "classagent.dispatch_transcription_retries", "schedule": 60.0},
     "recycle-bin-expiration": {"task": "classagent.clean_recycle_bin", "schedule": 600.0},
+    "material-index-dispatch": {"task": "classagent.dispatch_material_indexes", "schedule": 60.0},
 })
+
+
+@celery_app.task(name="classagent.process_material", soft_time_limit=240, time_limit=270)
+def process_material(material_id: str, generation: str) -> int:
+    from ..core.db import SessionLocal
+    from ..modules.materials.processing import process_material_content
+    with SessionLocal() as db:
+        return process_material_content(db, material_id, generation)
+
+
+@celery_app.task(name="classagent.dispatch_material_indexes")
+def dispatch_material_indexes() -> int:
+    from ..core.db import SessionLocal
+    from ..modules.materials.processing import dispatch_pending_materials
+    with SessionLocal() as db:
+        return dispatch_pending_materials(db)
 
 
 @celery_app.task(name="classagent.clean_recycle_bin")

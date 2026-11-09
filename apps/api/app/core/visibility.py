@@ -10,6 +10,11 @@ def _criteria():
     lessons = m.Lesson.__table__.alias("visible_lesson")
     quizzes = m.Quiz.__table__.alias("visible_quiz")
     questions = m.QuizQuestion.__table__.alias("visible_question")
+    materials = m.CourseMaterial.__table__.alias("visible_material")
+
+    def material_active(column):
+        return exists(select(materials.c.id).where(materials.c.id == column, materials.c.deleted_at.is_(None),
+            course_active(materials.c.course_id), or_(materials.c.lesson_id.is_(None), lesson_active(materials.c.lesson_id))).correlate_except(materials))
 
     def course_active(column):
         return exists(select(courses.c.id).where(courses.c.id == column, courses.c.deleted_at.is_(None)).correlate_except(courses))
@@ -30,6 +35,8 @@ def _criteria():
              (m.QuizQuestion, quiz_active(m.QuizQuestion.quiz_id)), (m.QuizAttempt, quiz_active(m.QuizAttempt.quiz_id))]
     rules.append((m.ChatConversation, or_(lesson_active(m.ChatConversation.lesson_id), course_active(m.ChatConversation.course_id),
         and_(m.ChatConversation.lesson_id.is_(None), m.ChatConversation.course_id.is_(None)))))
+    rules.append((m.MaterialProcessing, material_active(m.MaterialProcessing.material_id)))
+    rules.append((m.MaterialChunk, material_active(m.MaterialChunk.material_id)))
     for model in (m.AudioFile, m.ProcessingJob, m.TranscriptSegment, m.LessonSummary, m.SpeakerAlias, m.DocumentChunk, m.ReviewCard):
         rules.append((model, lesson_active(model.lesson_id)))
     for model in (m.QuizAnswer, m.QuizQuestionRetry):
