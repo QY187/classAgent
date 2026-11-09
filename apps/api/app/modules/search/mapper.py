@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
-from ...shared.models import Course, Lesson, LessonSummary, ReviewCard, TranscriptSegment
+from ...shared.models import Course, CourseMaterial, Lesson, LessonSummary, MaterialChunk, ReviewCard, TranscriptSegment
 
 
 def _snippet(text: str, query: str, width: int = 36) -> str:
@@ -56,8 +56,20 @@ def search_all(db: Session, query: str, owner_username: str, course_id: str | No
         .limit(30)
     ).all() if kind in ("all", "review_cards") else []
 
+    material_rows = []
+    if kind in ("all", "materials"):
+        from ..materials.content import active_chunks, chunk_read
+        material_scope = [CourseMaterial.course_id == course_id] if course_id else []
+        if lesson_id:
+            material_scope.append(CourseMaterial.lesson_id == lesson_id)
+        rows = db.execute(active_chunks().add_columns(CourseMaterial).join(Course, Course.id == CourseMaterial.course_id).where(
+            owned, *material_scope, MaterialChunk.content.ilike(pattern)).order_by(
+            CourseMaterial.created_at.desc(), MaterialChunk.position).limit(30)).all()
+        material_rows = [{**chunk_read(chunk, material), "snippet": _snippet(chunk.content, query)} for chunk, material in rows]
+
     return {
         "query": query,
+        "materials": material_rows,
         "courses": [{"id": course.id, "name": course.name, "semester": course.semester} for course in courses],
         "lessons": [
             {"id": lesson.id, "course_id": lesson.course_id, "course_name": lesson.course.name, "title": lesson.title, "lesson_date": lesson.lesson_date}

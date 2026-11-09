@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { errorMessage, request, requestBlob } from "../lib/api";
+import { type Material, materialHref, processingLabels } from "../lib/materials";
 
-type Material = { id: string; lesson_id: string | null; filename: string; size_bytes: number; created_at: string; status: string };
 type Preview = { filename: string; kind: "pdf" | "image" | "text"; loading: boolean; url?: string; text?: string; truncated?: boolean; error?: string };
 
 function sizeLabel(bytes: number) {
@@ -20,15 +21,36 @@ export default function CourseMaterials({ courseId, lessonId, refreshKey }: { co
   const [deleting, setDeleting] = useState<Material | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [indexBusy, setIndexBusy] = useState<string | null>(null);
   const previewRequest = useRef(0);
   const previewUrl = useRef<string | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
-  const lessonMaterials = materials.filter((material) => material.lesson_id === lessonId);
+  const lessonMaterials = materials.filter((material) => material.lesson_id === (lessonId || null));
 
   useEffect(() => {
     setLoading(true);
     request<Material[]>(`/courses/${courseId}/materials`).then(setMaterials).catch((err) => setError(errorMessage(err))).finally(() => setLoading(false));
   }, [courseId, refreshKey]);
+
+  const processing = materials.some((item) => ["queued", "processing", "indexing"].includes(item.processing_status));
+  useEffect(() => {
+    if (!processing) return;
+    const controller = new AbortController();
+    const timer = window.setInterval(() => {
+      request<Material[]>(`/courses/${courseId}/materials`, { signal: controller.signal })
+        .then((items) => { setMaterials(items); setError(""); }).catch((err) => { if (!controller.signal.aborted) setError(errorMessage(err)); });
+    }, 2500);
+    return () => { controller.abort(); window.clearInterval(timer); };
+  }, [courseId, processing]);
+
+  async function buildIndex(material: Material) {
+    setIndexBusy(material.id); setError("");
+    try {
+      const updated = await request<Material>(`/courses/${courseId}/materials/${material.id}/index`, { method: "POST" });
+      setMaterials((items) => items.map((item) => item.id === updated.id ? updated : item));
+    } catch (err) { setError(errorMessage(err)); }
+    finally { setIndexBusy(null); }
+  }
 
   useEffect(() => () => { previewRequest.current += 1; if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); }, []);
   useEffect(() => {
@@ -114,13 +136,13 @@ export default function CourseMaterials({ courseId, lessonId, refreshKey }: { co
   }
 
   return <div className="lesson-materials" id={`lesson-materials-${lessonId}`}>
-    <div className="lesson-materials-heading"><strong>本节资料</strong><span>{lessonMaterials.length} 份</span></div>
+    <div className="lesson-materials-heading"><strong>{lessonId ? "本节资料" : "课程公共资料"}</strong><span>{lessonMaterials.length} 份</span></div>
       {error && <p className="notice" role="alert">{error}</p>}
       {downloadError && <p className="notice" role="alert">下载失败：{downloadError}</p>}
-      {loading ? <p role="status" className="material-muted">正在加载资料…</p> : lessonMaterials.length === 0 ? <div className="material-empty">这节课还没有资料，点击上方“上传资料”即可添加。</div> : <div className="material-list">{lessonMaterials.map((material) => <div className="material-row" key={material.id}>
+      {loading ? <p role="status" className="material-muted">正在加载资料…</p> : lessonMaterials.length === 0 ? <div className="material-empty">还没有资料，点击上方“上传资料”即可添加。</div> : <div className="material-list">{lessonMaterials.map((material) => <div className="material-row" key={material.id}>
         <span className="material-icon" aria-hidden="true">▤</span>
-        <div className="material-info"><button type="button" className="material-name" title={material.filename} onClick={() => openPreview(material)}>{material.filename}</button><span>{sizeLabel(material.size_bytes)} · {new Date(material.created_at).toLocaleDateString("zh-CN")} · {material.status === "stored" ? "已保存" : material.status}</span></div>
-        <div className="material-actions"><button type="button" className="button button-secondary" onClick={() => openPreview(material)}>查看</button><button type="button" className="button button-secondary" onClick={() => download(material)}>下载</button><button type="button" className="button material-delete-button" onClick={() => askDelete(material)}>删除</button></div>
+        <div className="material-info"><button type="button" className="material-name" title={material.filename} onClick={() => openPreview(material)}>{material.filename}</button><span>{sizeLabel(material.size_bytes)} · {new Date(material.created_at).toLocaleDateString("zh-CN")} · {processingLabels[material.processing_status] || "已保存"}{material.indexed && material.processing_status !== "ready" ? " · 上一版本仍可问答" : ""}</span>{material.processing_error && <span role="status">{material.processing_error}</span>}</div>
+        <div className="material-actions">{material.indexed && <Link className="button button-secondary" href={materialHref({ course_id: courseId, material_id: material.id })}>问答原文</Link>}{["stored", "failed"].includes(material.processing_status || "stored") && <button type="button" className="button button-secondary" disabled={indexBusy !== null} onClick={() => buildIndex(material)}>{indexBusy === material.id ? "正在提交…" : material.processing_status === "failed" ? "重试解析" : "加入问答"}</button>}<button type="button" className="button button-secondary" onClick={() => openPreview(material)}>查看</button><button type="button" className="button button-secondary" onClick={() => download(material)}>下载</button><button type="button" className="button material-delete-button" onClick={() => askDelete(material)}>删除</button></div>
       </div>)}</div>}
     {deleting && createPortal(<div className="modal-backdrop" onMouseDown={(event) => { if (!deleteBusy && event.target === event.currentTarget) setDeleting(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="material-delete-title">
       <h2 id="material-delete-title">删除资料</h2>

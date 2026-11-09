@@ -131,16 +131,17 @@ export default function CoursePage() {
     finally { setDeleteBusy(false); }
   }
 
-  async function uploadMaterials(event: ChangeEvent<HTMLInputElement>, lesson: Lesson) {
+  async function uploadMaterials(event: ChangeEvent<HTMLInputElement>, lesson: Lesson | null) {
+    const targetId = lesson?.id || "course-materials";
     const input = event.target;
     const files = Array.from(input.files || []);
     if (!files.length || uploadingLessonId) return;
-    setUploadingLessonId(lesson.id);
+    setUploadingLessonId(targetId);
     const failures: string[] = [];
     let uploaded = 0;
     try {
       for (const [index, file] of files.entries()) {
-        setUploadStatus({ lessonId: lesson.id, text: `正在上传 ${index + 1}/${files.length}：${file.name}`, failed: false });
+        setUploadStatus({ lessonId: targetId, text: `正在上传 ${index + 1}/${files.length}：${file.name}`, failed: false });
         if (file.size === 0 || file.size > 25 * 1024 * 1024) {
           failures.push(`${file.name}：文件须为非空且不超过 25 MB`);
           continue;
@@ -148,16 +149,16 @@ export default function CoursePage() {
         try {
           const body = new FormData();
           body.append("file", file);
-          body.append("lesson_id", lesson.id);
+          if (lesson) body.append("lesson_id", lesson.id);
           await request(`/courses/${courseId}/materials`, { method: "POST", body, signal: AbortSignal.timeout(120000) });
           uploaded += 1;
         } catch (error) { failures.push(`${file.name}：${errorMessage(error)}`); }
       }
       if (uploaded) {
         setMaterialsRefreshKey((key) => key + 1);
-        setExpandedLessonId(lesson.id);
+        if (lesson) setExpandedLessonId(lesson.id);
       }
-      setUploadStatus({ lessonId: lesson.id, text: `已上传 ${uploaded} 份资料${failures.length ? `，失败 ${failures.length} 份：${failures.join("；")}` : ""}`, failed: failures.length > 0 });
+      setUploadStatus({ lessonId: targetId, text: `已上传 ${uploaded} 份资料${failures.length ? `，失败 ${failures.length} 份：${failures.join("；")}` : ""}`, failed: failures.length > 0 });
     } finally {
       input.value = "";
       setUploadingLessonId(null);
@@ -190,6 +191,7 @@ export default function CoursePage() {
       </div>
     </section>
     {message && <div className="notice" style={{ marginBottom: 16 }}>{message}</div>}
+    <section className="panel"><div className="panel-header"><div><h2>课程公共课件</h2><span className="summary-caption">供整门课程问答使用；单节课课件请在对应课次上传。</span></div><label className="button button-secondary lesson-upload"><input className="upload-input" aria-label="上传课程公共资料" type="file" multiple accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg,.webp,.txt,.md" disabled={Boolean(uploadingLessonId)} onChange={(event) => uploadMaterials(event, null)} />{uploadingLessonId === "course-materials" ? "上传中…" : "＋ 上传资料"}</label></div><div className="panel-body">{uploadStatus?.lessonId === "course-materials" && <p role="status">{uploadStatus.text}</p>}<CourseMaterials courseId={courseId} lessonId="" refreshKey={materialsRefreshKey} /></div></section>
     <section className="panel">
       <div className="panel-header"><h2>课次记录</h2><span>{lessons.length} 节课</span></div>
       <div className="panel-body">

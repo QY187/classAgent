@@ -95,3 +95,61 @@ def test_recycled_material_not_processed(material_db):
     with patch("app.modules.materials.processing.materialize_file") as read:
         assert process_material_content(db, "m", generation) == 0
         read.assert_not_called()
+
+
+def add_ready_chunk(db, *, identity="chunk", material_id="m", version="v", content="二叉树每个结点最多有两个孩子。"):
+    db.add(MaterialProcessing(material_id=material_id, status="ready", generation=version, active_version=version))
+    db.add(MaterialChunk(id=identity, material_id=material_id, version=version, position=0,
+                         locator_type="page", locator_number=3, content=content, embedding=[0.1] * 1536))
+    db.commit()
+
+
+def test_material_search_and_source_content(material_db):
+    from app.modules.search.mapper import search_all
+    from app.modules.materials.content import read_content
+    db = material_db
+    add_ready_chunk(db)
+    found = search_all(db, "二叉树", "owner", kind="materials")["materials"]
+    assert len(found) == 1 and found[0]["locator_number"] == 3
+    assert found[0]["filename"] == "讲义.txt"
+    page = read_content(db, "c", "m", "owner")
+    assert page["items"][0]["chunk_id"] == "chunk"
+    assert page["items"][0]["locator_label"] == "第 3 页"
+    assert read_content(db, "c", "m", "owner", version="old")["source_status"] == "changed"
+    with pytest.raises(Exception) as denied:
+        read_content(db, "c", "m", "not-owner")
+    assert denied.value.status_code == 401
+
+
+def test_search_owner_scope_active_version_and_recycle(material_db):
+    from app.modules.search.mapper import search_all
+    from app.modules.materials.content import read_content
+    db = material_db
+    add_ready_chunk(db)
+    db.add(User(id="other", username="other", password_hash="x"))
+    db.add(MaterialChunk(id="old", material_id="m", version="old", position=0, locator_type="page", locator_number=1,
+                         content="二叉树旧内容", embedding=[0.1] * 1536))
+    db.commit()
+    assert search_all(db, "二叉树", "other")["materials"] == []
+    assert len(search_all(db, "二叉树", "owner")["materials"]) == 1
+    assert search_all(db, "二叉树", "owner", lesson_id="different")["materials"] == []
+    material = db.get(CourseMaterial, "m")
+    material.deleted_at = now_utc()
+    db.commit()
+    assert search_all(db, "二叉树", "owner")["materials"] == []
+    with pytest.raises(Exception) as missing:
+        read_content(db, "c", "m", "owner")
+    assert missing.value.status_code == 404
+    material.deleted_at = None
+    db.commit()
+    assert len(search_all(db, "二叉树", "owner")["materials"]) == 1
+
+
+def test_course_materials_do_not_leak_into_lesson_search(material_db):
+    from app.modules.search.mapper import search_all
+    db = material_db
+    db.get(CourseMaterial, "m").lesson_id = None
+    db.commit()
+    add_ready_chunk(db)
+    assert search_all(db, "二叉树", "owner", lesson_id="l")["materials"] == []
+    assert len(search_all(db, "二叉树", "owner", course_id="c")["materials"]) == 1

@@ -4,9 +4,11 @@ import Link from "next/link";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { errorMessage, request } from "../../lib/api";
+import { materialHref, type MaterialChunk } from "../../lib/materials";
 
 type SearchResults = {
   query: string;
+  materials: (MaterialChunk & { snippet: string })[];
   courses: { id: string; name: string; semester?: string | null }[];
   lessons: { id: string; course_id: string; course_name: string; title: string; lesson_date?: string | null }[];
   transcript: { segment_id: string; lesson_id: string; course_id: string; lesson_title: string; course_name: string; speaker: string; start_ms: number; text: string; snippet: string }[];
@@ -95,13 +97,13 @@ function SearchResultsPage() {
   }, [query, courseId, kind]);
 
   const total = results
-    ? results.courses.length + results.lessons.length + results.transcript.length + results.summaries.length + results.review_cards.length
+    ? results.courses.length + results.lessons.length + results.transcript.length + results.summaries.length + results.review_cards.length + (results.materials?.length || 0)
     : 0;
 
   return (
     <main className="content page-search">
       <div className="page-heading">
-        <div><div className="eyebrow">站内检索</div><h1>全局搜索</h1><p>搜索课程、课次、文字记录、智能纪要和知识点。</p></div>
+        <div><div className="eyebrow">站内检索</div><h1>全局搜索</h1><p>搜索课程、课次、文字记录、智能纪要、知识点和课件正文。</p></div>
       </div>
 
       <form className="search-page-form" role="search" onSubmit={submitSearch}>
@@ -112,7 +114,7 @@ function SearchResultsPage() {
 
       {query && <div className="search-filter-bar" role="group" aria-label="搜索筛选">
         <label>课程<select className="field" value={courseId} onChange={(event) => updateFilter("course_id", event.target.value)}><option value="">全部课程</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</select></label>
-        <label>内容类型<select className="field" value={kind} onChange={(event) => updateFilter("kind", event.target.value)}><option value="all">全部类型</option><option value="courses">课程</option><option value="lessons">课次</option><option value="transcript">文字记录</option><option value="summaries">智能纪要</option><option value="review_cards">知识点</option></select></label>
+        <label>内容类型<select className="field" value={kind} onChange={(event) => updateFilter("kind", event.target.value)}><option value="all">全部类型</option><option value="courses">课程</option><option value="lessons">课次</option><option value="transcript">文字记录</option><option value="summaries">智能纪要</option><option value="review_cards">知识点</option><option value="materials">课件正文</option></select></label>
       </div>}
 
       {query && <p className="search-page-summary" role="status">{loading ? "正在搜索…" : error ? "搜索失败" : results ? `“${query}”找到 ${total} 条结果` : `正在搜索“${query}”`}</p>}
@@ -139,6 +141,7 @@ function SearchResultsPage() {
 
       {results && total > 0 && (
         <div className="search-results">
+          {!!results.materials?.length && <section className="panel"><div className="panel-header"><h2>课件正文</h2><span>{results.materials.length} 处命中</span></div><div className="panel-body">{results.materials.map((item) => <Link className="result-row" key={item.chunk_id} href={materialHref(item)}><div className="result-meta">{item.filename} · {item.locator_label} · 课件来源</div><div className="result-title"><Highlight text={item.snippet} query={query} /></div></Link>)}</div></section>}
           {results.courses.length > 0 && <section className="panel">
             <div className="panel-header"><div><h2>课程</h2><span className="summary-caption">{results.courses.length} 个匹配</span></div></div>
             <div className="panel-body">

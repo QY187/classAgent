@@ -15,7 +15,7 @@ router = APIRouter(tags=["search"], dependencies=[Depends(get_current_user)])
 def search(
     q: str = Query("", min_length=1),
     course_id: str | None = None,
-    kind: Literal["all", "courses", "lessons", "transcript", "summaries", "review_cards"] = "all",
+    kind: Literal["all", "courses", "lessons", "transcript", "summaries", "review_cards", "materials"] = "all",
     username: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
