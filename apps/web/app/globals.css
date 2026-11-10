@@ -488,6 +488,7 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .lesson-main { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .lesson-title { font-weight: 650; font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lesson-date { color: var(--muted); font-size: 12px; }
+.lesson-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .lesson-go { color: var(--blue); font-size: 18px; line-height: 1; transition: transform .18s; }
 .lesson-row:hover .lesson-go { transform: translateX(3px); }
 .lesson-empty-tip { padding: 8px 2px 0; }

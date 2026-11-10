@@ -5,6 +5,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { errorMessage, request } from "../../../lib/api";
 import CourseMaterials from "../../../components/CourseMaterials";
+import ResponsiveActions from "../../../components/ResponsiveActions";
 
 type Course = { id: string; name: string; semester?: string | null };
 type Lesson = { id: string; title: string; lesson_date?: string | null; status: string; created_at: string };
@@ -205,13 +206,14 @@ export default function CoursePage() {
             onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", lesson.id); setDraggedLessonId(lesson.id); setSortNotice(""); }}
             onDragEnd={() => { setDraggedLessonId(null); setDropLessonId(null); }}
             onKeyDown={(event) => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); const target = lessons[index + (event.key === "ArrowUp" ? -1 : 1)]; if (target) void moveLesson(lesson.id, target.id); } }}><span aria-hidden="true">⠿</span></button>}
-          <Link className="lesson-row-link" href={`/lessons/${lesson.id}`}><span className="lesson-index">{String(index + 1).padStart(2, "0")}</span><span className="lesson-main"><span className="lesson-title">{lesson.title}</span><span className="lesson-date">{lesson.lesson_date || "未设置日期"}</span></span></Link>
+          <Link className="lesson-row-link" href={`/lessons/${lesson.id}`}><span className="lesson-index">{String(index + 1).padStart(2, "0")}</span><span className="lesson-main"><span className="lesson-title">{lesson.title}</span><span className="lesson-meta"><span className="lesson-date">{lesson.lesson_date || "未设置日期"}</span><span className={`pill pill-${lesson.status}`}>{statusLabel[lesson.status] || lesson.status}</span></span></span></Link>
           <div className="lesson-row-actions">
+            <ResponsiveActions label={`${lesson.title}的更多操作`}>
             <button type="button" className="button button-secondary" onClick={() => openLessonEdit(lesson)} aria-label={`编辑${lesson.title}`}>编辑</button>
             <button type="button" className="button material-delete-button" onClick={() => { setDeleteError(""); setDeletingLesson(lesson); }} aria-label={`删除${lesson.title}`}>删除</button>
+            </ResponsiveActions>
             <label className={`button button-secondary lesson-upload${uploadingLessonId ? " is-disabled" : ""}`} role="button" tabIndex={uploadingLessonId ? -1 : 0} aria-label={`为${lesson.title}上传资料`} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } }}><input className="upload-input" type="file" multiple accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg,.webp,.txt,.md" onChange={(event) => uploadMaterials(event, lesson)} disabled={Boolean(uploadingLessonId)} />{uploadingLessonId === lesson.id ? "上传中…" : "＋ 上传资料"}</label>
             <button type="button" className="button button-secondary lesson-view-materials" aria-expanded={expandedLessonId === lesson.id} aria-controls={`lesson-materials-${lesson.id}`} onClick={() => setExpandedLessonId((current) => current === lesson.id ? null : lesson.id)}>{expandedLessonId === lesson.id ? "收起资料" : "查看资料"}</button>
-            <span className={`pill pill-${lesson.status}`}>{statusLabel[lesson.status] || lesson.status}</span>
             <Link className="lesson-go" href={`/lessons/${lesson.id}`} aria-label={`进入${lesson.title}`}>→</Link>
           </div>
           {uploadStatus?.lessonId === lesson.id && <div className={`lesson-upload-status${uploadStatus.failed ? " is-error" : ""}`} role="status">{uploadStatus.text}</div>}

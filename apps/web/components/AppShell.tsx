@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { apiUrl, request } from "../lib/api";
 import { clearSession, getRefreshToken, getStoredUser, isAuthenticated, redirectToLogin, type AuthUser } from "../lib/auth";
 import SearchBox from "./SearchBox";
@@ -19,15 +19,48 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [lessonInfo, setLessonInfo] = useState<LessonInfo | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const sidebarCollapsed = isMobile ? !mobileOpen : desktopCollapsed;
   useEffect(() => {
     let preference: string | null = null;
     try { preference = window.localStorage.getItem("classagent:sidebar-collapsed"); } catch {}
-    setSidebarCollapsed(preference === null ? window.matchMedia("(max-width: 640px)").matches : preference === "true");
+    setDesktopCollapsed(preference === "true");
+    const media = window.matchMedia("(max-width: 640px)");
+    const resize = () => { setIsMobile(media.matches); setMobileOpen(false); };
+    resize();
+    media.addEventListener("change", resize);
+    return () => media.removeEventListener("change", resize);
   }, []);
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!isMobile || !mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    sidebarRef.current?.querySelector<HTMLButtonElement>(".sidebar-mobile-close")?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); setMobileOpen(false); }
+      if (event.key !== "Tab") return;
+      const elements = [...(sidebarRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),[tabindex="0"]') || [])]
+        .filter(element => element.getClientRects().length > 0);
+      const first = elements[0], last = elements.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", keydown);
+      toggleRef.current?.focus({ preventScroll: true });
+    };
+  }, [isMobile, mobileOpen]);
   function toggleSidebar() {
+    if (isMobile) { setMobileOpen(open => !open); return; }
     const collapsed = !sidebarCollapsed;
-    setSidebarCollapsed(collapsed);
+    setDesktopCollapsed(collapsed);
     try { window.localStorage.setItem("classagent:sidebar-collapsed", String(collapsed)); } catch {}
   }
   const courseMatch = pathname.match(/^\/courses\/([^/]+)(?:\/.*)?$/);
@@ -97,8 +130,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const lessonTitle = lessonMatch ? lessonInfo?.title : undefined;
 
   return (
-    <div className={`app-shell${sidebarCollapsed ? " sidebar-is-collapsed" : ""}`}>
-      <aside id="app-sidebar" className={`sidebar${sidebarCollapsed ? " sidebar-collapsed" : ""}`} aria-label="左侧导航">
+    <div className={`app-shell${sidebarCollapsed ? " sidebar-is-collapsed" : ""}${isMobile && mobileOpen ? " mobile-navigation-open" : ""}`}>
+      {isMobile && mobileOpen && <button type="button" className="sidebar-backdrop" tabIndex={-1} aria-label="关闭左侧导航遮罩" onClick={() => setMobileOpen(false)} />}
+      <aside ref={sidebarRef} id="app-sidebar" className={`sidebar${sidebarCollapsed ? " sidebar-collapsed" : ""}`} aria-label="左侧导航" role={isMobile && mobileOpen ? "dialog" : undefined} aria-modal={isMobile && mobileOpen ? true : undefined} inert={isMobile && !mobileOpen ? true : undefined} onClick={(event) => { if (isMobile && (event.target as Element).closest("a[href]")) setMobileOpen(false); }}>
         {!sidebarCollapsed && <button type="button" className="sidebar-mobile-close" onClick={toggleSidebar} aria-label="关闭左侧导航" title="关闭左侧导航">×</button>}
         <Link href="/" className="brand" aria-label="ClassAgent 课程库" title="ClassAgent 课程库">
           <img className="brand-mark" src="/classagent-logo.svg" alt="" aria-hidden="true" />
@@ -132,9 +166,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <SidebarAccount user={user} pathname={pathname} collapsed={sidebarCollapsed} onLogout={logout} />
         </div>
       </aside>
-      <div className="main-area">
+      <div className="main-area" inert={isMobile && mobileOpen ? true : undefined}>
         <header className="topbar">
-          <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-controls="app-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"} title={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /><path d={sidebarCollapsed ? "m13 9 3 3-3 3" : "m16 9-3 3 3 3"} /></svg></button>
+          <button ref={toggleRef} type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-controls="app-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"} title={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /><path d={sidebarCollapsed ? "m13 9 3 3-3 3" : "m16 9-3 3 3 3"} /></svg></button>
           <nav className="breadcrumb" aria-label="当前位置">
             {courseMatch || lessonMatch || chatActive || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive || quotasActive || pendingActive || monitoringActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
             {pendingActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">待处理课次</span></>}
