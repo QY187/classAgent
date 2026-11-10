@@ -8,6 +8,7 @@ import { clearSession, getRefreshToken, getStoredUser, isAuthenticated, redirect
 import SearchBox from "./SearchBox";
 import SidebarAccount from "./SidebarAccount";
 import SidebarIcon from "./SidebarIcon";
+import SiteFooter from "./SiteFooter";
 
 type Course = { id: string; name: string };
 type LessonInfo = { course_id: string; title: string };
@@ -90,7 +91,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     window.location.href = "/login";
   }
 
-  if (isLogin) return <>{children}</>;
+  if (isLogin) return <div className="public-shell">{children}<SiteFooter /></div>;
 
   const activeCourseName = activeCourseId ? courses.find((course) => course.id === activeCourseId)?.name : undefined;
   const lessonTitle = lessonMatch ? lessonInfo?.title : undefined;
@@ -157,6 +158,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         {children}
+        <SiteFooter />
       </div>
     </div>
   );

@@ -1,0 +1,9 @@
+.main-area { display: flex; flex-direction: column; }
+.main-area > .topbar { flex-shrink: 0; }
+.main-area > .content { width: 100%; }
+.public-shell { display: flex; min-height: 100vh; min-height: 100dvh; flex-direction: column; }
+.public-shell > .login-page { flex: 1; min-height: 0; }
+.site-footer { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; margin-top: auto; padding: 14px 20px; border-top: 1px solid var(--line); color: var(--muted); background: var(--soft); text-align: center; font-size: 12px; line-height: 20px; }
+.site-footer a { color: inherit; text-decoration: none; }
+.site-footer a:hover { color: var(--blue); text-decoration: underline; }
+.site-footer a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 2px; }
