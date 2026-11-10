@@ -242,3 +242,57 @@
 .chat-failure-card p > span { font-weight: 600; }
 .chat-failure-card small { display: block; color: #9a7474; font-size: 11px; overflow-wrap: anywhere; }
 .chat-failure-card code { font-family: ui-monospace, monospace; }
+
+.chat-navigation { display: contents; }
+.chat-mobile-navigation { display: none; }
+.chat-mobile-navigation svg { width: 20px; height: 20px; }
+.chat-mobile-rename, .chat-mobile-welcome-header { display: none; }
+@media (max-width: 640px) {
+  .chat-workspace { position: relative; height: calc(var(--chat-viewport-height, 100dvh) - 64px); min-height: 0; flex: none; flex-direction: column; }
+  .chat-mobile-navigation { display: grid; place-items: center; position: absolute; left: 12px; top: 10px; z-index: 4; width: 40px; height: 40px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: #f8f9fd; color: var(--blue); }
+  .chat-mobile-navigation[aria-expanded="true"] { background: var(--blue-soft); border-color: #aab6ff; }
+  .chat-navigation { display: none; position: absolute; inset: 60px 8px auto; z-index: 18; max-height: calc(100% - 72px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 0 0 16px 16px; box-shadow: 0 16px 40px #101a322b; background: #fff; }
+  .navigation-is-open .chat-navigation { display: block; }
+  .chat-navigation .chat-tree { width: 100%; border: 0; }
+  .chat-tree-header { padding: 16px; }
+  .chat-tree-header h1 { font-size: 15px; }
+  .chat-tree-header p { display: none; }
+  .chat-tree-header .field { font-size: 16px; }
+  .chat-tree-scroll { max-height: none; overflow: visible; }
+  .chat-heading-action, .chat-list-pin, .chat-list-delete { min-width: 40px; min-height: 40px; }
+  .chat-main { flex: 1; width: 100%; min-height: 0; min-width: 0; }
+  .chat-thread-header { flex: none; flex-wrap: nowrap; min-height: 60px; gap: 8px; padding: 8px 12px 8px 62px; }
+  .chat-thread-header > .chat-thread-heading { flex: 1; min-width: 0; }
+  .chat-thread-heading > .eyebrow { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; line-height: 16px; }
+  .chat-title-editor h2 { margin: 0; min-width: 0; font-size: 14px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-title-editor > div { min-width: 0; }
+  .chat-title-editor > div > .button { display: none; }
+  .chat-title-editor form { flex-wrap: wrap; }
+  .chat-title-editor .field { width: 100%; font-size: 16px; }
+  .chat-thread-actions { width: auto; flex: none; gap: 0; }
+  .chat-thread-actions .responsive-actions { margin-left: auto; }
+  .chat-thread-header .responsive-actions-toggle { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-height: 40px; padding: 0; font-size: 0; }
+  .chat-thread-header .responsive-actions-toggle > span { font-size: 22px; line-height: 1; }
+  .chat-thread-actions .chat-mobile-rename { display: block; }
+  .chat-mobile-welcome-header { display: block; flex: none; min-height: 60px; padding: 10px 16px 10px 62px; border-bottom: 1px solid var(--line); }
+  .chat-mobile-welcome-header strong { display: block; font-size: 14px; line-height: 22px; }
+  .chat-mobile-welcome-header small { color: var(--muted); font-size: 11px; }
+  .chat-message-scroll { padding: 4px 16px 16px; overscroll-behavior: contain; }
+  .chat-message-role { flex-wrap: wrap; gap: 6px; }
+  .chat-message.user .chat-message-content { max-width: 92%; padding: 12px 14px; }
+  .chat-message.assistant .chat-message-content { padding: 14px; font-size: 14px; border-radius: 4px 14px 14px; }
+  .chat-message.assistant .chat-evidence[open] > div { padding: 0 12px; }
+  .chat-citation { gap: 8px; }
+  .chat-citation > div { min-width: 0; overflow-wrap: anywhere; }
+  .chat-thread-notice { padding: 8px 16px; max-height: 120px; overflow-y: auto; flex: none; }
+  .chat-empty-conversation { padding: 30px 8px; }
+  .chat-composer-wrap { padding: 8px 12px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid #eef0f6; }
+  .chat-composer textarea { font-size: 16px; padding: 12px 14px 0; max-height: 100px; }
+  .chat-composer-bottom { padding: 8px; gap: 8px; }
+  .chat-composer-options { min-width: 0; gap: 6px; }
+  .chat-model-control select { min-height: 36px; font-size: 16px; max-width: 180px; }
+  .chat-composer-bottom .button { min-height: 40px; padding: 8px 14px; }
+  .chat-composer-wrap > p { display: none; }
+  .chat-welcome { padding: 24px; }
+  .chat-welcome h2 { font-size: 22px; }
+}

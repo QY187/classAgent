@@ -1,13 +1,15 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { errorMessage, request } from "../../lib/api";
 import type { Conversation } from "../../lib/chat";
 
-export default function ChatTitleEditor({ conversation, disabled, onRenamed }: { conversation: Conversation; disabled: boolean; onRenamed: (item: Conversation) => void }) {
-  const [editing, setEditing] = useState(false);
+export default function ChatTitleEditor({ conversation, disabled, onRenamed, editing, onEditingChange: setEditing }: { conversation: Conversation; disabled: boolean; onRenamed: (item: Conversation) => void; editing: boolean; onEditingChange: (editing: boolean) => void }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (editing) { setDraft(conversation.title); setError(""); }
+  }, [editing, conversation.title]);
   async function save(event: FormEvent) {
     event.preventDefault(); if (busy || !draft.trim()) return;
     setBusy(true); setError("");
