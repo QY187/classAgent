@@ -489,6 +489,12 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .lesson-title { font-weight: 650; font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lesson-date { color: var(--muted); font-size: 12px; }
 .lesson-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.markdown-table-scroll { max-width: 100%; overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 10px; overscroll-behavior-x: contain; }
+.markdown-table-scroll table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.65; }
+.markdown-table-scroll th, .markdown-table-scroll td { min-width: 100px; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+.markdown-table-scroll th { background: var(--blue-soft); font-weight: 650; }
+.markdown-table-scroll tr:last-child td { border-bottom: 0; }
+.markdown-table-scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .lesson-go { color: var(--blue); font-size: 18px; line-height: 1; transition: transform .18s; }
 .lesson-row:hover .lesson-go { transform: translateX(3px); }
 .lesson-empty-tip { padding: 8px 2px 0; }

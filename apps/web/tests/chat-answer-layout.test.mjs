@@ -45,3 +45,29 @@ test("原文与用户输入中的HTML仍为文字，用户消息保留字面输�
 test("空回答不生成空的富文本容器", () => {
   assert.ok(!render("assistant", "").includes('class="markdown-body"'));
 });
+
+test("回答中的Markdown表格保留表头、对齐和行列，支持窄屏滚动", () => {
+  const html = render("assistant", "| 方法 | 根节点 |\n| :--- | ---: |\n| **先序** | 最先 |\n| 中序 | 左子树之后 |\n\n表格后的说明");
+  assert.ok(html.includes('class="markdown-table-scroll"'));
+  assert.ok(html.includes('role="region"') && html.includes('tabindex="0"'));
+  assert.equal((html.match(/<th /g) || []).length, 2);
+  assert.equal((html.match(/<td /g) || []).length, 4);
+  assert.ok(html.includes('text-align:right'));
+  assert.ok(html.includes("<strong>先序</strong>"));
+  assert.ok(html.includes("表格后的说明"));
+});
+
+test("普通竖线不被误识别为表格，单列和转义竖线可正确显示", () => {
+  assert.ok(!render("assistant", "a | b\n普通说明").includes("<table>"));
+  const html = render("assistant", "| 标题 |\n| --- |\n| 左\\|右 |");
+  assert.equal((html.match(/<th /g) || []).length, 1);
+  assert.equal((html.match(/<td /g) || []).length, 1);
+  assert.ok(html.includes("左|右"));
+});
+
+test("表格单元格的HTML仍被转义，缺失的列保持结构", () => {
+  const html = render("assistant", "| A | B |\n| --- | --- |\n| <img src=x onerror=alert(1)> |\n| 安全 | <script>alert(1)</script> |");
+  assert.equal((html.match(/<td /g) || []).length, 4);
+  assert.ok(!html.includes("<img ") && !html.includes("<script>"));
+  assert.ok(html.includes("&lt;img") && html.includes("&lt;script&gt;"));
+});

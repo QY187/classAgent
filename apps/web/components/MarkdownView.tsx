@@ -12,6 +12,11 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
   });
 }
 
+function tableCells(line: string): string[] {
+  return line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "")
+    .split(/(?<!\\)\|/).map(cell => cell.trim().replace(/\\\|/g, "|"));
+}
+
 function renderMarkdown(source: string): ReactNode[] {
   const lines = source.split("\n");
   const blocks: ReactNode[] = [];
@@ -29,8 +34,25 @@ function renderMarkdown(source: string): ReactNode[] {
     list = null;
   };
 
-  for (const raw of lines) {
+  for (let index = 0; index < lines.length; index++) {
+    const raw = lines[index];
     const line = raw.trimEnd();
+    const separators = index + 1 < lines.length ? tableCells(lines[index + 1]) : [];
+    const headers = tableCells(line);
+    if (line.includes("|") && separators.length === headers.length && separators.every(cell => /^:?-{3,}:?$/.test(cell))) {
+      flushList();
+      const rows: string[][] = [];
+      index += 1;
+      while (index + 1 < lines.length && lines[index + 1].trim() && lines[index + 1].includes("|")) {
+        rows.push(tableCells(lines[++index]));
+      }
+      const alignment = separators.map(cell => cell.startsWith(":") && cell.endsWith(":") ? "center" as const : cell.endsWith(":") ? "right" as const : "left" as const);
+      blocks.push(<div className="markdown-table-scroll" role="region" aria-label="表格，可横向滚动" tabIndex={0} key={`table-${key++}`}><table>
+        <thead><tr>{headers.map((cell, column) => <th key={column} scope="col" style={{ textAlign: alignment[column] }}>{renderInline(cell, `th-${key}-${column}`)}</th>)}</tr></thead>
+        <tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{headers.map((_, column) => <td key={column} style={{ textAlign: alignment[column] }}>{renderInline(row[column] || "", `td-${key}-${rowIndex}-${column}`)}</td>)}</tr>)}</tbody>
+      </table></div>);
+      continue;
+    }
     const heading = /^(#{1,3})\s+(.*)$/.exec(line);
     if (heading) {
       flushList();
