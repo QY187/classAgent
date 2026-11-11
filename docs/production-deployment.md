@@ -140,3 +140,5 @@ curl --fail --silent --show-error --output /dev/null https://101.200.198.62/
 正式入口为 `https://njust.shop`，HTTP 和 www 入口统一跳转至该 HTTPS 域名。备案号、版权展示、Nginx 配置、证书自动续期和域名回退说明见 `docs/domain-setup.md`。
 
 2026-11-09 的域名接入采用线上 `92935e0` 基线，仅叠加三份备案页脚前端文件；前端镜像最终为 `classagent-web:92935e0-icp-20261109-r2`。后端仍为 `classagent-api:92935e0`，不能据此认为本地新增的课件问答能力已部署。完整发布与回退记录位于 `/opt/classagent-releases/92935e0-icp-20261109-r2/`，本地验证记录位于忽略的 `test-results/domain-njust-shop-20261109/`。
+
+2026-11-10 已仅更新前端移动端布局，镜像为 `classagent-web:92935e0-mobile-6800f05-20261110`，发布目录 `/opt/classagent-releases/92935e0-mobile-6800f05-20261110/`。源码以线上 `92935e0` 业务及备案页脚为基线，叠加三笔移动端提交；资料组件仅接入兼容现有接口的手机操作菜单，没有顺带上线课件解析、替换和检索问答。后端及其余五个容器保持原标识、启动时间和挂载，Kombu 本地依赖修复未部署。实际发布源码26项测试、Linux镜像构建及类型检查通过；候选和公网390px/1440px各8项真实数据页面检查通过，无业务写入和模型调用。实际发布源码与哈希清单、构建及检查记录保存在发布目录的 `activation-evidence/`，本地报告见忽略目录 `test-results/deployment-mobile-20261110/report.md`。回退使用同目录 `rollback/docker-compose.rollback.yml`，原前端镜像保留；后续部署仍须读取实时运行状态。
