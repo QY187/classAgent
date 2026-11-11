@@ -212,6 +212,17 @@ docker compose ps
 docker compose up -d --force-recreate api worker
 ```
 
+### 后台任务启动失败（Kombu / Redis 依赖不兼容）
+
+若 Worker 或 Beat 日志出现 `ModuleNotFoundError: No module named 'packaging'`，或提示 Redis 传输要求更高版本的 redis-py，应检查间接依赖 Kombu 是否被自动升级。`apps/api/requirements.txt` 已固定 `kombu==5.4.2`，与现有 Celery 和 Redis 客户端一起使用；更新代码后重建本地镜像：
+
+```powershell
+docker compose up -d --build api worker beat
+docker compose exec worker celery -A app.infrastructure.tasks.celery_app inspect ping
+```
+
+确认 API 能正常访问、Worker 返回 `pong`，且 Beat 不再重启。无需删除数据库或上传文件的数据卷。
+
 ### 端口被占用
 
 当前默认端口：
