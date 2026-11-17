@@ -104,8 +104,8 @@ class QuizTest(unittest.TestCase):
                                           end_ms=i * 1000 + 900, text="长课次有效记录。") for i in range(100)])
             db.commit()
             segments = _source_segments(db, "c1", ["l1", "short"])
-            self.assertEqual(len(segments), 60)
-            self.assertEqual(len({segment.id for segment in segments}), 60)
+            self.assertEqual(len(segments), 105)
+            self.assertEqual(len({segment.id for segment in segments}), 105)
             self.assertEqual({segment.lesson_id for segment in segments}, {"l1", "short"})
 
     def test_quiz_scope_migration_is_repeatable_and_keeps_old_rows(self):
