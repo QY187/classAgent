@@ -348,4 +348,5 @@ def test_direct_quiz_generation_is_billed_even_if_question_validation_fails(env)
     with env.sessions() as db, patch("app.modules.quizzes.service.get_settings", return_value=SimpleNamespace(deepseek_api_key="fixture", summary_model="fixture")), patch(
         "app.modules.quizzes.service.httpx.post", return_value=response({"total_tokens": 40}, content='{"questions":[]}')), pytest.raises(HTTPException):
         generate_quiz(db, "course", QuizGenerate(count=3), "owner")
-    assert view(env)["used_tokens"] == 40
+    # 初次生成与最多两轮补题均按实际调用结算。
+    assert view(env)["used_tokens"] == 120

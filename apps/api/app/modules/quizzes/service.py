@@ -106,7 +106,8 @@ def _request_questions(segments: list[TranscriptSegment], count: int, question_t
                       "correct_option": correct, "explanation": explanation, "source": segments[source_index - 1], "evidence": evidence})
         if len(valid) == count:
             break
-    return valid
+    from .review import review_questions
+    return review_questions(valid)
 
 
 def _generate_questions(segments, count, question_type="mixed", *, focus_topics=None, source_windows=None):

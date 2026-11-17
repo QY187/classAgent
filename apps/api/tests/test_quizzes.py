@@ -184,7 +184,8 @@ class QuizTest(unittest.TestCase):
             payload["questions"][0].update(kind="single_choice", options=["有上限", "没有上限", "取决于数值", "无法判断"])
             response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"choices": [{"message": {"content": __import__("json").dumps(payload)}}]})
             with patch("app.modules.quizzes.service.get_settings", return_value=SimpleNamespace(deepseek_api_key="test", summary_model="test")), \
-                 patch("app.modules.quizzes.service.httpx.post", return_value=response):
+                 patch("app.modules.quizzes.service.httpx.post", return_value=response), \
+                 patch("app.modules.quizzes.review.review_questions", side_effect=lambda questions: questions):
                 questions = _generate_questions(segments, 5)
             self.assertEqual(len(questions), 3)
             self.assertEqual(questions[0]["source"].id, "s1")
@@ -198,7 +199,8 @@ class QuizTest(unittest.TestCase):
                       "evidence": segments[0].text[:8]} for kind in ("true_false", "single_choice") for i in range(3)]
             response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"choices": [{"message": {"content": __import__("json").dumps({"questions": items})}}]})
             with patch("app.modules.quizzes.service.get_settings", return_value=SimpleNamespace(deepseek_api_key="test", summary_model="test")), \
-                 patch("app.modules.quizzes.service.httpx.post", return_value=response):
+                 patch("app.modules.quizzes.service.httpx.post", return_value=response), \
+                 patch("app.modules.quizzes.review.review_questions", side_effect=lambda questions: questions):
                 for kind in ("true_false", "single_choice"):
                     questions = _generate_questions(segments, 5, kind)
                     self.assertEqual(len(questions), 3)
