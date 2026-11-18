@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { SummaryContent } from "../app/lessons/[lessonId]/lesson-view";
-import { buildLessonHtml, buildLessonMarkdown, buildLessonText, downloadText, printLesson } from "../lib/export";
+import { buildLessonHtml, buildLessonMarkdown, buildLessonText, downloadText, printLesson, exportFilename } from "../lib/export";
 
 type SegmentLike = { speaker: string; start_ms: number; end_ms: number; text: string };
 type LessonLike = { title: string; lesson_date?: string | null };
 type SpeakerLike = { raw_label: string; display_name: string };
 
-export default function ExportMenu({ lesson, summary, segments, speakers }: { lesson: LessonLike; summary: SummaryContent | null; segments: SegmentLike[]; speakers?: SpeakerLike[] }) {
+export default function ExportMenu({ lesson, summary, summaryHtml, segments, speakers }: { lesson: LessonLike; summary: SummaryContent | null; summaryHtml?: string | null; segments: SegmentLike[]; speakers?: SpeakerLike[] }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const speakerAliases = Object.fromEntries((speakers ?? []).map((item) => [item.raw_label, item.display_name]));
@@ -23,15 +23,15 @@ export default function ExportMenu({ lesson, summary, segments, speakers }: { le
   }, [open]);
 
   function exportMarkdown() {
-    downloadText(`${lesson.title}-课堂资料.md`, buildLessonMarkdown({ lesson, summary, segments, speakerAliases }), "text/markdown");
+    downloadText(`${exportFilename(lesson.title)}.md`, buildLessonMarkdown({ lesson, summary, summaryHtml, segments, speakerAliases }), "text/markdown");
     setOpen(false);
   }
   function exportText() {
-    downloadText(`${lesson.title}-课堂资料.txt`, buildLessonText({ lesson, summary, segments, speakerAliases }), "text/plain");
+    downloadText(`${exportFilename(lesson.title)}.txt`, buildLessonText({ lesson, summary, summaryHtml, segments, speakerAliases }), "text/plain");
     setOpen(false);
   }
   function exportPdf() {
-    printLesson(`${lesson.title}-课堂资料`, buildLessonHtml({ lesson, summary, segments, speakerAliases }));
+    printLesson(exportFilename(lesson.title), buildLessonHtml({ lesson, summary, summaryHtml, segments, speakerAliases }));
     setOpen(false);
   }
 

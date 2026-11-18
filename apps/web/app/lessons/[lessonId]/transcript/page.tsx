@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { errorMessage, apiUrl, request } from "../../../../lib/api";
 import { getToken } from "../../../../lib/auth";
 import { formatTime, Job, Lesson, Segment, stageLabel, TranscriptSegmentItem, saveSegment } from "../lesson-view";
+import { buildTranscriptText, downloadText, exportFilename } from "../../../../lib/export";
 import AudioPlayer from "../../../../components/AudioPlayer";
 
 export default function TranscriptPage() {
@@ -64,9 +65,8 @@ export default function TranscriptPage() {
   }
   function download() {
     if (!segments.length) { setMessage("当前还没有可下载的文字记录。"); return; }
-    const text = segments.map((segment) => `[${formatTime(segment.start_ms)}] ${displayName(segment.speaker)}\n${segment.text}`).join("\n\n");
-    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-    const link = document.createElement("a"); link.href = url; link.download = `${lesson?.title || "课堂"}-文字记录.txt`; link.click(); URL.revokeObjectURL(url);
+    const text = buildTranscriptText({ lesson: lesson || { title: "课堂" }, summary: null, segments, speakerAliases: aliasMap });
+    downloadText(`${exportFilename(lesson?.title || "课堂", "文字记录")}.txt`, text, "text/plain");
   }
   function toggleSpeakerManager() {
     if (!speakerOpen) setDrafts(Object.fromEntries(speakers.map((item) => [item.raw_label, item.display_name])));
