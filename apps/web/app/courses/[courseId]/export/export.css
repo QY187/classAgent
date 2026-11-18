@@ -23,3 +23,14 @@
 .export-package-preview .button-primary { width: 100%; margin: 12px 0; }
 @media (max-width: 900px) { .course-export-layout { grid-template-columns: 1fr; } }
 @media (max-width: 400px) { .export-scope { grid-template-columns: 1fr; } }
+
+.export-selection-panels { display: grid; gap: 20px; min-width: 0; }
+.export-content-options { padding: 0; margin: 0; border: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.export-content-group { border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.export-content-group:has(.export-content-choice input:checked) { background: #f8f9fe; border-color: #c8d0ed; }
+.export-content-choice,.export-answer-choice { display: flex; align-items: flex-start; gap: 10px; padding: 14px; cursor: pointer; }
+.export-content-choice input,.export-answer-choice input { flex: none; margin-top: 4px; }
+.export-content-choice span,.export-answer-choice span { font-size: 14px; line-height: 1.6; min-width: 0; overflow-wrap: anywhere; }
+.export-content-choice small,.export-answer-choice small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.export-answer-choice { border-top: 1px solid var(--line); padding-top: 12px; margin: 0 10px; padding-left: 4px; padding-right: 4px; }
+@media (max-width: 640px) { .export-content-options { grid-template-columns: 1fr; } }

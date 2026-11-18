@@ -24,3 +24,11 @@ test("截断或错误响应不生成伪ZIP下载", async () => {
   const { downloadCourseArchive } = load(async () => new Response("error", { headers: { "Content-Type": "application/zip" } }));
   await assert.rejects(downloadCourseArchive("c", "课程", { lesson_ids: null }, new AbortController().signal), /导出文件不完整/);
 });
+
+test("默认只导出纪要和文字，答案与原文件需要明确勾选", () => {
+  const { defaultExportContents, selectedExportLabels } = load();
+  assert.deepEqual(selectedExportLabels(defaultExportContents), ["智能纪要", "文字记录"]);
+  const onlyQuiz = { summaries: false, transcripts: false, knowledge: false, quizzes: true, answers: false, audio: false, materials: false };
+  assert.deepEqual(selectedExportLabels(onlyQuiz), ["小测题目"]);
+  assert.deepEqual(selectedExportLabels({ ...onlyQuiz, answers: true }), ["小测题目、答案与解析"]);
+});
