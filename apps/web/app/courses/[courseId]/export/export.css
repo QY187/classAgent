@@ -1,0 +1,25 @@
+.course-export-layout { display: grid; grid-template-columns: minmax(0, 1fr) 310px; align-items: start; gap: 20px; }
+.course-export-layout > * { min-width: 0; }
+.course-export-page .panel-header span { color: var(--muted); font-size: 12px; }
+.export-scope { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.export-scope label { display: flex; align-items: flex-start; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 16px; cursor: pointer; }
+.export-scope label:has(input:checked) { border-color: var(--blue); background: var(--blue-soft); }
+.export-scope input { margin: 4px 0 0; flex: 0 0 auto; }
+.export-scope span { font-size: 14px; font-weight: 650; }
+.export-scope small,.export-lesson-list small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; margin-top: 6px; }
+.export-hint { font-size: 12px; color: var(--muted); line-height: 1.8; }
+.export-lesson-picker { margin: 22px 0 0; border: 0; padding: 0; min-width: 0; }
+.export-lesson-picker legend { font-size: 14px; font-weight: 650; padding: 0 0 12px; }
+.export-picker-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.export-picker-tools input { flex: 1 1 200px; min-width: 0; }
+.export-lesson-list { max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; }
+.export-lesson-list label { display: flex; gap: 12px; align-items: flex-start; padding: 13px 15px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.export-lesson-list label:last-child { border-bottom: 0; }
+.export-lesson-list input { flex: none; margin-top: 4px; }
+.export-lesson-list span { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.export-package-preview strong { display: block; overflow-wrap: anywhere; }
+.export-package-preview ul { padding-left: 20px; line-height: 2; font-size: 14px; }
+.export-package-preview p { font-size: 13px; line-height: 1.8; }
+.export-package-preview .button-primary { width: 100%; margin: 12px 0; }
+@media (max-width: 900px) { .course-export-layout { grid-template-columns: 1fr; } }
+@media (max-width: 400px) { .export-scope { grid-template-columns: 1fr; } }

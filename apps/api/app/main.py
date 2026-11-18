@@ -8,6 +8,7 @@ from .core.telemetry import configure_trace_logging, configure_trace_sink
 from .core.passwords import hash_password, verify_password
 from .modules.auth.controller import router as auth_router
 from .modules.courses.controller import router as courses_router
+from .modules.exports.controller import router as exports_router
 from .modules.lessons.controller import router as lessons_router
 from .modules.lessons.controller import audio_router
 from .modules.search.controller import router as search_router
@@ -168,3 +169,5 @@ app.include_router(recycle_bin_router)
 app.include_router(chat_router)
 app.include_router(monitoring_router)
 app.include_router(quotas_router)
+
+app.include_router(exports_router)

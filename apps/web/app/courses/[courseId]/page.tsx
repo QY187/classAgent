@@ -181,6 +181,7 @@ export default function CoursePage() {
       <div className="page-hero-actions course-hero-actions">
         <Link className="button button-secondary" href={`/chat?course=${encodeURIComponent(courseId)}`}>课程问答</Link>
         <Link className="button button-secondary" href={`/courses/${courseId}/quizzes`}>课堂小测</Link>
+        <Link className="button button-secondary" href={`/courses/${courseId}/export`}>导出课程</Link>
         <button className="button button-primary" onClick={() => setShowModal(true)}>＋ 新建课次</button>
         <details className="course-manage-menu">
           <summary className="button button-secondary">管理课程</summary>
