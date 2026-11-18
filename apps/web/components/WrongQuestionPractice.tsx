@@ -77,7 +77,7 @@ export default function WrongQuestionPractice({ questions, onResult, onClose }: 
       {result ? <div className="wrong-book-feedback">
         <strong role="status">{result.is_correct ? "回答正确，已归入已巩固" : "本次答错，继续保留在待巩固"}</strong>
         <div className="quiz-result-explanation"><strong>解析</strong><p>{result.explanation}</p></div>
-        <div className="quiz-evidence"><strong>课堂依据</strong><p>{result.source_excerpt}</p>{quizSourceUrl(result) && <Link href={quizSourceUrl(result)!} target="_blank" rel="noopener noreferrer">回到文字记录 ↗</Link>}</div>
+        <div className="quiz-evidence"><strong>{result.source_material ? "课件依据" : "课堂依据"}</strong><p>{result.source_excerpt}</p>{result.source_material && <p>{result.source_material.filename} · {result.source_material.locator_label}{result.source_material.source_status !== "current" && " · 原文件已变更或不可用，以上保留出题时原文"}</p>}{quizSourceUrl(result) && <Link href={quizSourceUrl(result)!} target="_blank" rel="noopener noreferrer">{result.source_material ? "查看课件原文 ↗" : "回到文字记录 ↗"}</Link>}</div>
         <button className="button button-primary" onClick={next}>{index === roundQuestions.length - 1 ? "完成本轮" : "下一题"}</button>
       </div> : <button className="button button-primary" disabled={selection === null || busy} onClick={submit}>{busy ? "正在判分…" : error ? "重试提交" : "提交答案"}</button>}
       <p className="wrong-practice-hint">提交后查看解析，再进入下一题。提前结束时，已提交的结果会保留，未作答的题不改变状态。</p>

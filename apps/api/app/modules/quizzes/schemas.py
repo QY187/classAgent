@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class QuizGenerate(BaseModel):
+    source_type: Literal["transcript", "material"] = "transcript"
+    material_ids: list[str] | None = Field(default=None, min_length=1, max_length=50)
     lesson_id: str | None = None
     lesson_ids: list[str] | None = Field(default=None, min_length=1, max_length=50)
     count: int = Field(default=5, ge=3, le=15)
@@ -17,6 +19,10 @@ class QuizGenerate(BaseModel):
             if any(not value.strip() for value in self.lesson_ids):
                 raise ValueError("课次编号不能为空")
             self.lesson_ids = list(dict.fromkeys(self.lesson_ids))
+        if self.material_ids is not None:
+            if self.source_type != "material" or any(not value.strip() for value in self.material_ids):
+                raise ValueError("课件编号仅用于课件出题且不能为空")
+            self.material_ids = list(dict.fromkeys(self.material_ids))
         return self
 
 

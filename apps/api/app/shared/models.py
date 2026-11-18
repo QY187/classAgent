@@ -257,6 +257,7 @@ class QuizQuestion(Base):
     source_lesson_id: Mapped[str | None] = mapped_column(ForeignKey("lessons.id", ondelete="SET NULL"), nullable=True)
     source_start_ms: Mapped[int] = mapped_column(Integer)
     source_excerpt: Mapped[str] = mapped_column(Text)
+    source_material_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     quiz: Mapped[Quiz] = relationship(back_populates="questions")
 
 

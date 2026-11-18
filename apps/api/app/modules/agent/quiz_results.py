@@ -66,6 +66,10 @@ def get_quiz_attempt(db, context, args):
                         item["source_status"] = "available"
                         item["source"] = {"segment_id": segment.id, "lesson_id": lesson.id, "lesson_title": lesson.title,
                                           "start_ms": segment.start_ms, "end_ms": segment.end_ms, "excerpt": excerpt[:180]}
+        if question.get("source_material"):
+            source = question["source_material"]
+            item["source_material"] = source
+            item["source_status"] = "available" if source["source_status"] == "current" else source["source_status"]
         item["truncated"] = (len(question["stem"]) > 500 or len(question["explanation"]) > 2000
                              or any(len(option) > 200 for option in question["options"]))
         items.append(item)
@@ -128,7 +132,7 @@ class QuizResultStore:
                     lines.append(f"{index}. {row['course_name']} / {row['title']} · {display_time(row['created_at'])} · {score(row)}")
             else:
                 lines.append(f"{data['course_name']} / {data['title']} · {display_time(data['created_at'])} · {score(data)}")
-                lines.append("以下为已提交作答及出题时保存的答案、解析；课堂来源可用于再次核对。")
+                lines.append("以下为已提交作答及出题时保存的答案、解析；来源可用于再次核对。")
                 for index, row in enumerate(data["items"], args.offset + 1):
                     options = row["options"]
                     lines.append(f"{index}. {row['stem']} · {'答对' if row['is_correct'] else '答错'}\n"
@@ -136,7 +140,15 @@ class QuizResultStore:
                                  + f"\n你的选择：{'ABCD'[row['selected_option']]}. {options[row['selected_option']]}"
                                  + f"\n正确答案：{'ABCD'[row['correct_option']]}. {options[row['correct_option']]}"
                                  + f"\n历史解析：{row['explanation']}")
-                    if row["source_status"] == "available":
+                    if row.get("source_material"):
+                        source = row["source_material"]
+                        if row["source_status"] == "available":
+                            citation_id = len(citations) + 1 + citation_offset
+                            citations.append({**source, "id": citation_id})
+                            lines.append(f"课件来源：{source['filename']} · {source['locator_label']} [{citation_id}]")
+                        else:
+                            lines.append("课件来源已变化或不可用，请重新核对历史答案。")
+                    elif row["source_status"] == "available":
                         source = row["source"]
                         citation_id = len(citations) + 1 + citation_offset
                         citations.append({"id": citation_id, "lesson_id": source["lesson_id"], "lesson_title": source["lesson_title"],

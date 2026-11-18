@@ -253,6 +253,11 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .quiz-generate-body { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .quiz-generate-body .field-label { width: min(360px, 100%); }
 .quiz-generate-body .quiz-setting-count { width: min(160px, 100%); }
+.quiz-material-picker { flex-basis: 100%; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; max-height: 280px; overflow-y: auto; }
+.quiz-material-picker legend { padding: 0 6px; color: var(--muted); font-size: 13px; }
+.quiz-generate-body .quiz-material-picker .field-label { display: flex; align-items: flex-start; width: 100%; gap: 10px; padding: 8px 0; font-size: 14px; font-weight: 500; }
+.quiz-material-picker input { flex: 0 0 16px; width: 16px; height: 16px; margin: 3px 0 0; }
+.quiz-material-picker span { min-width: 0; overflow-wrap: anywhere; }
 .quiz-settings-hint { flex-basis: 100%; margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
 .quiz-lesson-picker { flex-basis: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 8px 0 0; }
 .quiz-lesson-picker legend { padding: 0 6px; color: #52617a; font-size: 13px; font-weight: 700; }

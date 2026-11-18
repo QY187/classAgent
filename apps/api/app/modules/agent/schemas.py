@@ -135,6 +135,8 @@ class QuizAttemptArguments(PageArguments):
 
 
 class QuizArguments(ToolArguments):
+    source_type: Literal["transcript", "material"] = "transcript"
+    material_ids: list[Identity] | None = Field(default=None, min_length=1, max_length=50)
     course_id: Identity
     lesson_ids: list[Identity] | None = Field(default=None, min_length=1, max_length=50)
     count: int = Field(default=5, ge=3, le=15)

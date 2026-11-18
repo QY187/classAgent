@@ -100,6 +100,21 @@ def generate_for_message(db, conversation_id, username, question_id, token, args
             elif args.lesson_ids != [lesson.id]:
                 raise HTTPException(400, "课次对话只能为当前课次出题")
         if requested:
+            if requested.get("source_type") and getattr(args, "source_type", "transcript") != requested["source_type"]:
+                raise HTTPException(400, "请按本次请求指定的资料来源出题")
+            if requested.get("materials"):
+                from ..materials.processing import owned_material
+                identities = getattr(args, "material_ids", None) or []
+                actual_names = [owned_material(db, args.course_id, identity, username).filename for identity in identities]
+                if sorted(actual_names) != sorted(requested["materials"]):
+                    raise HTTPException(400, "请先唯一定位本次指定的课件文件")
+                from ...shared.models import CourseMaterial
+                query = select(CourseMaterial.id).where(CourseMaterial.course_id == args.course_id,
+                    CourseMaterial.filename.in_(requested["materials"]))
+                if args.lesson_ids:
+                    query = query.where(CourseMaterial.lesson_id.in_(args.lesson_ids))
+                if set(db.scalars(query)) != set(identities):
+                    raise HTTPException(400, "指定课件存在同名歧义，请补充课次或明确选择文件")
             # 题量、题型和显式范围来自已验证计划；续接后也不能由工具模型擅自改变。
             if requested.get("count") is not None and args.count != requested["count"]:
                 raise HTTPException(400, "请按本次请求指定的题量生成")
@@ -128,6 +143,7 @@ def generate_for_message(db, conversation_id, username, question_id, token, args
     practice = isinstance(args, PracticeQuizArguments)
     selection = PracticeSelection(tuple(args.knowledge_point_ids), tuple(args.wrong_question_ids)) if practice else None
     result = generate_quiz(db, args.course_id, QuizGenerate(lesson_ids=None if practice else args.lesson_ids, count=args.count,
-        question_type=args.question_type), username, agent_request_key=question_id, before_save=before_save, practice=selection)
+        question_type=args.question_type, source_type=getattr(args, "source_type", "transcript"),
+        material_ids=getattr(args, "material_ids", None)), username, agent_request_key=question_id, before_save=before_save, practice=selection)
     quiz = db.scalar(select(Quiz).where(Quiz.id == result["id"]))
     return quiz_card(db, quiz)

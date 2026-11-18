@@ -12,3 +12,7 @@ def prepare_quiz_scope(engine) -> None:
     if inspector.has_table("quizzes") and "lesson_ids_json" not in {column["name"] for column in inspector.get_columns("quizzes")}:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE quizzes ADD COLUMN lesson_ids_json TEXT"))
+
+    if inspector.has_table("quiz_questions") and "source_material_json" not in {column["name"] for column in inspector.get_columns("quiz_questions")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE quiz_questions ADD COLUMN source_material_json TEXT"))

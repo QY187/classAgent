@@ -28,8 +28,11 @@ class ToolContext:
 
 def generate_quiz(db, context, args):
     from .material_tools import source_preference
-    if source_preference(context) == "material":
-        raise HTTPException(409, "当前小测仅支持课堂文字记录，课件出题尚未接入")
+    preference = source_preference(context)
+    if preference == "material":
+        args = args.model_copy(update={"source_type": "material"})
+    elif preference == "transcript" and args.source_type != "transcript":
+        raise HTTPException(403, "本次出题限定课堂记录来源")
     if context.generate_quiz is None or context.practice_only:
         raise HTTPException(403, "当前问题没有授权生成小测")
     check_course(db, context, args.course_id)

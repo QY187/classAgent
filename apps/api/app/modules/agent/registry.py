@@ -54,7 +54,7 @@ _definitions = (
     ToolDefinition("list_wrong_questions", "查询错题本，pending 待巩固、mastered 最近作答正确、all 全部。支持课程、来源课次、题干关键词和分页；wrong_count 是小测答错次数，retry_count 是错题重练次数；不返回答案。省略课程时使用当前对话范围，主对话可查全部课程。", WrongQuestionListArguments, learning.list_wrong_questions),
     ToolDefinition("list_quiz_attempts", "查询自己的已提交小测成绩，最新作答在前，可按课程、quiz_id、小测标题关键词筛选及分页。省略课程使用当前课程，主对话查询全部课程；未提交小测不计入。page_summary 只统计本页，不是全部历史。返回真实 attempt id，可继续 get_quiz_attempt 查看某次作答。", QuizAttemptListArguments, quiz_results.list_quiz_attempts),
     ToolDefinition("get_quiz_attempt", "按 list_quiz_attempts 查到的 attempt_id 分页读取已提交作答，包含实际选择、正确选项、历史解析和课堂来源状态。不能读取未提交小测答案。source_status=changed/unavailable 时不能把旧来源当作当前课堂依据；解释新的课堂结论仍需读取原文。", QuizAttemptArguments, quiz_results.get_quiz_attempt),
-    ToolDefinition("generate_quiz", "用户明确要求生成小测时使用。使用对话已绑定的课程或先查询课程，生成前查询课次；范围不明确先询问。未限定课次时使用整门课程。生成后即可答题，不返回答案。同一问题只生成一组。", QuizArguments, tools.generate_quiz, writes=True),
+    ToolDefinition("generate_quiz", "用户明确要求生成小测时使用。使用对话已绑定的课程或先查询课程，生成前查询课次；范围不明确先询问。未限定课次时使用整门课程。source_type选择transcript课堂记录或material已解析课件；指定文件先list_materials唯一定位后传material_ids，不能混入其他文件。生成后即可答题，不返回答案。同一问题只生成一组。", QuizArguments, tools.generate_quiz, writes=True),
     ToolDefinition("generate_practice_quiz", "用户明确要求根据错题或薄弱知识点出题时使用。先查询学习记录，只选择本次查到的 review（需要复习）知识点或 pending（待巩固）错题。选择一门课程，不能跨课程混合；没有记录或课堂来源时先说明，不能改为普通小测。生成新题，不返回答案。", PracticeQuizArguments, tools.generate_practice_quiz, writes=True),
 )
 TOOLS = MappingProxyType({tool.name: tool for tool in _definitions})

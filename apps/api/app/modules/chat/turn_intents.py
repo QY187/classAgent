@@ -32,7 +32,7 @@ pending_task 由后端提供，包括未完成的 intent、用户原始请求和
 每次可同时生成一组小测，也可组合多个只读查询。组合创建时 create_lesson.course 等于 create_course.name，均未知时均为 null。
 
 intent 各字段：
-source_type：用户限定只看课件/文档或指定文件用material；询问老师课堂原话、录音中怎么讲用transcript；结合两者或未限定来源用all。课件内容问题使用claims，问课件哪页或来源位置用locations，不当成产品能力咨询。首版支持课件文字检索和引用，不支持从图片理解图表或按课件出题。
+source_type：用户限定只看课件/文档或指定文件用material；询问老师课堂原话、录音中怎么讲用transcript；结合两者或未限定来源用all。课件内容问题使用claims，问课件哪页或来源位置用locations，不当成产品能力咨询。支持课件文字检索、引用和按已解析课件出单选/判断小测，不支持从图片理解图表。用户指定出题文件时quiz.materials逐字保留文件名，并设置source_type=material；薄弱点练习仍限课堂记录。
 goal：用一句话描述用户最终想得到什么，不猜答案，不列思考过程。outputs：本轮实际要展示的结果数组，必须填写。
 outputs可选claims课堂内容解答、locations主题所在课程课次/时间点、catalog课程课次目录、learning学习记录、progress课程进度、quiz_results成绩作答、workflow处理或小测记录、assistant产品身份/能力/使用帮助与礼貌交流。
 询问“你是谁”“能帮我做什么”“怎么用这个助手”、问候、致谢或超出已支持能力的咨询，使用assistant，由项目说明回答，不查询课堂资料里的助手身份。

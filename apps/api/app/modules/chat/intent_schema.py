@@ -58,6 +58,7 @@ class VerifyIntent(IntentModel):
 
 
 class QuizIntent(IntentModel):
+    materials: list[Name] | None = Field(default=None, min_length=1, max_length=50)
     mode: Literal["quiz", "practice"]
     course: Name | None = None
     lessons: list[Name] | None = Field(default=None, min_length=1, max_length=50)
@@ -156,6 +157,8 @@ class IntentPayload(IntentModel):
         if self.quiz:
             value["quiz"] = self.quiz.mode
             value["quiz_spec"] = self.quiz.model_dump(exclude={"mode"})
+            if self.source_type == "material" or self.quiz.materials:
+                value["quiz_spec"]["source_type"] = "material"
         return value
 
 

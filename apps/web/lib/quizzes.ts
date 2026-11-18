@@ -1,3 +1,5 @@
+import { materialHref } from "./materials";
+
 export type QuizQuestion = {
   id: string;
   kind: "single_choice" | "true_false";
@@ -5,7 +7,10 @@ export type QuizQuestion = {
   options: string[];
 };
 
+export type QuizMaterialSource = { course_id: string; material_id: string; filename: string; position: number; version: string; locator_label: string; source_status: "current" | "changed" | "unavailable" };
+
 export type QuizSource = {
+  source_material?: QuizMaterialSource;
   source_lesson_id: string | null;
   source_start_ms: number;
   source_excerpt: string;
@@ -26,6 +31,7 @@ export type WrongQuestion = QuizQuestion & Pick<QuizSource, "source_lesson_id" |
 };
 
 export type WrongQuestionResult = {
+  source_material?: QuizMaterialSource;
   id: string;
   question_id: string;
   selected_option: number;
@@ -59,6 +65,7 @@ export type QuizAttempt = QuizAttemptItem & {
   questions: (QuizQuestion & QuizSource & { selected_option: number; correct_option: number; is_correct: boolean; explanation: string; source_segment_id: string | null })[];
 };
 
-export function quizSourceUrl(question: Pick<QuizSource, "source_lesson_id" | "source_start_ms">): string | null {
+export function quizSourceUrl(question: Pick<QuizSource, "source_lesson_id" | "source_start_ms" | "source_material">): string | null {
+  if (question.source_material) return question.source_material.source_status === "current" ? materialHref(question.source_material) : null;
   return question.source_lesson_id ? `/lessons/${question.source_lesson_id}/transcript?t=${question.source_start_ms}` : null;
 }

@@ -8,6 +8,7 @@ from ...core.config import get_settings
 from ...core.model_budget import quota_chat_post
 from ...core.telemetry import annotate, record_usage, traced
 from ..summaries.service import _parse_json
+from .generation import model_timeout
 
 
 @traced("model.quiz_review", kind="model")
@@ -30,7 +31,7 @@ def review_questions(questions):
             headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
             json={"model": settings.summary_model, "temperature": 0,
                   "messages": [{"role": "system", "content": "你是严格的独立试题审核员，只输出JSON。"},
-                               {"role": "user", "content": prompt}]}, timeout=120, purpose="quiz_review")
+                               {"role": "user", "content": prompt}]}, timeout=model_timeout(), purpose="quiz_review")
         response.raise_for_status()
         body = response.json()
         record_usage(body.get("usage"))
