@@ -5,18 +5,13 @@ class ExportContents(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     summaries: bool = True
     transcripts: bool = True
-    knowledge: bool = False
-    quizzes: bool = False
-    answers: bool = False
-    audio: bool = False
-    materials: bool = False
+    knowledge: bool = True
+    quizzes: bool = True
 
     @model_validator(mode="after")
     def valid_selection(self):
-        if not any((self.summaries, self.transcripts, self.knowledge, self.quizzes, self.audio, self.materials)):
+        if not any((self.summaries, self.transcripts, self.knowledge, self.quizzes)):
             raise ValueError("请至少选择一种导出内容")
-        if self.answers and not self.quizzes:
-            raise ValueError("附带答案需要同时选择小测")
         return self
 
 

@@ -11,9 +11,8 @@ from sqlalchemy import select
 
 from app.modules.exports.schemas import CourseExport, ExportContents
 from app.modules.exports.service import Archive, build_course_archive
-from app.modules.exports.extras import add_binary
 from app.shared.models import AudioFile, CourseMaterial, Quiz, QuizQuestion, ReviewCard
-from test_course_export import export_db
+from test_course_export import export_db, pdf_text
 
 
 @pytest.fixture
@@ -47,133 +46,53 @@ def archive_bytes(db,contents,ids=None):
 
 
 def selection(**values):
-    return ExportContents(summaries=False,transcripts=False,**values)
+    return ExportContents(**({key: False for key in ['summaries','knowledge','quizzes','transcripts']} | values))
 
 
 def test_only_selected_contents_and_lesson_scope_are_archived(rich_export):
-    db,root=rich_export
-    files=archive_bytes(db,selection(knowledge=True),['first'])
-    assert set(files)=={'001_同名课次/知识点.md','课程目录.md'}
-    text=files['001_同名课次/知识点.md'].decode()
-    assert '卡片独有内容'in text and '需要复习'in text and '卡片来源'in text
-    assert '不应导出B'not in text
-    assert not any(name.endswith(('.mp3','.txt'))for name in files)
+    db, _ = rich_export
+    files = archive_bytes(db, selection(knowledge=True), ['first'])
+    assert set(files) == {'001_同名课次/知识点.pdf', '课程目录.pdf'}
+    text = pdf_text(files['001_同名课次/知识点.pdf'])
+    assert '卡片独有内容' in text and '需要复习' in text and '卡片来源' in text
+    assert '不应导出B' not in text
 
 
-def test_practice_and_answer_exports_are_separate_and_quizzes_obey_scope(rich_export):
-    db,_=rich_export
-    practice=archive_bytes(db,selection(quizzes=True),['first'])
-    quiz_files=[(name,data.decode())for name,data in practice.items()if '小测/'in name]
-    assert len(quiz_files)==1 and 'solo-a'in quiz_files[0][0]
-    text=quiz_files[0][1]
-    assert '选项甲'in text and '解析独有内容'not in text and '出题原文独有内容'not in text and '**正确答案**'not in text
-    answered=archive_bytes(db,selection(quizzes=True,answers=True),['first'])
-    answer=next(data.decode()for name,data in answered.items()if '小测/'in name)
-    assert '**正确答案**：A. 选项甲'in answer and '解析独有内容' in answer
-    assert '出题原文独有内容' in answer
-    both=archive_bytes(db,selection(quizzes=True),['first','second'])
-    assert any('multi小测'in name for name in both)
-    assert not any('course小测' in name or 'multi-hidden' in name or 'deleted小测' in name for name in both)
-    all_course=archive_bytes(db,selection(quizzes=True))
-    assert any('course小测'in name for name in all_course)
-    assert not any('multi-hidden'in name or 'deleted小测'in name for name in all_course)
+def test_question_only_pdf_and_scope(rich_export):
+    db, _ = rich_export
+    files = archive_bytes(db, selection(quizzes=True), ['first'])
+    assert len(files) == 2
+    text = pdf_text(files['001_同名课次/小测题目.pdf'])
+    assert 'solo-a题目' in text and '选项甲' in text
+    assert '解析独有内容' not in text and '出题原文独有内容' not in text
+    assert 'solo-b题目' not in text and 'course题目' not in text
+    both = archive_bytes(db, selection(quizzes=True), ['first','second'])
+    shared = pdf_text(both['课程公共资料/小测题目.pdf'])
+    assert 'multi题目' in shared and 'course题目' not in shared
+    all_course = archive_bytes(db, selection(quizzes=True))
+    combined = ''.join(pdf_text(data) for data in all_course.values())
+    assert 'course题目' in combined and 'multi-hidden题目' not in combined and 'deleted题目' not in combined
+    assert '解析独有内容' not in combined and '出题原文独有内容' not in combined
 
 
-def test_binary_files_keep_bytes_names_and_include_public_materials(rich_export):
-    db,root=rich_export
-    files=archive_bytes(db,selection(audio=True,materials=True),['first'])
-    binary={name:data for name,data in files.items()if name.endswith(('.mp3','.txt'))}
-    assert len(binary)==4
-    assert set(binary.values())=={(root/key).read_bytes()for key in ['audio-a','audio-a2','public','material-a']}
-    assert sum(name.endswith('_录音.mp3')for name in binary)==2
-    assert any(name.startswith('课程公共资料/')for name in binary)
-    assert not any('未选'in name or '回收站'in name or '他人'in name for name in files)
-    db.get(CourseMaterial,'material-a').filename='很长的文件名'*40+'.txt';db.commit()
-    files=archive_bytes(db,selection(materials=True),['first'])
-    assert all(Path(name).suffix=='.txt'for name in files if '/上传课件/'in name)
-    assert all(len(Path(name).name)<=84 for name in files)
+def test_defaults_four_pdfs_never_include_originals(rich_export):
+    db, _ = rich_export
+    files = archive_bytes(db, ExportContents())
+    assert len(files) == 10 and all(name.endswith('.pdf') for name in files)
+    assert all(set(name.rsplit('/',1)[-1] for name in files if name.startswith(folder)) == {'智能纪要.pdf','知识点.pdf','小测题目.pdf','文字记录.pdf'} for folder in ['001_', '002_'])
+    assert set(ExportContents().model_dump().values()) == {True}
 
 
-def test_missing_originals_are_listed_without_server_paths(rich_export):
-    db,root=rich_export
-    (root/'material-a').unlink()
-    files=archive_bytes(db,selection(materials=True),['first'])
-    index=files['课程目录.md'].decode()
-    assert '原文件缺失提醒'in index and '讲义'in index and '原文件不存在'in index
-    assert str(root)not in index and 'object_key'not in index
-    assert not any(name.endswith('_讲义.txt')and not name.startswith('课程公共资料')for name in files)
+def test_invalid_content_combinations_are_rejected():
+    for values in [dict(summaries=False,knowledge=False,quizzes=False,transcripts=False),dict(answers=True),dict(audio=False),dict(materials=False),dict(quizzes='true'),dict(unknown=True)]:
+        with pytest.raises(ValidationError): ExportContents(**values)
 
 
-def test_empty_and_invalid_content_combinations_are_rejected():
-    for values in [dict(summaries=False,transcripts=False),dict(summaries=False,transcripts=False,answers=True),dict(quizzes=False,answers=True),dict(audio='true'),dict(unknown=True)]:
-        with pytest.raises(ValidationError):ExportContents(**values)
-    assert ExportContents().summaries and ExportContents().transcripts
-    assert not ExportContents().audio and not ExportContents().answers
-
-
-def test_oversized_originals_fail_before_reading_and_cleanup(rich_export,tmp_path):
-    db,_=rich_export
-    db.get(AudioFile,'audio-a').size_bytes=513*1024*1024;db.commit()
+def test_pdf_failure_removes_partial_zip(export_db,tmp_path):
     import tempfile
-    output=tmp_path/'temp';output.mkdir()
-    with patch('app.modules.exports.service.mkstemp',side_effect=lambda **kwargs:tempfile.mkstemp(dir=output,**kwargs)),patch('app.modules.exports.extras.add_binary')as read:
-        with pytest.raises(HTTPException)as error:archive_bytes(db,selection(audio=True),['first'])
-    assert error.value.status_code==413 and not list(output.iterdir())
-    read.assert_not_called()
-
-
-def test_s3_stream_closes_resources_on_success_and_failure(tmp_path):
-    archive=Archive(tmp_path/'test.zip')
-    record=SimpleNamespace(object_key='key',size_bytes=4)
-    settings=SimpleNamespace(storage_backend='s3',s3_bucket='bucket')
-    response=Mock();response.stream.return_value=iter([b'ab',b'cd'])
-    with patch('app.modules.exports.extras.get_settings',return_value=settings),patch('app.modules.exports.extras.get_client',return_value=SimpleNamespace(get_object=lambda *_:response)):
-        assert add_binary(archive,record,'音频.mp3')
-    response.close.assert_called_once();response.release_conn.assert_called_once();archive.close()
-    with ZipFile(tmp_path/'test.zip')as z:assert z.read('音频.mp3')==b'abcd'
-    archive=Archive(tmp_path/'failed.zip');response=Mock()
-    def broken(*args):yield b'part';raise OSError('private server address')
-    response.stream.side_effect=broken
-    with patch('app.modules.exports.extras.get_settings',return_value=settings),patch('app.modules.exports.extras.get_client',return_value=SimpleNamespace(get_object=lambda *_:response)),pytest.raises(HTTPException)as error:
-        add_binary(archive,record,'音频.mp3')
-    assert 'private server'not in error.value.detail
-    response.close.assert_called_once();response.release_conn.assert_called_once();archive.close()
-
-
-def test_binary_path_escape_is_rejected_and_archive_removed(rich_export,tmp_path):
-    db,_=rich_export
-    db.get(AudioFile,'audio-a').object_key='../outside';db.commit()
-    with pytest.raises(HTTPException)as error:archive_bytes(db,selection(audio=True),['first'])
-    assert error.value.status_code==503
-
-
-def test_material_quiz_answers_keep_position_and_stale_source_warning(rich_export):
-    from app.shared.models import MaterialChunk, MaterialProcessing
-    db,_=rich_export
-    material=db.get(CourseMaterial,'material-a')
-    db.add(MaterialProcessing(material_id=material.id,status='ready',active_version='v1'))
-    db.add(MaterialChunk(id='chunk',material_id=material.id,version='v1',position=0,locator_type='page',locator_number=3,content='可核对的课件引用内容',embedding=[0.0]*1536))
-    question=db.scalar(select(QuizQuestion).where(QuizQuestion.quiz_id=='solo-a'))
-    question.source_material_json=json.dumps({'source_type':'material','course_id':'c','material_id':material.id,'chunk_id':'chunk','version':'v1','filename':material.filename,'locator_label':'第3页','snippet':'课件引用内容'})
-    question.source_excerpt='课件引用内容';db.commit()
-    files=archive_bytes(db,selection(quizzes=True,answers=True),['first'])
-    answer=next(value.decode()for name,value in files.items()if '/小测/'in name)
-    assert '第3页'in answer and '当前可核对'in answer and '课件引用内容'in answer
-    db.get(MaterialProcessing,material.id).active_version='v2';db.commit()
-    files=archive_bytes(db,selection(quizzes=True,answers=True),['first'])
-    assert '原文件已变更或不可用'in next(value.decode()for name,value in files.items()if '/小测/'in name)
-
-
-def test_public_files_export_even_when_course_has_no_lessons(rich_export):
-    db,root=rich_export
-    (root/'empty-file').write_bytes(b'original')
-    db.add(CourseMaterial(id='empty-file',course_id='empty',filename='课程说明.txt',content_type='text/plain',object_key='empty-file',size_bytes=8));db.commit()
-    path,_=build_course_archive(db,'empty',CourseExport(contents=selection(materials=True)),'owner')
-    try:
-        with ZipFile(path)as archive:
-            assert archive.read('课程公共资料/上传课件/001_课程说明.txt')==b'original'
-            assert len(archive.namelist())==2
-    finally:path.unlink()
+    with patch('app.modules.exports.service.mkstemp',side_effect=lambda **kwargs:tempfile.mkstemp(dir=tmp_path,**kwargs)), patch('app.modules.exports.service.render_pdf',side_effect=HTTPException(503,'PDF生成失败')), pytest.raises(HTTPException):
+        build_course_archive(export_db,'c',CourseExport(),'owner')
+    assert not list(tmp_path.iterdir())
 
 
 def test_file_count_limit_removes_partial_zip(rich_export,tmp_path):
@@ -196,3 +115,20 @@ def test_scope_changed_during_export_does_not_return_old_archive(export_db,tmp_p
     with patch('app.modules.exports.service.mkstemp',side_effect=lambda **kwargs:tempfile.mkstemp(dir=tmp_path,**kwargs)),patch('app.modules.exports.service.summary_markdown',side_effect=mutate),pytest.raises(HTTPException):
         build_course_archive(export_db,'c',CourseExport(lesson_ids=['first']),'owner')
     assert not list(tmp_path.iterdir())
+
+
+def test_long_pdf_has_embedded_chinese_font_page_numbers_and_limit():
+    from io import BytesIO
+    from pypdf import PdfReader
+    from app.modules.exports.pdf import render_pdf
+    content = '# 分页校验\n\n' + '\n\n'.join(f'## 第{i}段\n\n' + '中文正文与数学概念，保持完整可阅读。'*15 for i in range(30))
+    data = render_pdf(content)
+    reader = PdfReader(BytesIO(data))
+    assert len(reader.pages) > 2
+    for index, page in enumerate(reader.pages, 1):
+        assert f'{index} / {len(reader.pages)}' in page.extract_text()
+    fonts = reader.pages[0]['/Resources']['/Font'].get_object().values()
+    assert any('/FontFile2' in ref.get_object().get('/FontDescriptor', {}).get_object() for ref in fonts if ref.get_object().get('/FontDescriptor'))
+    with patch('app.modules.exports.pdf.MAX_PAGES',1), pytest.raises(HTTPException) as error:
+        render_pdf(content)
+    assert error.value.status_code == 413

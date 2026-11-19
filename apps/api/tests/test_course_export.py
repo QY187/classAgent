@@ -6,6 +6,8 @@ from unittest.mock import patch
 from zipfile import ZipFile
 import json
 
+from pypdf import PdfReader
+
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -47,24 +49,27 @@ def read_archive(db, payload=None, **kwargs):
         path.unlink()
 
 
+def pdf_text(data):
+    assert data.startswith(b"%PDF-")
+    return "\n".join(page.extract_text() for page in PdfReader(BytesIO(data)).pages)
+
+
 def test_zip_uses_course_order_unique_safe_names_and_current_edits(export_db):
-    files=read_archive(export_db)
-    assert list(files)==['001_同名课次/智能纪要.md','001_同名课次/文字记录.txt','002_同名课次/智能纪要.md','002_同名课次/文字记录.txt','课程目录.md']
-    summary=files['002_同名课次/智能纪要.md'].decode()
-    assert '我的修改' in summary and '- 复习重点' in summary
+    files = read_archive(export_db)
+    assert len(files) == 9 and all(name.endswith('.pdf') for name in files)
+    assert list(files)[0] == '001_同名课次/智能纪要.pdf'
+    summary = pdf_text(files['002_同名课次/智能纪要.pdf'])
+    assert '我的修改' in summary and '复习重点' in summary
     assert 'secretBad' not in summary and 'external.test' not in summary
-    text=files['002_同名课次/文字记录.txt']
-    assert text.startswith(b'\xef\xbb\xbf')
-    assert '01:00:00 - 01:00:05  |  老师' in text.decode('utf-8-sig')
-    assert b'\r\n' in text
-    assert '已删除内容' not in ''.join(value.decode('utf-8-sig') for value in files.values())
-    assert '%E5%90%8C' in files['课程目录.md'].decode()
+    text = pdf_text(files['002_同名课次/文字记录.pdf'])
+    assert '01:00:00 - 01:00:05 | 老师' in text
+    assert '已删除内容' not in ''.join(pdf_text(value) for value in files.values())
     assert all('..' not in name and not name.startswith('/') for name in files)
 
 
 def test_selected_scope_excludes_unselected_and_rejects_foreign_or_deleted(export_db):
     files=read_archive(export_db,CourseExport(lesson_ids=['first']))
-    assert len(files)==3 and '唯一的课堂原文' in files['001_同名课次/文字记录.txt'].decode('utf-8-sig')
+    assert len(files)==5 and '唯一的课堂原文' in pdf_text(files['001_同名课次/文字记录.pdf'])
     for ids in [['foreign'],['deleted'],['missing']]:
         with pytest.raises(HTTPException) as error:read_archive(export_db,CourseExport(lesson_ids=ids))
         assert error.value.status_code==400
@@ -79,11 +84,11 @@ def test_empty_course_and_missing_material_are_explicit(export_db):
     path,_=build_course_archive(export_db,'empty',CourseExport(),'owner')
     try:
         with ZipFile(path) as archive:
-            assert archive.namelist()==['课程目录.md']
-            assert '暂无可导出的课次' in archive.read('课程目录.md').decode()
+            assert archive.namelist()==['课程目录.pdf']
+            assert '暂无可导出的课次' in pdf_text(archive.read('课程目录.pdf'))
     finally:path.unlink()
     files=read_archive(export_db,CourseExport(lesson_ids=['second']))
-    assert '暂无已保存的智能纪要' in files['001_同名课次/智能纪要.md'].decode()
+    assert '暂无已保存的智能纪要' in pdf_text(files['001_同名课次/智能纪要.pdf'])
 
 
 def test_failed_build_removes_partial_archive(export_db,tmp_path):

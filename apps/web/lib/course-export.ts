@@ -1,17 +1,15 @@
 import { authorizedResponse } from "./api";
 
-export type ExportContents = { summaries: boolean; transcripts: boolean; knowledge: boolean; quizzes: boolean; answers: boolean; audio: boolean; materials: boolean };
-export const defaultExportContents: ExportContents = { summaries: true, transcripts: true, knowledge: false, quizzes: false, answers: false, audio: false, materials: false };
+export type ExportContents = { summaries: boolean; knowledge: boolean; quizzes: boolean; transcripts: boolean };
+export const defaultExportContents: ExportContents = { summaries: true, knowledge: true, quizzes: true, transcripts: true };
 export const exportContentChoices = [
-  { key: "summaries", label: "智能纪要", description: "Markdown · 保留已保存的手动修改" },
-  { key: "transcripts", label: "文字记录", description: "TXT · 含说话人和片段起止时间" },
-  { key: "knowledge", label: "知识点", description: "Markdown · 含内容、掌握状态和来源" },
-  { key: "quizzes", label: "小测题目", description: "Markdown · 可另选参考答案与解析" },
-  { key: "audio", label: "原音频", description: "原始文件 · 资料包可能较大" },
-  { key: "materials", label: "上传课件", description: "原始文件 · 包含课程公共课件" },
+  { key: "summaries", label: "智能纪要", description: "PDF · 保留已保存的手动修改" },
+  { key: "knowledge", label: "知识点", description: "PDF · 含内容、掌握状态和来源" },
+  { key: "quizzes", label: "小测题目", description: "PDF · 仅题目与选项，不含答案解析" },
+  { key: "transcripts", label: "文字记录", description: "PDF · 含说话人和片段起止时间" },
 ] as const;
 export function selectedExportLabels(contents: ExportContents): string[] {
-  return exportContentChoices.filter((choice) => contents[choice.key]).map((choice) => choice.key === "quizzes" && contents.answers ? "小测题目、答案与解析" : choice.label);
+  return exportContentChoices.filter((choice) => contents[choice.key]).map((choice) => choice.label);
 }
 export type CourseExportOptions = { lesson_ids: string[] | null; contents?: ExportContents };
 

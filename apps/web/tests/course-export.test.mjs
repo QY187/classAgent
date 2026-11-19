@@ -25,10 +25,11 @@ test("截断或错误响应不生成伪ZIP下载", async () => {
   await assert.rejects(downloadCourseArchive("c", "课程", { lesson_ids: null }, new AbortController().signal), /导出文件不完整/);
 });
 
-test("默认只导出纪要和文字，答案与原文件需要明确勾选", () => {
-  const { defaultExportContents, selectedExportLabels } = load();
-  assert.deepEqual(selectedExportLabels(defaultExportContents), ["智能纪要", "文字记录"]);
-  const onlyQuiz = { summaries: false, transcripts: false, knowledge: false, quizzes: true, answers: false, audio: false, materials: false };
-  assert.deepEqual(selectedExportLabels(onlyQuiz), ["小测题目"]);
-  assert.deepEqual(selectedExportLabels({ ...onlyQuiz, answers: true }), ["小测题目、答案与解析"]);
+test("默认只包含四项PDF内容并全部勾选", () => {
+  const { defaultExportContents, selectedExportLabels, exportContentChoices } = load();
+  assert.deepEqual(selectedExportLabels(defaultExportContents), ["智能纪要", "知识点", "小测题目", "文字记录"]);
+  assert.equal(Object.keys(defaultExportContents).length, 4);
+  assert.ok(Object.values(defaultExportContents).every(Boolean));
+  assert.ok(exportContentChoices.every(choice => choice.description.startsWith("PDF")));
+  assert.deepEqual(selectedExportLabels({ summaries: false, knowledge: false, quizzes: true, transcripts: false }), ["小测题目"]);
 });
