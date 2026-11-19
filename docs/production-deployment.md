@@ -142,3 +142,13 @@ curl --fail --silent --show-error --output /dev/null https://101.200.198.62/
 2026-11-09 的域名接入采用线上 `92935e0` 基线，仅叠加三份备案页脚前端文件；前端镜像最终为 `classagent-web:92935e0-icp-20261109-r2`。后端仍为 `classagent-api:92935e0`，不能据此认为本地新增的课件问答能力已部署。完整发布与回退记录位于 `/opt/classagent-releases/92935e0-icp-20261109-r2/`，本地验证记录位于忽略的 `test-results/domain-njust-shop-20261109/`。
 
 2026-11-10 已仅更新前端移动端布局，镜像为 `classagent-web:92935e0-mobile-6800f05-20261110`，发布目录 `/opt/classagent-releases/92935e0-mobile-6800f05-20261110/`。源码以线上 `92935e0` 业务及备案页脚为基线，叠加三笔移动端提交；资料组件仅接入兼容现有接口的手机操作菜单，没有顺带上线课件解析、替换和检索问答。后端及其余五个容器保持原标识、启动时间和挂载，Kombu 本地依赖修复未部署。实际发布源码26项测试、Linux镜像构建及类型检查通过；候选和公网390px/1440px各8项真实数据页面检查通过，无业务写入和模型调用。实际发布源码与哈希清单、构建及检查记录保存在发布目录的 `activation-evidence/`，本地报告见忽略目录 `test-results/deployment-mobile-20261110/report.md`。回退使用同目录 `rollback/docker-compose.rollback.yml`，原前端镜像保留；后续部署仍须读取实时运行状态。
+
+## 八、出题与资料导出部署（2026-11-21）
+
+已将完整提交 `fc924f5549bc26b7cb923c3f79dd29ad69e06e3e` 部署至 `https://njust.shop`。发布目录 `/opt/classagent-releases/fc924f5-20261121`，前端镜像 `classagent-web:fc924f5`，api、worker、beat 共用 `classagent-api:fc924f5`。本次包含课件出题所需的已推送课件解析、检索与替换能力，以及后台Kombu依赖修复；不再沿用上一版仅适配旧后端的移动端补丁。源码从该Git提交导出，无额外业务补丁。
+
+前后端均在本机构建Linux amd64生产镜像，后端固定依赖与pip check、前端生产构建及类型检查通过；复用同源码已有回归结果。镜像及源码归档校验通过，候选API的158份源码/依赖哈希与发布输入一致，候选服务及新增结构检查通过。数据库新增三张课件处理表和小测课件引用可空字段；更新前保存并验证了 `rollback/database-before.dump`。生产env、数据挂载保持不变，PostgreSQL和Redis未重建。后台无active/reserved任务时完成正常切换。
+
+公网代表性验收通过：上传文字课件、真实Worker解析及索引、Agent生成3道判断题、独立答案审核、作答及来源定位；匿名/越权保护、重放不重复计费与另一用户额度隔离通过。390/1440各5项共10项页面检查通过，涵盖文件选择、成绩引用、手动编辑纪要导出和PDF打印。四个应用无重启循环或新增关键日志错误，首页、登录页与健康接口正常。临时账号、资料、测验、消息、额度与追踪已清理，原27张表行数与发布前完全一致。
+
+回退覆盖文件为本次发布目录下 `rollback/docker-compose.rollback.yml`，旧镜像及数据库备份保留；回退应用不自动覆盖数据库。完整说明和证据保存在本地忽略目录 `test-results/deployment-fc924f5-20261121/` 及线上发布目录的 `activation-evidence/`。本次只做代表性模型路径验收，不等于全场景出题质量评测。
