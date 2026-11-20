@@ -49,7 +49,9 @@ class Archive:
 
     def document(self, name, content, plain=False):
         self.check(files=1)
-        data = render_pdf(content, plain=plain, check=self.check)
+        document_type = {"智能纪要.pdf": "summary", "知识点.pdf": "knowledge", "小测题目.pdf": "quiz",
+                         "文字记录.pdf": "transcript", "课程目录.pdf": "index"}.get(name.rsplit("/", 1)[-1], "summary")
+        data = render_pdf(content, plain=plain, document_type=document_type, check=self.check)
         self.check(len(data), 1)
         self.zip.writestr(name, data)
         self.bytes += len(data)
