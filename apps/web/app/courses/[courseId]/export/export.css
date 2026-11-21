@@ -33,3 +33,10 @@
 .export-content-choice span { font-size: 14px; line-height: 1.6; min-width: 0; overflow-wrap: anywhere; }
 .export-content-choice small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
 @media (max-width: 640px) { .export-content-options { grid-template-columns: 1fr; } }
+
+.export-pdf-preview { margin-top: 24px; min-width: 0; }
+.export-preview-controls { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.export-preview-controls label { display: grid; gap: 8px; flex: 1 1 220px; min-width: 0; }
+.export-preview-controls select { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel, #fff); color: inherit; }
+.export-preview-frame { display: block; width: 100%; height: 75vh; min-height: 400px; margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; }
+@media (max-width: 640px) { .export-pdf-preview .panel-header { flex-wrap: wrap; gap: 12px; } .export-preview-frame { display: none; } }

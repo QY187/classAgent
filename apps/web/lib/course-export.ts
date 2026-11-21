@@ -33,3 +33,15 @@ export async function downloadCourseArchive(courseId: string, title: string, opt
     document.body.append(link); link.click(); link.remove();
   } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
 }
+
+export async function previewCourseExport(courseId: string, options: CourseExportOptions, signal: AbortSignal, document?: string): Promise<string[] | Blob> {
+  const query = document === undefined ? "" : `?document=${encodeURIComponent(document)}`;
+  const response = await authorizedResponse(`/courses/${encodeURIComponent(courseId)}/export/preview${query}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(options), signal,
+  });
+  if (document === undefined) return (await response.json()).documents;
+  if (!response.headers.get("Content-Type")?.startsWith("application/pdf")) throw new Error("未收到可用的PDF，请重试。");
+  const blob = await response.blob();
+  if (await blob.slice(0, 5).text() !== "%PDF-") throw new Error("PDF文件不完整，请重试。");
+  return blob;
+}
