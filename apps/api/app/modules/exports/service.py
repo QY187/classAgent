@@ -35,8 +35,10 @@ def safe_name(value, fallback="未命名"):
 
 
 class Archive:
-    def __init__(self, path):
+    def __init__(self, path, preview_document=None):
         self.zip = ZipFile(path, "w", compression=ZIP_DEFLATED, compresslevel=3, allowZip64=True)
+        # None为完整ZIP；空字符串仅枚举；指定名称仅渲染该PDF，复用全部范围与内容校验。
+        self.preview_document = preview_document
         self.bytes = 0
         self.files = 0
         self.deadline = monotonic() + MAX_SECONDS
@@ -51,7 +53,7 @@ class Archive:
         self.check(files=1)
         document_type = {"智能纪要.pdf": "summary", "知识点.pdf": "knowledge", "小测题目.pdf": "quiz",
                          "文字记录.pdf": "transcript", "课程目录.pdf": "index"}.get(name.rsplit("/", 1)[-1], "summary")
-        data = render_pdf(content, plain=plain, document_type=document_type, check=self.check)
+        data = render_pdf(content, plain=plain, document_type=document_type, check=self.check) if self.preview_document is None or self.preview_document == name else b""
         self.check(len(data), 1)
         self.zip.writestr(name, data)
         self.bytes += len(data)
@@ -74,14 +76,14 @@ def selected_scope(db, course_id, payload, username):
     return course, lessons
 
 
-def build_course_archive(db, course_id, payload, username):
+def build_course_archive(db, course_id, payload, username, *, preview_document=None):
     course, lessons = selected_scope(db, course_id, payload, username)
     descriptor, filename = mkstemp(prefix="classagent-export-", suffix=".zip")
     os.close(descriptor)
     path = Path(filename)
     archive = None
     try:
-        archive = Archive(path)
+        archive = Archive(path, preview_document=preview_document)
         extras = Extras(db, course, lessons, payload, username)
         contents = payload.contents
         labels = [label for key, label in [("summaries", "智能纪要"), ("knowledge", "知识点"), ("quizzes", "小测题目"), ("transcripts", "文字记录")] if getattr(contents, key)]

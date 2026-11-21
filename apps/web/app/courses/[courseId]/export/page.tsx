@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { errorMessage, request } from "../../../../lib/api";
 import { defaultExportContents, downloadCourseArchive, exportContentChoices, selectedExportLabels, type ExportContents } from "../../../../lib/course-export";
+import CourseExportPreview from "../../../../components/CourseExportPreview";
 import ExportLessonPicker from "../../../../components/ExportLessonPicker";
 import "./export.css";
 
@@ -52,5 +53,6 @@ export default function CourseExportPage() {
       </div></section></div>
       <aside className="panel export-package-preview"><div className="panel-header"><h2>你的资料包</h2></div><div className="panel-body"><strong>{course.name}</strong><p>课程目录 + {scope === "all" ? lessons.length : selected.length} 个课次文件夹</p><ul>{included.map((label) => <li key={label}>{label}</li>)}</ul>{!included.length && <p>尚未选择导出内容</p>}<p className="export-hint">保留已保存的手动修改和说话人名称。缺少的内容会在目录中说明，导出不会调用AI生成资料。</p><button className="button button-primary" disabled={busy || !included.length || (scope === "selected" && !selected.length)} onClick={download}>{busy ? "正在整理资料…" : "下载 PDF 资料包"}</button>{busy && <button type="button" className="button button-quiet" onClick={() => { active.current?.abort(); setBusy(false); setNotice("已取消等待，你可以调整范围后重新导出。"); }}>取消等待</button>}<p className="export-hint">资料较多时建议分批导出。每次最多512MB、2000个PDF文件。</p></div></aside>
     </div>}
+    {!loading && course && <CourseExportPreview key={JSON.stringify([courseId, scope, selected, contents])} courseId={courseId} options={{ lesson_ids: scope === "selected" ? selected : null, contents }} valid={!!included.length && (scope !== "selected" || !!selected.length)} />}
   </main>;
 }

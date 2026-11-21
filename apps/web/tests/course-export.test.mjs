@@ -33,3 +33,26 @@ test("默认只包含四项PDF内容并全部勾选", () => {
   assert.ok(exportContentChoices.every(choice => choice.description.startsWith("PDF")));
   assert.deepEqual(selectedExportLabels({ summaries: false, knowledge: false, quizzes: true, transcripts: false }), ["小测题目"]);
 });
+
+test("PDF预览使用已认证请求并保留范围及文档路径", async () => {
+  const calls = [];
+  const { previewCourseExport } = load(async (...args) => { calls.push(args); return calls.length === 1
+    ? Response.json({ documents: ["课程目录.pdf", "001_课堂/智能纪要.pdf"] })
+    : new Response("%PDF-real", { headers: { "Content-Type": "application/pdf" } }); });
+  const options = { lesson_ids: ["lesson"], contents: { summaries: true, knowledge: false, quizzes: false, transcripts: false } };
+  const signal = new AbortController().signal;
+  assert.deepEqual(await previewCourseExport("c", options, signal), ["课程目录.pdf", "001_课堂/智能纪要.pdf"]);
+  assert.equal(await (await previewCourseExport("c", options, signal, "001_课堂/智能纪要.pdf")).text(), "%PDF-real");
+  assert.equal(calls[1][0], "/courses/c/export/preview?document=" + encodeURIComponent("001_课堂/智能纪要.pdf"));
+  assert.deepEqual(JSON.parse(calls[1][1].body), options);
+  assert.equal(calls[1][1].signal, signal);
+});
+
+test("PDF预览拒绝错误类型和截断文件，保留接口失败", async () => {
+  for (const response of [new Response("login", { headers: { "Content-Type": "text/html" } }), new Response("broken", { headers: { "Content-Type": "application/pdf" } })]) {
+    const { previewCourseExport } = load(async () => response);
+    await assert.rejects(previewCourseExport("c", { lesson_ids: null }, new AbortController().signal, "课程目录.pdf"), /PDF/);
+  }
+  const { previewCourseExport } = load(async () => { throw new Error("课程不存在"); });
+  await assert.rejects(previewCourseExport("c", { lesson_ids: null }, new AbortController().signal), /课程不存在/);
+});
