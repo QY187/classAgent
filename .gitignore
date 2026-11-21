@@ -40,3 +40,6 @@ Thumbs.db
 *.err
 dev.log
 login_body.html
+
+# 与锁定PDF.js版本同步生成的阅读器Worker
+/apps/web/public/vendor/pdfjs/

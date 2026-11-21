@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import PdfDocumentPreview from "./PdfDocumentPreview";
 import { errorMessage } from "../lib/api";
 import { previewCourseExport, type CourseExportOptions } from "../lib/course-export";
 
@@ -40,7 +41,7 @@ export default function CourseExportPreview({ courseId, options, valid }: { cour
       {documents.length > 0 && <div className="export-preview-controls"><label>课程 / 课次<select value={group} onChange={(event) => setSelected(documents.find((name) => inGroup(name, event.target.value)) || "")}>{groups.map((value) => <option key={value}>{value}</option>)}</select></label><label>文档<select value={selected} onChange={(event) => setSelected(event.target.value)}>{documents.filter((name) => inGroup(name, group)).map((name) => <option key={name} value={name}>{name.split("/").pop()}</option>)}</select></label></div>}
       {loading && <p role="status">正在生成真实 PDF…</p>}
       {error && <p role="alert">{error} <button className="button button-secondary" onClick={() => setRetry((value) => value + 1)}>重新加载</button></p>}
-      {url && !loading && !error && <><a className="button button-secondary" href={url} target="_blank" rel="noopener noreferrer">在新窗口打开 PDF</a><p className="export-hint">手机请使用上方入口，在浏览器PDF阅读器中查看完整内容。桌面也可单独打开阅读；缺少资料会在PDF正文说明。</p><iframe className="export-preview-frame" title={`PDF预览：${selected}`} src={url} /></>}
+      {url && !loading && !error && <><a className="button button-secondary" href={url} target="_blank" rel="noopener noreferrer">在新窗口打开 PDF</a><p className="export-hint">可在下方翻页和缩放；也可在新窗口打开，使用浏览器阅读器搜索、选择文字或打印。缺少资料会在PDF正文说明。</p><PdfDocumentPreview key={url} title={selected} url={url} onReload={() => setRetry(value => value + 1)} /></>}
     </>}
     </div>
   </section>;

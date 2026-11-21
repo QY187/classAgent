@@ -1,0 +1,10 @@
+import { createRequire } from "node:module";
+import { copyFile, mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+const require = createRequire(import.meta.url);
+const packagePath = require.resolve("pdfjs-dist/package.json");
+const { version } = require(packagePath);
+const target = fileURLToPath(new URL("../public/vendor/pdfjs/", import.meta.url));
+await mkdir(target, { recursive: true });
+await copyFile(join(dirname(packagePath), "build/pdf.worker.min.mjs"), join(target, `pdf.worker-${version}.min.mjs`));
