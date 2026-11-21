@@ -57,3 +57,21 @@ PDF.js Worker由锁定依赖复制至版本化的本地静态路径，开发启�
 
 
 本次修复最终验证：前端42项测试、本机生产构建/类型检查与Linux amd64完整生产镜像构建通过；在该生产镜像上再次执行360/390/1440三宽度真实后端文档验证，Worker静态资源无失败，页面异常0。每宽度确认四类PDF可见文字与非空画布像素，首尾页、缩放、收起和下载通过；桌面另外验证调整窗口宽度和损坏PDF重新请求后恢复。由此补齐原先standalone包和桌面阅读器显示的验收缺口。设备宽度由浏览器模拟，不代表物理手机手势测试。渲染库集成参考Mozilla PDF.js官方示例：https://mozilla.github.io/pdf.js/examples/ 。
+
+
+## 普通滚动条下闪烁修复（2026-11-22，本地待验收）
+
+用户反馈持续闪烁后，在保留普通滚动条的可视浏览器复现：7秒内808次DOM/加载状态变化，可用宽度在1023与1038像素之间往返。原实现绘制前清空Canvas，滚动条消失后增加15px宽度，ResizeObserver触发重绘；新Canvas插入后滚动条再次占位又缩小宽度，形成循环。此前无头浏览器隐藏滚动条，未覆盖此场景。
+
+修复为阅读区始终保留纵向滚动条/稳定槽位，仅响应外部边框盒的实际宽度变化，并在新页离屏绘制完成后原子替换旧Canvas，不在绘制前清空。高度变化不会触发宽度重绘；真实窗口变化、缩放、翻页仍可正常更新。相同环境连续7秒记录变化为0。
+
+新增可复用浏览器回归`apps/web/tests/pdf-preview-stability.test.mjs`，使用开发依赖playwright-core和本机已安装Edge（可通过`PDF_PREVIEW_BROWSER_CHANNEL`覆盖）。先启动独立预览样例，再在PowerShell执行：
+
+```powershell
+$env:PDF_PREVIEW_TEST_URL='http://127.0.0.1:3324'
+node --test apps/web/tests/pdf-preview-stability.test.mjs
+```
+
+测试强制保留15px普通滚动条，验证390/1440宽度静置/滚动无Canvas替换或busy循环、重绘期间旧Canvas不被清空、缩放不撑宽整页、窗口变化后稳定和收起清理。需要其他固定样例时可配置`PDF_PREVIEW_TEST_COURSE`、`PDF_PREVIEW_TEST_TOKEN`、`PDF_PREVIEW_TEST_USER`。普通`npm test`未配置地址时明确跳过该浏览器专项；原42项单元测试通过，专项独立执行通过。
+
+本次闪烁修复的最终生产构建/类型检查通过；360/390/1440四类文档、首尾页、缩放、切换、重试和真实ZIP下载再次通过，页面异常与失败资源均为0。主工作区证据`test-results/pdf-preview-review-20261122/flash-before.json`、`flash-after.json`及`flash-reader-results.json`记录复现和修复结果。仅本地预览分支，未推送或部署。

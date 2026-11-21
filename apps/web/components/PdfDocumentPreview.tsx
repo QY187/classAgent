@@ -12,10 +12,18 @@ export default function PdfDocumentPreview({ url, title, onReload }: { url: stri
   useEffect(() => {
     const element = viewport.current;
     if (!element) return;
-    const resize = () => setWidth(element.clientWidth);
+    let frame = 0, previousOuterWidth = -1;
+    const resize = () => {
+      // ResizeObserver也会在高度/滚动条变化时通知，只响应阅读区外部宽度变化。
+      const outerWidth = element.getBoundingClientRect().width;
+      if (Math.abs(outerWidth - previousOuterWidth) < 1) return;
+      previousOuterWidth = outerWidth;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setWidth(element.clientWidth));
+    };
     resize();
-    const observer = new ResizeObserver(resize); observer.observe(element);
-    return () => observer.disconnect();
+    const observer = new ResizeObserver(resize); observer.observe(element, { box: "border-box" });
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, []);
 
   useEffect(() => {
@@ -40,7 +48,8 @@ export default function PdfDocumentPreview({ url, title, onReload }: { url: stri
   useEffect(() => {
     if (!pdf || !width) return;
     let disposed = false, render: RenderTask | undefined;
-    setLoading(true); setError(""); host.current?.replaceChildren();
+    setLoading(true); setError("");
+    // 新页在离屏Canvas画好后原子替换，避免清空内容引起高度和滚动条反复变化。
     if (viewport.current) { viewport.current.scrollTop = 0; viewport.current.scrollLeft = 0; }
     async function draw() {
       try {
@@ -63,7 +72,7 @@ export default function PdfDocumentPreview({ url, title, onReload }: { url: stri
         const text = await documentPage.getTextContent();
         if (disposed) return;
         canvas.textContent = text.items.map(item => "str" in item ? item.str : "").join(" ");
-        canvas.dataset.page = String(page); canvas.dataset.rendered = "true";
+        canvas.dataset.page = String(page); canvas.dataset.rendered = "true"; canvas.dataset.zoom = String(zoom);
         host.current?.replaceChildren(canvas); setLoading(false);
       } catch {
         if (!disposed) { setLoading(false); setError("这一页暂时无法显示，请重新绘制，或在新窗口打开。 "); }
