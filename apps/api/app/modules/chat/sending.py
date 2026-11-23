@@ -1,5 +1,6 @@
 """消息发送、幂等请求和失败恢复；所有对话按后端范围绑定 Agent。"""
 import json
+from dataclasses import replace
 from fastapi import HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -7,7 +8,7 @@ from ...core.telemetry import bind_request, request_trace, span, trace_event, tr
 from ...core.chat_failures import ChatRequestFailure, public_failure
 from ...core.model_budget import user_budget
 from ...core.config import get_settings
-from ...shared.models import ChatConversation, ChatMessage, Lesson, new_id, now_utc
+from ...shared.models import ChatConversation, ChatMessage, Lesson, AgentAction, Quiz, new_id, now_utc
 from ..agent.loop import run_agent
 from ..agent.tools import ToolContext
 from ..agent.synthesis import synthesize_result
@@ -29,6 +30,16 @@ from .retry_actions import actions_for_message as retry_actions
 from .lesson_actions import actions_for_message as lesson_actions, action_hint as lesson_action_hint
 from .knowledge_actions import actions_for_message as knowledge_actions
 from .action_verification import verify_actions
+
+
+def saved_effects_notice(db, conversation_id, question_id):
+    """失败不回滚已提交的业务动作；只根据本条请求的持久回执说明。"""
+    db.rollback()
+    actions = db.scalar(select(func.count()).select_from(AgentAction).join(ChatMessage, AgentAction.message_id == ChatMessage.id)
+        .where(ChatMessage.id == question_id, ChatMessage.conversation_id == conversation_id)) or 0
+    quizzes = db.scalar(select(func.count()).select_from(Quiz).where(Quiz.agent_request_key == question_id)) or 0
+    completed = ([f"{actions} 项资料操作" ] if actions else []) + ([f"{quizzes} 组小测生成"] if quizzes else [])
+    return (" 本次已有" + "、".join(completed) + "完成并保存；后续失败不表示这些操作已撤销。请先查看本条消息的操作结果，避免作为新请求重复执行。") if completed else ""
 
 
 @traced("request.fail_persist")
@@ -218,7 +229,14 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
             def summarize_verified(read_result, refresh):
                 nonlocal failure_stage
                 failure_stage = "answer"
-                summarized = synthesize_result(question, read_result, on_check=check)
+                try:
+                    summarized = synthesize_result(question, read_result, on_check=check)
+                except ChatRequestFailure:
+                    if not read_result.get("diagnostic"):
+                        raise
+                    # 原因已经由后端核对；润色服务失败不能再次掩盖真实诊断。
+                    trace_event("answer.diagnostic_plain", reason="synthesis_unavailable")
+                    summarized = read_result
                 check()
                 current = refresh()
                 if (current.get("answer_materials") != read_result.get("answer_materials")
@@ -231,6 +249,9 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         failure_stage = "answer"
         # 只发布模型组织的回答和公开引用，内部证据包不进入预览或消息接口。
         result.pop("answer_materials", None)
+        result.pop("diagnostic", None)
+        result.pop("diagnostic_code", None)
+        result.pop("explained_missing", None)
         enrich_citations(db, result["citations"], conversation.user_id)
         if verification and not verification_only:
             result["answer"] = verification + "\n\n" + result["answer"]
@@ -268,6 +289,12 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         return read_messages(db, conversation_id, username)
     except Exception as exc:
         failure = public_failure(exc, stage=failure_stage)
+        try:
+            notice = saved_effects_notice(db, conversation_id, question_id)
+            if notice:
+                failure = replace(failure, reason=failure.reason + notice)
+        except Exception:
+            db.rollback()  # 数据库本身不可用时仍报告原始分类，不猜测操作是否保存。
         bind_request(error_code=failure.code)
         try:
             _finish_failed(db, conversation_id, request_id, token, failure.message)

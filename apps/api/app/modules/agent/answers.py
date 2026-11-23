@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from ...core.telemetry import traced
 from .goals import select_outputs, requested_outputs, incomplete_notice, requirements_for, selection_issues
 from .assistant_profile import ASSISTANT_PROFILE
+from .diagnostics import explain_missing
 
 
 @traced("answer.compose")
@@ -22,7 +23,11 @@ def compose_answer(db, context, payload, evidence, steps):
         except HTTPException as exc:
             if exc.status_code not in {400, 404, 409, 502, 503, 504}:
                 raise
-            unavailable.append(f"{label}当前无法核对，请检查资料范围或稍后重试。")
+            cause = ("资料已删除或当前不可访问，请刷新后重新选择" if exc.status_code == 404 else
+                     "资料或状态已经变化，请刷新后重新查询" if exc.status_code == 409 else
+                     "当前查询范围或条件不符合要求，请确认目标" if exc.status_code == 400 else
+                     "读取资料所需的服务暂时不可用，请稍后重试")
+            unavailable.append(f"{label}未完成：{cause}；这不表示查询结果为空。")
             return
         if isinstance(result, str):
             if result:
@@ -30,6 +35,9 @@ def compose_answer(db, context, payload, evidence, steps):
                 materials.append({"id": output, "content": result, "citation_ids": []})
                 completed.add(output)
         else:
+            # 无引用的课堂占位文案不是已核验事实，统一由具体诊断解释。
+            if output in {"claims", "locations"} and not result["citations"]:
+                return
             parts[output] = result["answer"]
             materials.append({"id": output, "content": result["answer"],
                               "citation_ids": [item["id"] for item in result["citations"]]})
@@ -68,10 +76,17 @@ def compose_answer(db, context, payload, evidence, steps):
         append_result("助手介绍", lambda: ASSISTANT_PROFILE, "assistant")
     verified_business = bool(set(parts) - {"claims", "locations"})
     if parts or unavailable:
+        explained_missing = False
         missing = [key for key in (requested_outputs(context) or ()) if key not in completed]
         # 有字段却未取得有效结果也不是完成；查询的空清单仍由业务服务核验。
         if missing:
-            unavailable.append(incomplete_notice(missing))
+            diagnostic = explain_missing(db, context, evidence, steps) if any(key in {"claims", "locations"} for key in missing) else None
+            if diagnostic:
+                explained_missing = True
+                unavailable.append(diagnostic["answer"])
+                missing = [key for key in missing if key not in {"claims", "locations"}]
+            if missing:
+                unavailable.append(incomplete_notice(missing))
         titles = {"locations": "内容出处", "claims": "课堂说明", "learning": "学习记录", "progress": "纪要与进度",
                   "workflow": "处理记录", "catalog": "课程与课次", "quiz_results": "小测结果", "assistant": "助手介绍"}
         order = ([key for key in ("assistant", "locations", "claims", "learning", "progress", "quiz_results", "workflow", "catalog") if key in parts]
@@ -80,15 +95,12 @@ def compose_answer(db, context, payload, evidence, steps):
         if unavailable:
             materials.append({"id": "limitations", "content": "\n".join(unavailable), "citation_ids": []})
         return {"answer": "\n\n".join(blocks + unavailable), "citations": citations,
-                "answer_materials": materials,
+                "answer_materials": materials, "explained_missing": explained_missing,
                 "outcome": ("answered" if verified_business or citations else
                             "insufficient_evidence" if parts else "operation_failed"), "steps": steps}
     if payload.get("outcome") == "needs_input":
         return {"answer": payload["question"], "citations": [], "outcome": "needs_input", "steps": steps}
-    result = evidence.answer(db, context, [])
-    if requested_outputs(context):
-        result["answer"] += "\n\n" + incomplete_notice(requested_outputs(context))
-    return {**result, "outcome": "insufficient_evidence", "steps": steps}
+    return explain_missing(db, context, evidence, steps)
 
 
 def requested_query_groups(question):

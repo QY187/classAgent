@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
-from ...core.chat_failures import ChatRequestFailure
+from ...core.chat_failures import ChatRequestFailure, public_failure
 from ...core.telemetry import annotate, span
 from .registry import TOOLS
 from .tools import ToolContext, check_course, check_lesson
@@ -54,15 +54,29 @@ def _execute_tool(db: Session, context: ToolContext, name: str, arguments: dict 
         if isinstance(exc, ChatRequestFailure) and exc.failure.code.startswith("quota_"):
             raise
         annotate(error_type=type(exc).__name__, http_status=exc.status_code)
+        if isinstance(exc, ChatRequestFailure):
+            code = "generation_failed" if name in {"generate_quiz", "generate_practice_quiz"} else exc.failure.code
+            return failure(name, code, exc.failure.reason)
         if name in context.actions and exc.status_code in {400, 403, 409}:
             return failure(name, "action_rejected", exc.detail if isinstance(exc.detail, str) else "操作未执行，请检查目标")
         if name in {"generate_quiz", "generate_practice_quiz"} and exc.status_code in {400, 409, 502, 503}:
-            return failure(name, "generation_failed", exc.detail if isinstance(exc.detail, str) else "小测生成失败，请重试")
-        code = "unauthenticated" if exc.status_code == 401 else "not_found" if exc.status_code == 404 else "unavailable"
-        return failure(name, code, "请重新登录" if code == "unauthenticated" else "资料不存在或当前范围不可访问" if code == "not_found" else "工具暂不可用")
+            cause = public_failure(exc)
+            message = (cause.reason if cause.code not in {"internal_error", "service_unavailable"} else
+                       exc.detail if isinstance(exc.detail, str) else "小测生成失败，请重试")
+            return failure(name, "generation_failed", message)
+        code = {401:"unauthenticated", 403:"forbidden", 404:"not_found", 400:"invalid_arguments", 422:"invalid_arguments", 409:"state_not_ready"}.get(exc.status_code, "unavailable")
+        messages = {"unauthenticated":"请重新登录", "forbidden":"当前资料或操作不在授权范围内", "not_found":"资料不存在或当前范围不可访问",
+                    "invalid_arguments":"本次查询参数或范围不符合要求", "state_not_ready":"资料当前状态不满足读取要求，请查看处理详情", "unavailable":"读取资料的服务暂时不可用，请稍后重试"}
+        message = exc.detail if code == "state_not_ready" and isinstance(exc.detail, str) else messages[code]
+        return failure(name, code, message)
     except Exception as exc:
         annotate(error_type=type(exc).__name__)
-        return failure(name, "execution_failed", "工具执行失败，请稍后重试")
+        from ..chat.generation import GenerationStopped
+        if isinstance(exc, GenerationStopped):
+            raise
+        reason = public_failure(exc)
+        db.rollback()
+        return failure(name, reason.code if reason.code != "internal_error" else "execution_failed", reason.reason)
 
 
 def failure(name: str, code: str, message: str) -> dict:

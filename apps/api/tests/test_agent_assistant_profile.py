@@ -103,7 +103,7 @@ def test_classroom_question_cannot_be_replaced_by_project_profile(env):
         assert upstream.call_count == 3
     assert result.status_code == 200, result.text
     answer = result.json()["messages"][-1]
-    assert "课堂学习助手" not in answer["content"] and "没有找到" in answer["content"]
+    assert "课堂学习助手" not in answer["content"] and "尚未完成有效的资料读取" in answer["content"]
 
 
 def test_assistant_result_cannot_carry_unverified_prose_or_mask_clarification():

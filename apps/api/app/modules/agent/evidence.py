@@ -18,6 +18,7 @@ from .workflow_queries import WorkflowQueryStore
 class EvidenceStore:
     def __init__(self):
         self.entries = {}
+        self.observations = []
         self.catalog_reads = []
         self.course_ids = set()
         self.lesson_ids = set()
@@ -28,6 +29,17 @@ class EvidenceStore:
         self.workflow = WorkflowQueryStore()
 
     def collect(self, db: Session, context: ToolContext, name: str, result: dict, arguments=None):
+        args = arguments or {}
+        if isinstance(args, str):
+            try: args = json.loads(args)
+            except (ValueError, TypeError): args = {}
+        if not isinstance(args, dict): args = {}
+        data = result.get("data") or {}
+        scope = tuple((key, str(args.get(key, ""))) for key in ("course_id", "lesson_id", "material_id", "query", "offset"))
+        self.observations.append({"tool":name, "ok":result["ok"], "scope":scope,
+            "course_id":args.get("course_id") or data.get("course_id"), "error":result.get("error", {}),
+            "offset":args.get("offset",0), "item_count":len(data["items"]) if isinstance(data.get("items"),list) else None,
+            "total":data.get("total"), "retrieval_method":data.get("retrieval_method")})
         if not result["ok"]:
             return
         self.learning.collect(name, result)
@@ -35,7 +47,7 @@ class EvidenceStore:
         self.progress.collect(name, result)
         self.workflow.collect(name, result)
         if name in {"list_courses", "list_lessons", "list_materials"}:
-            self.catalog_reads.append((name, arguments or {}, result["data"]))
+            self.catalog_reads.append((name, args, result["data"]))
             target = {"list_courses": self.course_ids, "list_lessons": self.lesson_ids, "list_materials": self.material_ids}[name]
             target.update(row["id"] for row in result["data"]["items"])
             return

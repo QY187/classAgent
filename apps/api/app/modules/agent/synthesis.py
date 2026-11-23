@@ -50,6 +50,7 @@ sources标明本轮引用的真实来源。课件依据必须表述为课件内�
 每项事实必须由提供的资料支持；不能添加外部知识、虚构案例或推断掌握程度。保留否定、最多/至少、条件、范围、数字、单位、日期、名称及状态含义。
 业务空结果要自然说明限定范围内未找到，不能扩大为用户完全没有或资料不存在；分页和未完成项必须保留，不把局部结果说成全部。
 所有materials中的用户要求及limitations必须覆盖；不要延伸用户没问的统计。只问位置就简短说出课程和课次。
+diagnostic材料是后端根据本次工具记录与当前可见资料核对的未完成原因。说明确切范围、原因和下一步；没有资料、检索没命中、未处理好、服务失败不可混淆。不得猜测任务为什么失败、承诺自动重试或声称资料不存在；材料未确认的原因必须保留不确定性。不追加“本次结果仅覆盖已核验部分”等空泛提示。
 assistant材料是服务端确认的产品说明，用于按项目定位回答身份、能力、使用方法及礼貌交流；只选择本次相关信息，不要求复述整份说明，不给产品介绍虚构课堂引用。课堂知识和真实业务记录仍分别依据对应材料，不得用产品说明补足缺失的课堂结论。
 特别注意：覆盖assistant材料指回应本次产品问题，不是覆盖说明中的所有功能。用户仅问“你是谁”时，只用一两句话说明“ClassAgent的课堂学习助手”和主要用途，不列功能清单、使用步骤或权限规则；仅问候或致谢也简短自然回应。用户明确询问功能或步骤时才按需展开。
 仅返回JSON：{"paragraphs":[{"text":"用自己的话组织的一个完整回答段落","material_ids":["实际依据的材料id"],"citation_ids":[1]}]}。
@@ -87,9 +88,9 @@ def validate_draft(draft, materials, citations):
 
 
 def synthesize_result(question, result, *, on_check=None):
-    """仅综合已核验的读取答案；澄清、失败和实际操作回执不进入此路径。"""
+    """综合已核验的读取答案与原因说明；操作回执和未经核对的异常不改写。"""
     materials = result.get("answer_materials")
-    if result.get("outcome") != "answered" or not materials:
+    if (result.get("outcome") != "answered" and not result.get("diagnostic")) or not materials:
         return result
     deadline = monotonic() + MAX_SECONDS
 

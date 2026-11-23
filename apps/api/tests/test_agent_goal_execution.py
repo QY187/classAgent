@@ -70,7 +70,8 @@ class GoalExecutionTest(unittest.TestCase):
             result = run_agent(self.db, self.goal_context(["locations", "claims"]), "定位并解释")
         self.assertEqual(model.call_count, 3)
         self.assertIn("《数据结构》", result["answer"])
-        self.assertEqual(result["answer"].count("尚未完成的回答："), 1)
+        self.assertNotIn("尚未完成的回答", result["answer"])
+        self.assertEqual(result["answer"].count("课堂内容解答"), 1)
         self.assertIn("课堂内容解答", result["answer"])
 
     def test_fake_reference_cannot_count_as_completed_output(self):
@@ -78,7 +79,9 @@ class GoalExecutionTest(unittest.TestCase):
             claims=[{"text": "没有读取的结论", "source_ids": ["E99"]}])):
             result = run_agent(self.db, self.goal_context(["claims"]), "解释一下")
         self.assertEqual(result["outcome"], "insufficient_evidence")
-        self.assertIn("尚未完成的回答", result["answer"])
+        self.assertIn("尚未完成有效的资料读取", result["answer"])
+        self.assertNotIn("没有读取的结论", result["answer"])
+        self.assertNotIn("目前课程资料中没有找到足够依据", result["answer"])
         self.assertEqual(result["citations"], [])
 
     def test_contract_cannot_gain_business_queries_or_write_authorization(self):

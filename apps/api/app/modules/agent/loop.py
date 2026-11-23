@@ -212,7 +212,8 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             raise ChatRequestFailure("execution_timeout")
 
     def finish_read(result, payload):
-        if on_answer and result.get("outcome") == "answered" and result.get("answer_materials"):
+        if (on_answer and (result.get("outcome") == "answered" or result.get("diagnostic"))
+                and result.get("diagnostic_code") != "read_not_attempted" and result.get("answer_materials")):
             return on_answer(result, lambda: compose_answer(db, context, payload, evidence, steps))
         return result
 
@@ -239,6 +240,13 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             except (ValueError, TypeError):
                 final_payload = None
                 requested_clarification = False
+            if (final_payload and final_payload.get("outcome") == "insufficient_evidence"
+                    and not actions.results and not actions.errors and not unperformed
+                    and not any(final_payload.get(key) for key in ("claims", "locations", "catalog", "progress", "learning", "workflow", "quiz_results", "assistant"))):
+                from .diagnostics import explain_missing
+                explained = explain_missing(db, context, evidence, steps)
+                if explained is not None:
+                    return finish_read(explained, final_payload)
             missing_deliverables = missing_outputs(context, final_payload) if final_payload else []
             invalid_selections = selection_issues(db, context, final_payload, evidence) if final_payload and not requested_clarification else {}
             if invalid_selections and not repaired:
@@ -355,7 +363,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                         **({"clarification": clarification} if clarification else {})}
             try:
                 final = finalize(db, context, message.get("content"), evidence, steps)
-                if missing_deliverables and "尚未完成的回答：" not in final["answer"]:
+                if missing_deliverables and not final.get("diagnostic") and not final.get("explained_missing") and "尚未完成的回答：" not in final["answer"]:
                     final["answer"] += "\n\n" + incomplete_notice(missing_deliverables)
                 if unperformed:
                     labels = {"create_course":"创建课程", "create_lesson":"添加课次", "update_course":"修改课程信息", "update_lesson":"修改课次信息", "update_knowledge_status":"修改知识点状态", "retry_transcription":"重试转写", "generate_quiz":"生成小测", "generate_practice_quiz":"生成薄弱点练习"}
@@ -439,7 +447,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             if feedback:
                 # 固定运行反馈不包含课堂文本，不允许工具内容变为系统指令。
                 result["execution_feedback"] = feedback
-            evidence.collect(db, context, name, result, json.loads(call["function"]["arguments"]) if result["ok"] else None)
+            evidence.collect(db, context, name, result, call["function"]["arguments"])
             actions.collect(context, name, result)
             if name == "create_course" and result["ok"]:
                 evidence.course_ids.add(result["data"]["id"])
