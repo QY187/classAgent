@@ -2,7 +2,7 @@ from ...core.visibility import visible_get
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ...shared.models import AudioFile, Lesson, ProcessingJob, SpeakerAlias, TranscriptRevision, TranscriptSegment
+from ...shared.models import AudioFile, Lesson, ProcessingJob, SpeakerAlias, TranscriptBookmark, TranscriptRevision, TranscriptSegment
 
 
 def find_lesson(db: Session, lesson_id: str) -> Lesson | None:
@@ -47,15 +47,19 @@ def replace_speaker_aliases(db: Session, lesson_id: str, aliases: dict[str, str]
 
 
 def merge_transcript_segments(db: Session, lesson_id: str, first_id: str, second_id: str) -> TranscriptSegment:
-    first = visible_get(db, TranscriptSegment, first_id)
-    second = visible_get(db, TranscriptSegment, second_id)
-    if first is None or second is None or first.lesson_id != lesson_id or second.lesson_id != lesson_id:
+    segments = {segment.id: segment for segment in db.scalars(select(TranscriptSegment).where(
+        TranscriptSegment.id.in_((first_id, second_id)),
+        TranscriptSegment.lesson_id == lesson_id,
+    ).order_by(TranscriptSegment.id).with_for_update())}
+    if len(segments) != 2:
         raise ValueError("文字片段不存在或不属于该课次")
-    ordered = sorted([first, second], key=lambda segment: segment.start_ms)
-    earlier, later = ordered
+    earlier, later = sorted([segments[first_id], segments[second_id]], key=lambda segment: segment.start_ms)
+    marks = list(db.scalars(select(TranscriptBookmark).where(TranscriptBookmark.segment_id.in_(segments))))
+    earlier_kinds = {mark.kind for mark in marks if mark.segment_id == earlier.id}
+    for mark in marks:
+        if mark.segment_id == later.id and mark.kind not in earlier_kinds:
+            db.add(TranscriptBookmark(segment_id=earlier.id, kind=mark.kind))
     earlier.text = f"{earlier.text or ''}{later.text or ''}"
     earlier.end_ms = later.end_ms
     db.delete(later)
-    db.commit()
-    db.refresh(earlier)
     return earlier

@@ -8,9 +8,21 @@ import { getToken } from "../../../../lib/auth";
 import { formatTime, Job, Lesson, Segment, stageLabel, TranscriptSegmentItem, saveSegment } from "../lesson-view";
 import { buildTranscriptText, downloadText, exportFilename } from "../../../../lib/export";
 import AudioPlayer from "../../../../components/AudioPlayer";
+import "./bookmarks.css";
+
+const bookmarkKinds = [
+  { kind: "favorite", label: "收藏" },
+  { kind: "question", label: "没听懂" },
+] as const;
+type BookmarkKind = (typeof bookmarkKinds)[number]["kind"];
+type Bookmark = { segment_id: string; kind: BookmarkKind };
 
 export default function TranscriptPage() {
   const { lessonId } = useParams<{ lessonId: string }>();
+  return <TranscriptWorkspace key={lessonId} lessonId={lessonId} />;
+}
+
+function TranscriptWorkspace({ lessonId }: { lessonId: string }) {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [job, setJob] = useState<Job | null>(null);
@@ -22,11 +34,53 @@ export default function TranscriptPage() {
   const [audioMeta, setAudioMeta] = useState<{ id: string; filename: string; content_type: string; size_bytes: number } | null>(null);
   const [seek, setSeek] = useState<{ ms: number; n: number } | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [bookmarks, setBookmarks] = useState<Bookmark[] | null>(null);
+  const [bookmarkError, setBookmarkError] = useState("");
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const scrolledTimeRef = useRef<string | null>(null);
 
   const aliasMap = Object.fromEntries(speakers.map((item) => [item.raw_label, item.display_name]));
   const displayName = (raw: string) => aliasMap[raw] || raw;
   function seekTo(ms: number) { setSeek((prev) => ({ ms, n: (prev ? prev.n : 0) + 1 })); }
+
+  const marked = new Set(bookmarks?.map(({ segment_id, kind }) => `${segment_id}:${kind}`));
+  const markedSegments = segments.filter((segment) => bookmarkKinds.some(({ kind }) => marked.has(`${segment.id}:${kind}`)));
+
+  async function loadBookmarks() {
+    setBookmarkError("");
+    try {
+      setBookmarks(await request<Bookmark[]>(`/lessons/${lessonId}/transcript/bookmarks`));
+    } catch (error) {
+      setBookmarks(null);
+      setBookmarkError(errorMessage(error));
+    }
+  }
+
+  async function toggleBookmark(segmentId: string, kind: BookmarkKind) {
+    if (bookmarkBusy || merging) return;
+    const wasMarked = marked.has(`${segmentId}:${kind}`);
+    setBookmarkBusy(true);
+    setBookmarkError("");
+    try {
+      await request(`/lessons/${lessonId}/transcript/${segmentId}/bookmarks/${kind}`, { method: wasMarked ? "DELETE" : "PUT" });
+      setBookmarks((current) => {
+        if (current === null) return null;
+        return wasMarked
+          ? current.filter((mark) => mark.segment_id !== segmentId || mark.kind !== kind)
+          : [...current, { segment_id: segmentId, kind }];
+      });
+    } catch (error) {
+      setBookmarkError(errorMessage(error));
+    } finally {
+      setBookmarkBusy(false);
+    }
+  }
+
+  function openBookmark(segment: Segment) {
+    seekTo(segment.start_ms);
+    setActiveId(segment.id);
+    document.getElementById(`transcript-segment-${segment.id}`)?.scrollIntoView({ block: "center" });
+  }
 
   async function load() {
     try {
@@ -43,7 +97,7 @@ export default function TranscriptPage() {
       try { setAudioMeta(await request<{ id: string; filename: string; content_type: string; size_bytes: number }>(`/lessons/${lessonId}/audio/meta`)); } catch { setAudioMeta(null); }
     } catch (error) { setMessage(errorMessage(error)); }
   }
-  useEffect(() => { if (lessonId) load(); }, [lessonId]);
+  useEffect(() => { if (lessonId) { load(); loadBookmarks(); } }, [lessonId]);
   useEffect(() => { if (!job || ["completed", "failed"].includes(job.stage)) return; const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer); }, [job?.stage, lessonId]);
   useEffect(() => {
     if (!segments.length) return;
@@ -85,14 +139,14 @@ export default function TranscriptPage() {
   async function mergeNext(segment: Segment) {
     const index = segments.findIndex((item) => item.id === segment.id);
     const nextSegment = segments[index + 1];
-    if (!nextSegment || merging) return;
+    if (!nextSegment || merging || bookmarkBusy) return;
     setMerging(true);
     try {
       await request(`/lessons/${lessonId}/transcript/merge`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first_id: segment.id, second_id: nextSegment.id }),
       });
       setMessage("已合并相邻片段。");
-      await load();
+      await Promise.all([load(), loadBookmarks()]);
     } catch (error) { setMessage(errorMessage(error)); }
     finally { setMerging(false); }
   }
@@ -115,6 +169,57 @@ export default function TranscriptPage() {
         <div className="speaker-panel-head"><strong>重命名说话人</strong><button className="button button-quiet" type="button" onClick={() => setSpeakerOpen(false)}>收起</button></div>
         {speakers.length === 0 ? <p className="speaker-empty">本课次还没有可命名的说话人。</p> : <div className="speaker-list">{speakers.map((item) => <label key={item.raw_label} className="speaker-field"><span className="speaker-field-from">{item.raw_label}</span><span className="speaker-arrow" aria-hidden="true">→</span><input className="field" value={drafts[item.raw_label] ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [item.raw_label]: event.target.value }))} placeholder="如：老师 / 同学" /></label>)}</div>}
         <div className="speaker-panel-actions"><button className="button button-primary" type="button" onClick={saveSpeakers}>保存名称</button></div>
-      </div>}</div></div><div className="panel-body">{audioMeta && segments.length > 0 && <AudioPlayer src={`${apiUrl}/lessons/${lessonId}/audio?token=${encodeURIComponent(getToken() ?? "")}`} segments={segments.map((segment) => ({ id: segment.id, start_ms: segment.start_ms }))} seek={seek} onActiveChange={setActiveId} />}{job && job.stage !== "completed" && <div style={{ marginBottom: 18 }}><div className="progress-label"><span>{stageLabel[job.stage] || job.stage}</span><span>{progress}%</span></div><div className="job-progress"><span style={{ width: `${progress}%` }} /></div>{job.error_message && <div className="notice" style={{ marginTop: 10 }}>{job.error_message}</div>}</div>}{segments.length ? <div className="transcript">{segments.map((segment, index) => <TranscriptSegmentItem key={segment.id} segment={segment} onSave={saveText} displayName={displayName(segment.speaker)} onMerge={index < segments.length - 1 ? () => mergeNext(segment) : undefined} onSeek={seekTo} isActive={activeId === segment.id} />)}</div> : <div className="empty-state"><div className="empty-icon">◌</div><strong>{job?.stage === "completed" ? "暂无文字记录" : "文字记录还在准备中"}</strong><p>完成浏览器录音或音频转写后，课堂原文会显示在这里。</p><Link className="button button-secondary" href={`/lessons/${lesson.id}`}>返回课次工作台</Link></div>}</div></section>
+      </div>}</div></div>
+      <div className="panel-body">
+        {audioMeta && segments.length > 0 && <AudioPlayer
+          src={`${apiUrl}/lessons/${lessonId}/audio?token=${encodeURIComponent(getToken() ?? "")}`}
+          segments={segments.map((segment) => ({ id: segment.id, start_ms: segment.start_ms }))}
+          seek={seek}
+          onActiveChange={setActiveId}
+        />}
+        {job && job.stage !== "completed" && <div style={{ marginBottom: 18 }}>
+          <div className="progress-label"><span>{stageLabel[job.stage] || job.stage}</span><span>{progress}%</span></div>
+          <div className="job-progress"><span style={{ width: `${progress}%` }} /></div>
+          {job.error_message && <div className="notice" style={{ marginTop: 10 }}>{job.error_message}</div>}
+        </div>}
+        {segments.length > 0 && <>
+          {bookmarkError && <div className="notice" role="alert">
+            课堂书签：{bookmarkError}
+            {bookmarks === null && <button className="button button-quiet" type="button" onClick={loadBookmarks}>重新加载</button>}
+          </div>}
+          {bookmarks !== null && <details className="transcript-bookmarks">
+            <summary>课堂书签（{markedSegments.length}）</summary>
+            {markedSegments.length === 0 ? <p>在文字片段旁点击「收藏」或「没听懂」，即可在这里回看。</p> : <ul>
+              {markedSegments.map((segment) => <li key={segment.id}>
+                <button type="button" className="timecode" onClick={() => openBookmark(segment)} aria-label={`定位书签 ${formatTime(segment.start_ms)}`}>{formatTime(segment.start_ms)}</button>
+                <span className="transcript-bookmark-label">{bookmarkKinds.filter(({ kind }) => marked.has(`${segment.id}:${kind}`)).map(({ label }) => label).join(" · ")}</span>
+                <span className="transcript-bookmark-preview">{segment.text}</span>
+              </li>)}
+            </ul>}
+          </details>}
+          <div className="transcript">
+            {segments.map((segment, index) => <TranscriptSegmentItem
+              key={segment.id}
+              segment={segment}
+              onSave={saveText}
+              displayName={displayName(segment.speaker)}
+              onMerge={index < segments.length - 1 ? () => mergeNext(segment) : undefined}
+              onSeek={seekTo}
+              isActive={activeId === segment.id}
+              extraActions={bookmarks !== null && bookmarkKinds.map(({ kind, label }) => <button
+                key={kind}
+                type="button"
+                className="button button-quiet transcript-bookmark-button"
+                aria-label={`${formatTime(segment.start_ms)} ${label}`}
+                aria-pressed={marked.has(`${segment.id}:${kind}`)}
+                disabled={bookmarkBusy || merging}
+                onClick={() => toggleBookmark(segment.id, kind)}
+              >{label}</button>)}
+            />)}
+          </div>
+        </>}
+        {segments.length === 0 && <div className="empty-state"><div className="empty-icon">◌</div><strong>{job?.stage === "completed" ? "暂无文字记录" : "文字记录还在准备中"}</strong><p>完成浏览器录音或音频转写后，课堂原文会显示在这里。</p><Link className="button button-secondary" href={`/lessons/${lesson.id}`}>返回课次工作台</Link></div>}
+      </div>
+    </section>
   </main>;
 }

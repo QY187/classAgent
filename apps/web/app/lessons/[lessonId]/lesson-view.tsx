@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { errorMessage, request } from "../../../lib/api";
 
 export type Lesson = { id: string; course_id: string; title: string; lesson_date?: string | null; status: string };
@@ -56,7 +56,15 @@ export function SummaryContentView({ content }: { content: SummaryContent }) {
   </div>;
 }
 
-export function TranscriptSegmentItem({ segment, onSave, displayName, onMerge, onSeek, isActive }: { segment: Segment; onSave: (id: string, text: string) => Promise<void>; displayName?: string; onMerge?: () => void; onSeek?: (ms: number) => void; isActive?: boolean }) {
+export function TranscriptSegmentItem({ segment, onSave, displayName, onMerge, onSeek, isActive, extraActions }: {
+  segment: Segment;
+  onSave: (id: string, text: string) => Promise<void>;
+  displayName?: string;
+  onMerge?: () => void;
+  onSeek?: (ms: number) => void;
+  isActive?: boolean;
+  extraActions?: ReactNode;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(segment.text);
   const [saving, setSaving] = useState(false);
@@ -66,7 +74,30 @@ export function TranscriptSegmentItem({ segment, onSave, displayName, onMerge, o
     setSaving(true); setError("");
     try { await onSave(segment.id, draft.trim()); setEditing(false); } catch (saveError) { setError(errorMessage(saveError)); } finally { setSaving(false); }
   }
-  return <div className={`transcript-segment${isActive ? " is-active" : ""}`}><div><div className="speaker">{displayName ?? segment.speaker}</div><button type="button" className="timecode" onClick={() => onSeek?.(segment.start_ms)} aria-label={`跳到 ${formatTime(segment.start_ms)}`}>{formatTime(segment.start_ms)}</button></div><div>{editing ? <div className="transcript-edit-form"><textarea className="field transcript-edit-input" aria-label={`编辑 ${formatTime(segment.start_ms)} 的文字记录`} value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={10000} rows={3} disabled={saving} />{error && <div className="transcript-edit-error" role="alert">{error}</div>}<div className="transcript-edit-actions"><button className="button button-primary" onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</button><button className="button button-secondary" onClick={() => { setDraft(segment.text); setError(""); setEditing(false); }} disabled={saving}>取消</button></div></div> : <><div className="transcript-text">{segment.text}</div><div className="transcript-edit-actions">{segment.source === "manual" && <span className="transcript-edited">已人工校正</span>}<button className="button button-quiet transcript-edit-button" onClick={() => { setDraft(segment.text); setError(""); setEditing(true); }}>编辑</button>{onMerge && <button className="button button-quiet transcript-edit-button" onClick={onMerge}>合并下段</button>}</div></>}</div></div>;
+  return <div id={`transcript-segment-${segment.id}`} className={`transcript-segment${isActive ? " is-active" : ""}`}>
+    <div>
+      <div className="speaker">{displayName ?? segment.speaker}</div>
+      <button type="button" className="timecode" onClick={() => onSeek?.(segment.start_ms)} aria-label={`跳到 ${formatTime(segment.start_ms)}`}>{formatTime(segment.start_ms)}</button>
+    </div>
+    <div>
+      {editing ? <div className="transcript-edit-form">
+        <textarea className="field transcript-edit-input" aria-label={`编辑 ${formatTime(segment.start_ms)} 的文字记录`} value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={10000} rows={3} disabled={saving} />
+        {error && <div className="transcript-edit-error" role="alert">{error}</div>}
+        <div className="transcript-edit-actions">
+          <button className="button button-primary" onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</button>
+          <button className="button button-secondary" onClick={() => { setDraft(segment.text); setError(""); setEditing(false); }} disabled={saving}>取消</button>
+        </div>
+      </div> : <>
+        <div className="transcript-text">{segment.text}</div>
+        <div className="transcript-edit-actions">
+          {segment.source === "manual" && <span className="transcript-edited">已人工校正</span>}
+          <button className="button button-quiet transcript-edit-button" onClick={() => { setDraft(segment.text); setError(""); setEditing(true); }}>编辑</button>
+          {onMerge && <button className="button button-quiet transcript-edit-button" onClick={onMerge}>合并下段</button>}
+          {extraActions}
+        </div>
+      </>}
+    </div>
+  </div>;
 }
 
 export async function saveSegment(lessonId: string, segmentId: string, text: string) {

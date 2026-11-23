@@ -151,6 +151,14 @@ class TranscriptSegment(Base):
     revisions: Mapped[list["TranscriptRevision"]] = relationship(back_populates="segment", cascade="all, delete-orphan")
 
 
+class TranscriptBookmark(Base):
+    __tablename__ = "transcript_bookmarks"
+    __table_args__ = (CheckConstraint("kind IN ('favorite', 'question')", name="ck_transcript_bookmark_kind"),)
+
+    segment_id: Mapped[str] = mapped_column(ForeignKey("transcript_segments.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(12), primary_key=True)
+
+
 class TranscriptRevision(Base):
     __tablename__ = "transcript_revisions"
 

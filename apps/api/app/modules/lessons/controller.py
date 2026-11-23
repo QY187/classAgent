@@ -7,8 +7,11 @@ from starlette.background import BackgroundTask
 
 from ...core.db import get_db
 from ...core.deps import get_current_user, get_current_user_flexible
-from ...shared.schemas import AudioMeta, JobRead, LessonRead, SpeakerAliasRead, TranscriptMerge, TranscriptSegmentRead, TranscriptSegmentUpdate
-from . import service
+from ...shared.schemas import (
+    AudioMeta, JobRead, LessonRead, SpeakerAliasRead, TranscriptBookmarkKind, TranscriptBookmarkRead,
+    TranscriptMerge, TranscriptSegmentRead, TranscriptSegmentUpdate,
+)
+from . import bookmarks, service
 
 
 router = APIRouter(tags=["lessons"], dependencies=[Depends(get_current_user)])
@@ -33,6 +36,27 @@ def latest_job(lesson_id: str, username: str = Depends(get_current_user), db: Se
 @router.get("/lessons/{lesson_id}/transcript", response_model=list[TranscriptSegmentRead])
 def get_transcript(lesson_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
     return service.get_transcript(db, lesson_id, username)
+
+
+@router.get("/lessons/{lesson_id}/transcript/bookmarks", response_model=list[TranscriptBookmarkRead])
+def list_bookmarks(lesson_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    return bookmarks.list_bookmarks(db, lesson_id, username)
+
+
+@router.put("/lessons/{lesson_id}/transcript/{segment_id}/bookmarks/{kind}", status_code=204)
+def add_bookmark(
+    lesson_id: str, segment_id: str, kind: TranscriptBookmarkKind,
+    username: str = Depends(get_current_user), db: Session = Depends(get_db),
+) -> None:
+    bookmarks.set_bookmark(db, lesson_id, segment_id, kind, username, enabled=True)
+
+
+@router.delete("/lessons/{lesson_id}/transcript/{segment_id}/bookmarks/{kind}", status_code=204)
+def remove_bookmark(
+    lesson_id: str, segment_id: str, kind: TranscriptBookmarkKind,
+    username: str = Depends(get_current_user), db: Session = Depends(get_db),
+) -> None:
+    bookmarks.set_bookmark(db, lesson_id, segment_id, kind, username, enabled=False)
 
 
 @audio_router.get("/lessons/{lesson_id}/audio/meta", response_model=AudioMeta)

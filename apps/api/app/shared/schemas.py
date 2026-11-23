@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -61,6 +62,15 @@ class TranscriptSegmentUpdate(BaseModel):
 class TranscriptMerge(BaseModel):
     first_id: str
     second_id: str
+
+
+TranscriptBookmarkKind = Literal["favorite", "question"]
+
+
+class TranscriptBookmarkRead(BaseModel):
+    segment_id: str
+    kind: TranscriptBookmarkKind
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SpeakerAliasRead(BaseModel):
