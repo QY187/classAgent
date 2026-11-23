@@ -161,6 +161,8 @@ docker compose up --build -d
 
 ## 8. 数据保留规则
 
+开发 Compose 默认使用 `classagent` 作为项目名，在中文目录中也能启动。若此前使用其他项目名启动过，沿用原来的 `docker compose -p <项目名>` 命令可继续使用对应的数据卷。
+
 当前数据保存在 Docker 持久化卷：
 
 - `classagent_postgres_data`：数据库数据
