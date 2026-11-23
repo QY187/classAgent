@@ -12,11 +12,13 @@ export default function ChatWorkspace() {
   const workspaceRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const viewport = window.visualViewport;
+    const mainArea = workspaceRef.current?.parentElement;
     const media = window.matchMedia("(max-width: 640px)");
     const resize = () => {
       if (media.matches) {
         workspaceRef.current?.style.setProperty("--chat-viewport-height", `${viewport?.height ?? window.innerHeight}px`);
-      } else workspaceRef.current?.style.removeProperty("--chat-viewport-height");
+        mainArea?.style.setProperty("--chat-viewport-height", `${viewport?.height ?? window.innerHeight}px`);
+      } else { workspaceRef.current?.style.removeProperty("--chat-viewport-height"); mainArea?.style.removeProperty("--chat-viewport-height"); }
     };
     const breakpointChanged = () => { setNavigationOpen(false); resize(); };
     resize();

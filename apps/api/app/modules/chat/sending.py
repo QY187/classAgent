@@ -13,7 +13,7 @@ from ..agent.tools import ToolContext
 from ..agent.synthesis import synthesize_result
 from ..agent.model_selection import bind_chat_model, chat_model_scope, select_chat_model
 from .access import owned_conversation, owned_course, owned_lesson
-from .messages import read_messages
+from .messages import read_messages, enrich_citations
 from .generation import is_generating, GenerationStopped
 from .context import recent_context
 from .previews import save_preview
@@ -231,6 +231,7 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         failure_stage = "answer"
         # 只发布模型组织的回答和公开引用，内部证据包不进入预览或消息接口。
         result.pop("answer_materials", None)
+        enrich_citations(db, result["citations"], conversation.user_id)
         if verification and not verification_only:
             result["answer"] = verification + "\n\n" + result["answer"]
         bind_request(outcome=result.get("outcome", "answered"), citation_count=len(result.get("citations", [])))

@@ -16,6 +16,7 @@ function compile(path, customRequire = require) {
 }
 const MarkdownView = compile("../components/MarkdownView.tsx");
 const MessageList = compile("../components/chat/ChatMessageList.tsx", name => {
+  if (name === "../../lib/chat-presentation") return { citationTarget: (id, number) => `${id}-${number}` };
   if (name === "../MarkdownView") return MarkdownView;
   if (name.startsWith("./Chat")) return { default: () => null };
   if (name === "next/link") return { default: ({ children, href }) => createElement("a", { href }, children) };
@@ -70,4 +71,25 @@ test("表格单元格的HTML仍被转义，缺失的列保持结构", () => {
   assert.equal((html.match(/<td /g) || []).length, 4);
   assert.ok(!html.includes("<img ") && !html.includes("<script>"));
   assert.ok(html.includes("&lt;img") && html.includes("&lt;script&gt;"));
+});
+
+
+test("业务链接可点击，危险协议与原始HTML不能执行", () => {
+  const html = render("assistant", "[小测](/courses/c/quizzes/q) [官网](https://example.com) [坏链接](javascript:alert(1)) [跨站](//evil.test) <script>run()</script>");
+  assert.ok(html.includes('href="/courses/c/quizzes/q"'));
+  assert.ok(html.includes('href="https://example.com/"'));
+  assert.ok(!html.includes('href="javascript:') && !html.includes('href="//evil.test'));
+  assert.ok(!html.includes('<script>'));
+});
+test("代码、引用块和嵌套列表保持结构，代码中的引用编号不变成按钮", () => {
+  const html = renderToStaticMarkup(createElement(MarkdownView.default, { source: "变量 `n`。\n\n> 说明\n\n```python\nprint('<img> [1]')\n```\n\n1. 定义\n   - 左子树\n   - 右子树", citationIds:[1], onCitation:()=>{} }));
+  assert.ok(html.includes('<code>n</code>') && html.includes('<blockquote>'));
+  assert.ok(html.includes('<pre><code class="language-python">'));
+  assert.ok(html.includes('&lt;img&gt; [1]') && !html.includes('chat-inline-citation'));
+  assert.equal((html.match(/<li>/g)||[]).length,3);
+});
+test("只为本条回答真实存在的编号显示引用按钮", () => {
+  const html = renderToStaticMarkup(createElement(MarkdownView.default, { source: "定义 [1]，未知 [99]。", citationIds:[1], onCitation:()=>{} }));
+  assert.equal((html.match(/class="chat-inline-citation"/g)||[]).length,1);
+  assert.ok(html.includes('查看引用 1') && html.includes('[99]'));
 });

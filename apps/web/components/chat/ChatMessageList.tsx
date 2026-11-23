@@ -1,3 +1,4 @@
+"use client";
 import { Fragment } from "react";
 import ChatAgentSteps from "./ChatAgentSteps";
 import ChatQuizCard from "./ChatQuizCard";
@@ -8,15 +9,25 @@ import MarkdownView from "../MarkdownView";
 import Link from "next/link";
 import type { ChatMessage } from "../../lib/chat";
 import ChatCitationList from "./ChatCitationList";
+import { citationTarget } from "../../lib/chat-presentation";
+
+function revealCitation(messageId: string, id: number) {
+  const target = document.getElementById(citationTarget(messageId, id));
+  target?.closest(".chat-message-scroll")?.dispatchEvent(new Event("chat:source-navigation"));
+  const details = target?.closest("details");
+  if (details) details.open = true;
+  target?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  target?.focus({ preventScroll: true });
+}
 
 
 export default function ChatMessageList({ messages, generating, username, conversationId }: { messages: ChatMessage[]; generating: boolean; username: string; conversationId: string }) {
-  return <>{messages.map((message) => <Fragment key={message.id}><article className={`chat-message ${message.role}`}><div className="chat-message-role">{message.role === "assistant" && <span className="chat-assistant-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z" /></svg></span>}{message.role === "user" ? username : "课堂助手"}{message.model && (message.role === "assistant" || message.status === "failed") && <span className="chat-message-model" title={message.model.label}>{message.model.label}</span>}<time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</time></div><div className="chat-message-content">{message.role === "assistant" && message.content ? <MarkdownView source={message.content} /> : message.content}</div>
-    {message.role === "assistant" && message.status !== "pending" && !!message.content.trim() && <ChatCopyButton content={message.content} />}
+  return <>{messages.map((message) => <Fragment key={message.id}><article className={`chat-message ${message.role}`}><div className="chat-message-role">{message.role === "assistant" && <span className="chat-assistant-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z" /></svg></span>}{message.role === "user" ? username : "课堂助手"}{message.model && (message.role === "assistant" || message.status === "failed") && <span className="chat-message-model" title={message.model.label}>{message.model.label}</span>}<time dateTime={message.created_at}>{new Date(message.created_at).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</time></div><div className="chat-message-content">{message.role === "assistant" && message.content ? <MarkdownView source={message.content} citationIds={message.citations.map(item => item.id)} onCitation={id => revealCitation(message.id, id)} /> : message.content}</div>
+    {message.role === "assistant" && message.status !== "pending" && !!message.content.trim() && <ChatCopyButton content={message.content} citations={message.citations} />}
     {message.status === "failed" && <ChatFailureCard reason={message.error_message} requestId={message.request_id} />}
     {message.id !== "stream-preview" && message.request_id && ((message.role === "assistant" && message.status !== "pending") || (message.role === "user" && message.status === "failed")) && <ChatRequestTrace requestId={message.request_id} conversationId={conversationId} />}
     {message.status === "cancelled" && <p className="chat-message-status">{message.role === "assistant" ? "已停止生成 · 回答未完成" : "已停止生成"}</p>}
     {message.status === "pending" && !message.steps?.length && <p className="chat-message-status" role="status">{generating ? message.role === "assistant" ? "正在继续生成，完成后自动保存…" : "正在查找课堂依据并整理回答…" : "上次回答已中断，可以重试。"}</p>}
-    <ChatCitationList citations={message.citations} />
+    <ChatCitationList citations={message.citations} messageId={message.id} />
   </article>{message.role === "user" && !!message.steps?.length && <ChatAgentSteps steps={message.steps} status={message.status} generating={generating} />}{message.artifacts?.map((artifact) => artifact.kind === "quiz" ? <ChatQuizCard key={artifact.id} quiz={artifact} /> : <div key={artifact.id} className="chat-action-result"><p>{artifact.message}</p><Link className="button button-secondary" href={artifact.target === "knowledge_point" ? `/lessons/${artifact.lesson_id}/review` : artifact.target === "lesson" ? `/lessons/${artifact.id}` : `/courses/${artifact.course_id}`}>{artifact.target === "knowledge_point" ? "查看知识点" : artifact.target === "lesson" ? "查看课次" : "查看课程"} ↗</Link></div>)}</Fragment>)}</>;
 }

@@ -15,7 +15,8 @@ function compile(path, overrides = {}) {
   return module.exports;
 }
 const materials = compile("../lib/materials.ts");
-const CitationList = compile("../components/chat/ChatCitationList.tsx", { "../../lib/materials": materials }).default;
+const presentation = compile("../lib/chat-presentation.ts", { "./materials": materials });
+const CitationList = compile("../components/chat/ChatCitationList.tsx", { "../../lib/chat-presentation": presentation }).default;
 const material = { id: 1, source_type: "material", course_id: "c", material_id: "m", filename: "<课件>.pdf",
   lesson_id: null, lesson_title: "课程公共资料", start_ms: null, position: 12, version: "v", locator_label: "第 8 页",
   snippet: "<script>用户资料</script>", source_status: "current" };
@@ -43,4 +44,14 @@ test("旧录音引用保留原有时间跳转，可与课件引用同时展示",
   assert.match(html, /\/lessons\/l\/transcript\?t=61000/);
   assert.match(html, /01:01/);
   assert.match(html, /2 条引用/);
+});
+
+
+test("来源包含课程与时间范围，带来源复制保留编号、摘录与链接", () => {
+  const transcript={ id:2,lesson_id:"l",lesson_title:"第一讲",course_name:"数据结构",start_ms:3600000,end_ms:3605000,snippet:"叶子没有孩子" };
+  const html=render([transcript]);
+  assert.match(html,/数据结构 → 第一讲/); assert.match(html,/01:00:00–01:00:05/);
+  const text=presentation.answerWithSources("结论 [2]",[transcript,{...material,source_status:"unavailable"}],"http://localhost:3000");
+  assert.match(text,/\[2\] 数据结构/); assert.match(text,/http:\/\/localhost:3000\/lessons\/l\/transcript\?t=3600000/);
+  assert.match(text,/来源已删除或当前不可访问/); assert.ok(!text.includes('/materials/m'));
 });

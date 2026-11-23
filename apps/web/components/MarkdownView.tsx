@@ -1,92 +1,71 @@
 "use client";
-
 import { type ReactNode } from "react";
 
-function renderInline(text: string, keyPrefix: string): ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+type Options = { citationIds?: number[]; onCitation?: (id: number) => void };
+function safeHref(value: string): string | null {
+  if (/[\s\\\u0000-\u001f]/.test(value)) return null;
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
+  try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) ? url.href : null; } catch { return null; }
+}
+function inline(text: string, prefix: string, options: Options): ReactNode[] {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]\n]+\]\([^\s)]+\)|\[\d+\])/g);
   return parts.map((part, index) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={`${keyPrefix}-${index}`}>{part.slice(2, -2)}</strong>;
-    }
-    return <span key={`${keyPrefix}-${index}`}>{part}</span>;
+    const key = `${prefix}-${index}`;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={key}>{part.slice(1, -1)}</code>;
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={key}>{inline(part.slice(2, -2), key, options)}</strong>;
+    const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
+    if (link) { const href = safeHref(link[2]); if (href) return <a key={key} href={href} rel="noopener noreferrer">{inline(link[1], key, {})}</a>; }
+    const citation = /^\[(\d+)\]$/.exec(part);
+    if (citation && options.onCitation && options.citationIds?.includes(Number(citation[1]))) return <button key={key} type="button" className="chat-inline-citation" aria-label={`查看引用 ${citation[1]}`} onClick={() => options.onCitation?.(Number(citation[1]))}>{part}</button>;
+    return part;
   });
 }
-
-function tableCells(line: string): string[] {
-  return line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "")
-    .split(/(?<!\\)\|/).map(cell => cell.trim().replace(/\\\|/g, "|"));
-}
-
-function renderMarkdown(source: string): ReactNode[] {
-  const lines = source.split("\n");
-  const blocks: ReactNode[] = [];
-  let list: { ordered: boolean; items: string[] } | null = null;
-  let key = 0;
-
-  const flushList = () => {
-    if (!list) return;
-    const items = list.items;
-    const ordered = list.ordered;
-    const node = ordered
-      ? <ol key={`list-${key++}`}>{items.map((item, index) => <li key={index}>{renderInline(item, `ol-${key}-${index}`)}</li>)}</ol>
-      : <ul key={`list-${key++}`}>{items.map((item, index) => <li key={index}>{renderInline(item, `ul-${key}-${index}`)}</li>)}</ul>;
-    blocks.push(node);
-    list = null;
-  };
-
+function cells(line: string): string[] { return line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map(cell => cell.trim().replace(/\\\|/g, "|")); }
+const listItem = /^(\s*)([-*]|\d+[.)])\s+(.*)$/;
+function blocks(lines: string[], options: Options, prefix = "md", depth = 0): ReactNode[] {
+  if (depth > 12) return [<p key={prefix}>{lines.join("\n")}</p>];
+  const result: ReactNode[] = [];
   for (let index = 0; index < lines.length; index++) {
-    const raw = lines[index];
-    const line = raw.trimEnd();
-    const separators = index + 1 < lines.length ? tableCells(lines[index + 1]) : [];
-    const headers = tableCells(line);
+    const line = lines[index].trimEnd(), key = `${prefix}-${index}`;
+    if (!line.trim()) continue;
+    const fence = /^\s*(`{3,}|~{3,})([\w+-]*)\s*$/.exec(line);
+    if (fence) {
+      const code: string[] = []; index++;
+      while (index < lines.length && !new RegExp(`^\\s*${fence[1][0]}{${fence[1].length},}\\s*$`).test(lines[index])) code.push(lines[index++]);
+      result.push(<pre key={key}><code className={fence[2] ? `language-${fence[2]}` : undefined}>{code.join("\n")}</code></pre>); continue;
+    }
+    if (/^\s*>/.test(line)) {
+      const quote: string[] = [];
+      while (index < lines.length && /^\s*>/.test(lines[index])) quote.push(lines[index++].replace(/^\s*> ?/, ""));
+      index--; result.push(<blockquote key={key}>{blocks(quote, options, key, depth + 1)}</blockquote>); continue;
+    }
+    const headers = cells(line), separators = index + 1 < lines.length ? cells(lines[index + 1]) : [];
     if (line.includes("|") && separators.length === headers.length && separators.every(cell => /^:?-{3,}:?$/.test(cell))) {
-      flushList();
-      const rows: string[][] = [];
-      index += 1;
-      while (index + 1 < lines.length && lines[index + 1].trim() && lines[index + 1].includes("|")) {
-        rows.push(tableCells(lines[++index]));
-      }
-      const alignment = separators.map(cell => cell.startsWith(":") && cell.endsWith(":") ? "center" as const : cell.endsWith(":") ? "right" as const : "left" as const);
-      blocks.push(<div className="markdown-table-scroll" role="region" aria-label="表格，可横向滚动" tabIndex={0} key={`table-${key++}`}><table>
-        <thead><tr>{headers.map((cell, column) => <th key={column} scope="col" style={{ textAlign: alignment[column] }}>{renderInline(cell, `th-${key}-${column}`)}</th>)}</tr></thead>
-        <tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{headers.map((_, column) => <td key={column} style={{ textAlign: alignment[column] }}>{renderInline(row[column] || "", `td-${key}-${rowIndex}-${column}`)}</td>)}</tr>)}</tbody>
-      </table></div>);
-      continue;
+      const rows: string[][] = []; index++;
+      while (index + 1 < lines.length && lines[index + 1].trim() && lines[index + 1].includes("|")) rows.push(cells(lines[++index]));
+      const align = separators.map(cell => cell.startsWith(":") && cell.endsWith(":") ? "center" as const : cell.endsWith(":") ? "right" as const : "left" as const);
+      result.push(<div className="markdown-table-scroll" role="region" aria-label="表格，可横向滚动" tabIndex={0} key={key}><table><thead><tr>{headers.map((cell, col) => <th key={col} scope="col" style={{ textAlign: align[col] }}>{inline(cell, `${key}-h${col}`, options)}</th>)}</tr></thead><tbody>{rows.map((row, r) => <tr key={r}>{headers.map((_, col) => <td key={col} style={{ textAlign: align[col] }}>{inline(row[col] || "", `${key}-${r}-${col}`, options)}</td>)}</tr>)}</tbody></table></div>); continue;
     }
     const heading = /^(#{1,3})\s+(.*)$/.exec(line);
-    if (heading) {
-      flushList();
-      const level = heading[1].length;
-      const text = heading[2];
-      const node = level === 1 ? <h1 key={`h-${key++}`}>{renderInline(text, `h1-${key}`)}</h1>
-        : level === 2 ? <h2 key={`h-${key++}`}>{renderInline(text, `h2-${key}`)}</h2>
-        : <h3 key={`h-${key++}`}>{renderInline(text, `h3-${key}`)}</h3>;
-      blocks.push(node);
-      continue;
+    if (heading) { const content = inline(heading[2], key, options); result.push(heading[1].length === 1 ? <h1 key={key}>{content}</h1> : heading[1].length === 2 ? <h2 key={key}>{content}</h2> : <h3 key={key}>{content}</h3>); continue; }
+    if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) { result.push(<hr key={key} />); continue; }
+    const first = listItem.exec(line);
+    if (first) {
+      const indent = first[1].length, ordered = /^\d/.test(first[2]), items: ReactNode[] = [];
+      while (index < lines.length) {
+        const match = listItem.exec(lines[index]);
+        if (!match || match[1].length !== indent || /^\d/.test(match[2]) !== ordered) break;
+        const nested: string[] = [], itemKey = `${key}-i${index}`;
+        const body = match[3]; index++;
+        while (index < lines.length && (!lines[index].trim() || (lines[index].match(/^\s*/)?.[0].length || 0) > indent)) {
+          nested.push(lines[index].slice(Math.min(indent + 2, lines[index].match(/^\s*/)?.[0].length || 0))); index++;
+        }
+        items.push(<li key={itemKey}>{inline(body, itemKey, options)}{blocks(nested, options, itemKey, depth + 1)}</li>);
+      }
+      index--; result.push(ordered ? <ol key={key} start={Number.parseInt(first[2], 10)}>{items}</ol> : <ul key={key}>{items}</ul>); continue;
     }
-    const unordered = /^[-*]\s+(.*)$/.exec(line);
-    if (unordered) {
-      if (!list || list.ordered) { flushList(); list = { ordered: false, items: [] }; }
-      list.items.push(unordered[1]);
-      continue;
-    }
-    const ordered = /^\d+\.\s+(.*)$/.exec(line);
-    if (ordered) {
-      if (!list || !list.ordered) { flushList(); list = { ordered: true, items: [] }; }
-      list.items.push(ordered[1]);
-      continue;
-    }
-    if (line.trim() === "") {
-      flushList();
-      continue;
-    }
-    flushList();
-    blocks.push(<p key={`p-${key++}`}>{renderInline(line, `p-${key}`)}</p>);
+    result.push(<p key={key}>{inline(line, key, options)}</p>);
   }
-  flushList();
-  return blocks;
+  return result;
 }
-
-export default function MarkdownView({ source }: { source: string }) {
-  return <div className="markdown-body">{renderMarkdown(source)}</div>;
-}
+export default function MarkdownView({ source, citationIds, onCitation }: { source: string } & Options) { return <div className="markdown-body">{blocks(source.replace(/\r\n/g, "\n").split("\n"), { citationIds, onCitation })}</div>; }

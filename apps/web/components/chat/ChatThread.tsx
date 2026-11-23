@@ -1,22 +1,18 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { errorMessage, request } from "../../lib/api";
 import { getStoredUser, type AuthUser } from "../../lib/auth";
 import type { AgentModelCatalog, ChatHistory, Conversation } from "../../lib/chat";
 import ChatMessageList from "./ChatMessageList";
 import ChatComposer from "./ChatComposer";
 import ChatModelSelect from "./ChatModelSelect";
-import ChatTitleEditor from "./ChatTitleEditor";
 import ChatArchiveButton from "./ChatArchiveButton";
 import ChatDeleteButton from "./ChatDeleteButton";
-import ResponsiveActions from "../ResponsiveActions";
 import { streamAnswer, type AnswerPreview } from "../../lib/chat-stream";
 import { chatFailureMessage } from "../../lib/chat-errors";
 import { chatRequestIdentity } from "../../lib/chat-models";
 
 export default function ChatThread({ conversationId, onLoaded, onChanged, onDeleted }: { conversationId: string; onLoaded: (item: Conversation) => void; onChanged: () => void; onDeleted: () => void }) {
-  const [titleEditing, setTitleEditing] = useState(false);
   const [history, setHistory] = useState<ChatHistory | null>(null);
   const [catalog, setCatalog] = useState<AgentModelCatalog | null>(null);
   const [modelId, setModelId] = useState("default");
@@ -56,6 +52,8 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const messageScroll = useRef<HTMLDivElement>(null);
+  const followLatest = useRef(true);
+  const [showLatest, setShowLatest] = useState(false);
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const result = await request<ChatHistory>(`/chat/conversations/${conversationId}/messages`, { signal });
@@ -74,8 +72,39 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
   }, [history?.conversation.generating, load, sending]);
   useEffect(() => {
     const container = messageScroll.current;
-    container?.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-  }, [history?.messages.length]);
+    const column = container?.querySelector(".chat-message-column");
+    if (!container || !column) return;
+    let frame = 0;
+    const observePosition = () => {
+      const nearBottom = container.scrollHeight - container.clientHeight - container.scrollTop <= 72;
+      if (nearBottom) followLatest.current = true;
+      setShowLatest(!nearBottom);
+    };
+    const readingSource = () => { followLatest.current = false; };
+    const manualScroll = () => { followLatest.current = false; };
+    const keyboardScroll = (event: KeyboardEvent) => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) manualScroll(); };
+    const scrollbarDrag = (event: PointerEvent) => { if (event.clientX >= container.getBoundingClientRect().right - 20) manualScroll(); };
+    const resize = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (followLatest.current) { container.scrollTop = container.scrollHeight; setShowLatest(false); }
+        else setShowLatest(container.scrollHeight - container.clientHeight - container.scrollTop > 72);
+      });
+    });
+    resize.observe(column); resize.observe(container);
+    container.addEventListener("scroll", observePosition, { passive: true });
+    container.addEventListener("chat:source-navigation", readingSource);
+    container.addEventListener("wheel", manualScroll, { passive: true });
+    container.addEventListener("touchstart", manualScroll, { passive: true });
+    container.addEventListener("keydown", keyboardScroll);
+    container.addEventListener("pointerdown", scrollbarDrag);
+    return () => { resize.disconnect(); cancelAnimationFrame(frame); container.removeEventListener("scroll", observePosition); container.removeEventListener("chat:source-navigation", readingSource); container.removeEventListener("wheel", manualScroll); container.removeEventListener("touchstart", manualScroll); container.removeEventListener("keydown", keyboardScroll); container.removeEventListener("pointerdown", scrollbarDrag); };
+  }, []);
+  function returnToLatest() {
+    followLatest.current = true; setShowLatest(false);
+    const container = messageScroll.current;
+    if (container) container.scrollTop = container.scrollHeight;
+  }
   async function chooseModel(id: string) {
     if (switchingRef.current || sendingRef.current || !history || history.conversation.generating || history.conversation.is_archived) return;
     const previous = modelId;
@@ -101,6 +130,7 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
       setError(retryRequest ? "原问题使用的模型当前不可用。请选择可用模型后作为新问题发送。" : "请选择已配置的可用模型，或重新加载模型列表。");
       return false;
     }
+    returnToLatest();
     const run = { controller: new AbortController(), stopped: false };
     activeRun.current = run;
     sendingRef.current = true; setSending(true); setError(""); setPreview(null); setReadyRequestId(null);
@@ -160,20 +190,14 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
   }] : [])] : [];
   const retryable = last?.role === "user" && (last.status === "failed" || (last.status === "pending" && !history?.conversation.generating));
   const canStop = !stopping && (sending ? !!readyRequestId : !!history?.conversation.generating && history.messages.some((item) => item.role === "user" && item.status === "pending"));
-  return <><header className={`chat-thread-header${titleEditing ? " title-is-editing" : ""}`}>
-    <div className="chat-thread-heading">
-      <span className="eyebrow">{history?.conversation.scope === "global" ? "主对话 · 全部课程" : history?.conversation.scope === "course" ? "课程对话 · 全部课次" : "课次对话 · 仅本课次"}</span>
-      {history ? <ChatTitleEditor conversation={history.conversation} disabled={sending || history.conversation.generating} editing={titleEditing} onEditingChange={setTitleEditing} onRenamed={(item) => { setHistory({ ...history, conversation: item }); onChanged(); }} /> : <h2>正在读取对话</h2>}
-    </div>
-    {history && <div className="chat-thread-actions"><ResponsiveActions label="对话更多操作">
-      <button type="button" className="button button-quiet chat-mobile-rename" disabled={sending || history.conversation.generating} onClick={() => setTitleEditing(true)}>修改对话标题</button>
-      {history.conversation.scope !== "global" && <Link className="button button-quiet" href={history.conversation.scope === "course" ? `/courses/${history.conversation.course_id}` : `/lessons/${history.conversation.lesson_id}/summary`}>{history.conversation.scope === "course" ? "查看课程 ↗" : "查看本课纪要 ↗"}</Link>}
+  return <><header className="chat-thread-header chat-thread-tools" aria-label="对话操作">
+    {history && <div className="chat-thread-actions">
       <ChatArchiveButton conversation={history.conversation} onChanged={(item) => { setHistory({ ...history, conversation: item }); onChanged(); }} />
       <ChatDeleteButton conversation={history.conversation} disabled={sending || history.conversation.generating} onDeleted={onDeleted} />
-    </ResponsiveActions></div>}
+    </div>}
   </header>
     {error && <div className="chat-thread-notice"><p role="alert">{error}</p><button className="button button-secondary" onClick={() => { void load(); setModelsRevision((value) => value + 1); }}>重新加载</button></div>}
-    <div ref={messageScroll} className="chat-message-scroll"><div className="chat-message-column">{loading ? <p role="status">正在读取消息…</p> : history?.messages.length ? <ChatMessageList conversationId={conversationId} username={username} messages={visibleMessages} generating={history.conversation.generating} /> : !error && <div className="chat-empty-conversation"><h3>有什么想弄明白的？</h3><p>{history?.conversation.scope === "global" ? "可以查询所有课程的学习进度、课堂内容和错题，创建课程与课次，或按名称标记知识点状态。也可以选择一门课生成练习。" : history?.conversation.scope === "course" ? "可以查询这门课的学习进度、课堂内容和错题，添加课次，或明确标记知识点状态。课堂回答附上原文来源，小测生成后开始答题。" : "回答会依据本课次的文字记录与纪要，并附上原文时间点。"}</p></div>}{retryable && !history?.conversation.is_archived && <button className="button button-secondary" disabled={sending} onClick={() => void send(last.content, last.request_id)}>重试这条问题</button>}</div></div>
+    <div className="chat-scroll-area"><div ref={messageScroll} className="chat-message-scroll"><div className="chat-message-column">{loading ? <p role="status">正在读取消息…</p> : history?.messages.length ? <ChatMessageList conversationId={conversationId} username={username} messages={visibleMessages} generating={history.conversation.generating} /> : !error && <div className="chat-empty-conversation"><h3>有什么想弄明白的？</h3><p>{history?.conversation.scope === "global" ? "可以查询所有课程的学习进度、课堂内容和错题，创建课程与课次，或按名称标记知识点状态。也可以选择一门课生成练习。" : history?.conversation.scope === "course" ? "可以查询这门课的学习进度、课堂内容和错题，添加课次，或明确标记知识点状态。课堂回答附上原文来源，小测生成后开始答题。" : "回答会依据本课次的文字记录与纪要，并附上原文时间点。"}</p></div>}{retryable && !history?.conversation.is_archived && <button className="button button-secondary" disabled={sending} onClick={() => void send(last.content, last.request_id)}>重试这条问题</button>}</div></div>{showLatest && <button type="button" className="chat-return-latest" onClick={returnToLatest}>回到最新 ↓</button>}</div>
     {history?.conversation.is_archived && <p className="chat-thread-notice" role="status">此对话已归档，全部内容已保留。点击右上方“恢复对话”后继续提问。</p>}
     {history && !history.conversation.is_archived && <ChatComposer scope={history.conversation.scope} disabled={loading || history.conversation.generating || stopping || switchingModel || modelsLoading || !!modelsError || !catalog?.items.some((model) => model.id === modelId && model.available)} busy={sending} onSend={send} onStop={() => void stop()} canStop={canStop} stopping={stopping} modelSelector={<ChatModelSelect models={catalog?.items || []} value={modelId} onChange={(id) => void chooseModel(id)} loading={modelsLoading} error={modelsError} disabled={loading || sending || history.conversation.generating || stopping || switchingModel} onRetry={() => setModelsRevision((value) => value + 1)} />} />}</>;
 }

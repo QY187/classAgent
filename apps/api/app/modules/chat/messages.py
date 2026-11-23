@@ -1,7 +1,7 @@
 import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from ...shared.models import ChatMessage, Quiz, AgentAction
+from ...shared.models import ChatMessage, Quiz, AgentAction, Course, Lesson
 from .course_actions import visible_action
 from .lesson_actions import visible_action as visible_lesson_action
 from .knowledge_actions import visible_action as visible_knowledge_action
@@ -10,6 +10,23 @@ from .edit_actions import visible_action as visible_edit_action
 from .quiz_actions import quiz_card
 from .access import owned_conversation
 from .conversations import conversation_read
+
+
+def enrich_citations(db, citations, user_id):
+    """只补充当前用户可见的课程信息，不把历史来源误指向其他课程。"""
+    lesson_ids = {item.get("lesson_id") for item in citations if item.get("lesson_id")}
+    course_ids = {item.get("course_id") for item in citations if item.get("course_id")}
+    lessons = dict(db.execute(select(Lesson.id, Course.name).join(Course, Lesson.course_id == Course.id)
+        .where(Lesson.id.in_(lesson_ids), Course.owner_id == user_id)).all()) if lesson_ids else {}
+    courses = dict(db.execute(select(Course.id, Course.name).where(Course.id.in_(course_ids),
+        Course.owner_id == user_id)).all()) if course_ids else {}
+    for item in citations:
+        name = courses.get(item.get("course_id")) or lessons.get(item.get("lesson_id"))
+        if name:
+            item["course_name"] = name
+        if item.get("source_type", "transcript") == "transcript" and item.get("lesson_id") not in lessons:
+            item["source_status"] = "unavailable"
+    return citations
 
 
 def message_read(item: ChatMessage) -> dict:
@@ -40,4 +57,5 @@ def read_messages(db: Session, conversation_id: str, username: str) -> dict:
         message["citations"] = [refresh_material_citation(db, citation, username) for citation in message["citations"]]
         message["artifacts"] = ([artifacts[item.id]] if item.id in artifacts else []) + action_artifacts.get(item.id, [])
         messages.append(message)
+    enrich_citations(db, [citation for message in messages for citation in message["citations"]], conversation.user_id)
     return {"conversation": conversation_read(conversation), "messages": messages}
