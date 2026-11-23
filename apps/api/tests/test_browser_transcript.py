@@ -9,6 +9,7 @@ os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 
 from fastapi import UploadFile  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
+from kombu.exceptions import OperationalError  # noqa: E402
 from sqlalchemy import create_engine, select  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from starlette.datastructures import Headers  # noqa: E402
@@ -16,7 +17,8 @@ from starlette.datastructures import Headers  # noqa: E402
 from app.core.db import Base  # noqa: E402
 from app.modules.lessons.service import update_transcript_segment, upload_audio  # noqa: E402
 from app.infrastructure.asr import TranscriptResult  # noqa: E402
-from app.infrastructure.tasks import process_audio  # noqa: E402
+from app.infrastructure.tasks import generate_summary, process_audio  # noqa: E402
+from app.modules.summaries.service import request_summary  # noqa: E402
 from app.shared.models import Course, Lesson, LessonSummary, TranscriptRevision, TranscriptSegment, User  # noqa: E402
 
 
@@ -89,6 +91,76 @@ class BrowserTranscriptUploadTest(unittest.TestCase):
         segment = self.db.scalar(select(TranscriptSegment))
         self.assertEqual((segment.text, segment.source), ("上传文件的文字。", "paraformer"))
         summary_task.assert_called_once_with(self.lesson.id)
+
+    def test_summary_dispatch_failure_preserves_completed_transcription(self):
+        job, _, asr_task = self.upload()
+        object_key = asr_task.call_args.args[1]
+        with patch("app.core.db.SessionLocal", sessionmaker(bind=self.engine)), patch(
+            "app.infrastructure.tasks.materialize_file", return_value=("audio.webm", False)
+        ), patch(
+            "app.infrastructure.tasks.transcribe_file",
+            return_value=[TranscriptResult("说话人 1", 100, 900, "上传文件的文字。")],
+        ), patch("app.infrastructure.tasks.generate_summary.delay", side_effect=OperationalError("broker unavailable")):
+            process_audio(job.id, object_key)
+
+        self.db.expire_all()
+        self.assertEqual((job.stage, self.lesson.status), ("completed", "completed"))
+        self.assertEqual(self.db.scalar(select(TranscriptSegment)).text, "上传文件的文字。")
+        summary = self.db.scalar(select(LessonSummary))
+        self.assertEqual(summary.status, "failed")
+        self.assertIn("重新生成", summary.error_message)
+
+    def test_manual_summary_dispatch_failure_allows_retry(self):
+        self.upload(json.dumps([{"start_ms": 0, "end_ms": 1000, "text": "原文"}]))
+        with patch("app.infrastructure.tasks.generate_summary.delay", side_effect=OperationalError("broker unavailable")):
+            with self.assertRaises(HTTPException) as context:
+                request_summary(self.db, self.lesson.id, "test")
+        self.assertEqual(context.exception.status_code, 503)
+        self.assertEqual(self.db.scalar(select(LessonSummary)).status, "failed")
+
+        with patch("app.infrastructure.tasks.generate_summary.delay") as summary_task:
+            summary = request_summary(self.db, self.lesson.id, "test")
+        self.assertEqual(summary.status, "queued")
+        self.assertIsNone(summary.error_message)
+        summary_task.assert_called_once_with(self.lesson.id)
+
+    def test_summary_dispatch_failure_does_not_overwrite_started_task(self):
+        self.upload(json.dumps([{"start_ms": 0, "end_ms": 1000, "text": "原文"}]))
+
+        def start_then_lose_connection(lesson_id):
+            with Session(self.engine) as worker_db:
+                summary = worker_db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson_id))
+                summary.status = "generating"
+                worker_db.commit()
+            raise OperationalError("broker connection lost")
+
+        with patch("app.infrastructure.tasks.generate_summary.delay", side_effect=start_then_lose_connection):
+            with self.assertRaises(HTTPException):
+                request_summary(self.db, self.lesson.id, "test")
+
+        self.assertEqual(self.db.scalar(select(LessonSummary)).status, "generating")
+
+    def test_failed_regeneration_preserves_edited_summary(self):
+        self.upload(json.dumps([{"start_ms": 0, "end_ms": 1000, "text": "原文"}]))
+        summary = self.db.scalar(select(LessonSummary))
+        summary.status = "edited"
+        summary.content = "<p>已编辑</p>"
+        self.db.commit()
+        with patch("app.infrastructure.tasks.generate_summary.delay", side_effect=OperationalError("broker unavailable")):
+            with self.assertRaises(HTTPException):
+                request_summary(self.db, self.lesson.id, "test")
+        self.assertEqual((summary.status, summary.content), ("edited", "<p>已编辑</p>"))
+
+    def test_index_dispatch_failure_preserves_generated_summary(self):
+        self.upload(json.dumps([{"start_ms": 0, "end_ms": 1000, "text": "原文"}]))
+        with patch("app.core.db.SessionLocal", sessionmaker(bind=self.engine)), patch(
+            "app.infrastructure.tasks.build_summary", return_value='{"overview":"完成的纪要"}'
+        ), patch("app.infrastructure.tasks.reindex_lesson.delay", side_effect=OperationalError("broker unavailable")):
+            generate_summary(self.lesson.id)
+        self.db.expire_all()
+        summary = self.db.scalar(select(LessonSummary))
+        self.assertEqual(summary.status, "completed")
+        self.assertEqual(json.loads(summary.content)["overview"], "完成的纪要")
 
     def test_correct_transcript_preserves_revision_and_invalidates_summary(self):
         segment = TranscriptSegment(lesson_id=self.lesson.id, speaker="说话人 1", start_ms=0, end_ms=1000, text="错误词", source="paraformer")

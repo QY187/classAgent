@@ -1,14 +1,18 @@
-from ..core.visibility import visible_get
-from celery import Celery
-from sqlalchemy import select
+import logging
 from pathlib import Path
 
+from celery import Celery
+from kombu.exceptions import OperationalError
+from sqlalchemy import select
+
 from ..core.config import get_settings
+from ..core.visibility import visible_get
 from .asr import transcribe_file
 from .storage import materialize_file
-from ..modules.summaries.service import generate_summary as build_summary
+from ..modules.summaries.service import dispatch_summary, generate_summary as build_summary
 
 
+logger = logging.getLogger(__name__)
 celery_app = Celery("classagent", broker=get_settings().redis_url, backend=get_settings().redis_url)
 celery_app.conf.update(task_track_started=True, result_expires=3600, beat_schedule={
     "retry-transcription-dispatch": {"task": "classagent.dispatch_transcription_retries", "schedule": 60.0},
@@ -85,14 +89,17 @@ def process_audio(job_id: str, object_key: str) -> None:
             )
             for segment in segments
         ])
-        if db.scalar(select(LessonSummary.id).where(LessonSummary.lesson_id == lesson.id)) is None:
-            db.add(LessonSummary(lesson_id=lesson.id, provider=get_settings().summary_provider, status="queued"))
+        summary = db.scalar(select(LessonSummary).where(LessonSummary.lesson_id == lesson.id))
+        if summary is None:
+            summary = LessonSummary(lesson_id=lesson.id, provider=get_settings().summary_provider, status="queued")
+            db.add(summary)
+        lesson_id = lesson.id
+        db.flush()
+        summary_id, queued_at = summary.id, summary.updated_at
         job.stage = "completed"
         job.progress = 100
         lesson.status = "completed"
         db.commit()
-        generate_summary.delay(lesson.id)
-        reindex_lesson.delay(lesson.id)
     except Exception as exc:
         db.rollback()
         job = visible_get(db, ProcessingJob, job_id)
@@ -104,6 +111,9 @@ def process_audio(job_id: str, object_key: str) -> None:
                 lesson.status = "failed"
             db.commit()
         raise
+    else:
+        dispatch_summary(db, lesson_id, summary_id, queued_at)
+        dispatch_lesson_reindex(lesson_id)
     finally:
         db.close()
 
@@ -155,7 +165,6 @@ def generate_summary(lesson_id: str) -> None:
             summary.content = None
             summary.status = "stale"
         db.commit()
-        reindex_lesson.delay(lesson_id)
     except Exception as exc:
         db.rollback()
         if summary is None:
@@ -165,8 +174,17 @@ def generate_summary(lesson_id: str) -> None:
             summary.error_message = str(exc)
             db.commit()
         raise
+    else:
+        dispatch_lesson_reindex(lesson_id)
     finally:
         db.close()
+
+
+def dispatch_lesson_reindex(lesson_id: str) -> None:
+    try:
+        reindex_lesson.delay(lesson_id)
+    except OperationalError:
+        logger.exception("Could not enqueue index update for lesson %s", lesson_id)
 
 
 def _format_time(milliseconds: int) -> str:

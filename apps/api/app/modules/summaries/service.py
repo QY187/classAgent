@@ -1,16 +1,24 @@
-from ...core.visibility import visible_get
+from datetime import datetime
 import json
+import logging
 import re
 from typing import Any
 
 import httpx
 from fastapi import HTTPException
+from kombu.exceptions import OperationalError
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
 from ...core.ownership import user_id_for_username
-from ...shared.models import Lesson, LessonSummary
+from ...core.visibility import visible_get
+from ...shared.models import Lesson, LessonSummary, now_utc
 from . import mapper
+
+
+logger = logging.getLogger(__name__)
+SUMMARY_DISPATCH_ERROR = "纪要任务暂时无法加入队列，请稍后重新生成。"
 
 
 SUMMARY_SCHEMA = {
@@ -113,14 +121,38 @@ def request_summary(db: Session, lesson_id: str, owner_username: str) -> LessonS
     if summary is None:
         summary = LessonSummary(lesson_id=lesson_id, provider=get_settings().summary_provider)
         db.add(summary)
+    failure_status = summary.status if summary.status in {"completed", "edited"} else "failed"
     summary.status = "queued"
     summary.error_message = None
+    queued_at = now_utc()
+    summary.updated_at = queued_at
+    db.flush()
+    summary_id = summary.id
     db.commit()
+    if not dispatch_summary(db, lesson_id, summary_id, queued_at, failure_status=failure_status):
+        raise HTTPException(status_code=503, detail=SUMMARY_DISPATCH_ERROR)
     db.refresh(summary)
-    from ...infrastructure.tasks import generate_summary as generate_summary_task
-
-    generate_summary_task.delay(lesson_id)
     return summary
+
+
+def dispatch_summary(
+    db: Session, lesson_id: str, summary_id: str, queued_at: datetime, *, failure_status: str = "failed",
+) -> bool:
+    from ...infrastructure.tasks import generate_summary as task
+
+    try:
+        task.delay(lesson_id)
+    except OperationalError:
+        logger.exception("Could not enqueue summary for lesson %s", lesson_id)
+        # 仅更新本次登记且仍未开始的任务，避免覆盖 Worker 或后续请求的状态。
+        db.execute(update(LessonSummary).where(
+            LessonSummary.id == summary_id,
+            LessonSummary.status == "queued",
+            LessonSummary.updated_at == queued_at,
+        ).values(status=failure_status, error_message=SUMMARY_DISPATCH_ERROR))
+        db.commit()
+        return False
+    return True
 
 
 def update_summary_content(db: Session, lesson_id: str, content: str, owner_username: str) -> LessonSummary:
@@ -133,6 +165,6 @@ def update_summary_content(db: Session, lesson_id: str, content: str, owner_user
     summary.error_message = None
     db.commit()
     db.refresh(summary)
-    from ...infrastructure.tasks import reindex_lesson
-    reindex_lesson.delay(lesson_id)
+    from ...infrastructure.tasks import dispatch_lesson_reindex
+    dispatch_lesson_reindex(lesson_id)
     return summary

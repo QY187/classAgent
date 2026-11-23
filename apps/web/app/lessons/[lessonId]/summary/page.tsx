@@ -39,7 +39,14 @@ export default function SummaryPage() {
   async function generate() {
     if (!segments.length || loading || summary?.status === "generating" || summary?.status === "queued") return;
     setLoading(true); setMessage("正在生成智能纪要，请稍候…");
-    try { setSummary(await request<Summary>(`/lessons/${lessonId}/summary`, { method: "POST" })); } catch (error) { setMessage(errorMessage(error)); } finally { setLoading(false); }
+    try {
+      setSummary(await request<Summary>(`/lessons/${lessonId}/summary`, { method: "POST" }));
+    } catch (error) {
+      setMessage(errorMessage(error));
+      await load();
+    } finally {
+      setLoading(false);
+    }
   }
 
   function startEdit() {

@@ -48,20 +48,25 @@ def upload_audio(db: Session, lesson_id: str, file: UploadFile, browser_transcri
     for chunk in chunks:
         db.add(TranscriptSegment(lesson_id=lesson_id, speaker="说话人 1", start_ms=chunk["start_ms"], end_ms=chunk["end_ms"], text=chunk["text"], source="browser"))
     lesson.status = "completed" if chunks else "queued"
+    summary = None
     if chunks:
         from ...core.config import get_settings
 
-        db.add(LessonSummary(lesson_id=lesson_id, provider=get_settings().summary_provider, status="queued"))
+        summary = LessonSummary(lesson_id=lesson_id, provider=get_settings().summary_provider, status="queued")
+        db.add(summary)
+        db.flush()
+        summary_id, queued_at = summary.id, summary.updated_at
     job = mapper.save_audio_job(
         db, audio,
         ProcessingJob(lesson_id=lesson_id, stage="completed" if chunks else "queued", progress=100 if chunks else 0),
         lesson,
     )
-    if chunks:
-        from ...infrastructure.tasks import generate_summary, reindex_lesson
+    if summary is not None:
+        from ...infrastructure.tasks import dispatch_lesson_reindex
+        from ..summaries.service import dispatch_summary
 
-        generate_summary.delay(lesson_id)
-        reindex_lesson.delay(lesson_id)
+        dispatch_summary(db, lesson_id, summary_id, queued_at)
+        dispatch_lesson_reindex(lesson_id)
     else:
         from ...infrastructure.tasks import process_audio
 
@@ -124,8 +129,9 @@ def merge_segments(db: Session, lesson_id: str, first_id: str, second_id: str, o
             summary.error_message = None
         db.execute(delete(DocumentChunk).where(DocumentChunk.lesson_id == lesson_id))
         db.commit()
-        from ...infrastructure.tasks import reindex_lesson
-        reindex_lesson.delay(lesson_id)
+        db.refresh(merged)
+        from ...infrastructure.tasks import dispatch_lesson_reindex
+        dispatch_lesson_reindex(lesson_id)
         return merged
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
