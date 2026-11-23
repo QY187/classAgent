@@ -13,7 +13,7 @@ router = APIRouter(tags=["search"], dependencies=[Depends(get_current_user)])
 
 @router.get("/search")
 def search(
-    q: str = Query("", min_length=1),
+    q: str = Query("", min_length=1, max_length=100),
     course_id: str | None = None,
     kind: Literal["all", "courses", "lessons", "transcript", "summaries", "review_cards", "materials"] = "all",
     username: str = Depends(get_current_user),

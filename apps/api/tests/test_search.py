@@ -52,3 +52,16 @@ class SearchTest(unittest.TestCase):
     def test_lesson_result_names_its_course(self):
         lessons = search_all(self.db, "二叉树", "alice", kind="lessons")["lessons"]
         self.assertEqual([(item["title"], item["course_name"]) for item in lessons], [("二叉树", "数据结构")])
+
+    def test_fuzzy_chinese_and_unordered_keywords(self):
+        self.assertEqual([row["id"] for row in search_all(self.db, "数构", "alice")["courses"]], ["alice-course"])
+        cards = search_all(self.db, "上限 节点", "alice")["review_cards"]
+        self.assertEqual([row["title"] for row in cards], ["满二叉树"])
+        self.assertEqual(search_all(self.db, "上限 节点", "bob")["review_cards"], [])
+        self.assertEqual(search_all(self.db, "  ", "alice")["courses"], [])
+
+    def test_sql_wildcards_are_literal(self):
+        self.db.add(Course(id="literal", name="C_100%入门", owner_id="alice-id"))
+        self.db.commit()
+        self.assertEqual([row["id"] for row in search_all(self.db, "100%", "alice")["courses"]], ["literal"])
+        self.assertEqual([row["id"] for row in search_all(self.db, "_", "alice")["courses"]], ["literal"])

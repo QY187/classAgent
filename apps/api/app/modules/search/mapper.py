@@ -3,13 +3,20 @@ from sqlalchemy.orm import Session
 
 from ...core.ownership import user_id_for_username
 from ...shared.models import Course, CourseMaterial, Lesson, LessonSummary, MaterialChunk, ReviewCard, TranscriptSegment
+from .matching import search_condition
 
 
 def _snippet(text: str, query: str, width: int = 36) -> str:
     lower = text.lower()
     idx = lower.find(query.lower())
     if idx < 0:
-        return text[: width * 2]
+        tokens = query.split()
+        positions = [lower.find(token.lower()) for token in tokens]
+        positions = [position for position in positions if position >= 0]
+        if not positions:
+            positions = [lower.find(token[0].lower()) for token in tokens if token]
+            positions = [position for position in positions if position >= 0]
+        idx = min(positions) if positions else 0
     start = max(0, idx - width)
     end = min(len(text), idx + len(query) + width)
     prefix = "…" if start > 0 else ""
@@ -18,23 +25,22 @@ def _snippet(text: str, query: str, width: int = 36) -> str:
 
 
 def search_all(db: Session, query: str, owner_username: str, course_id: str | None = None, kind: str = "all", *, lesson_id: str | None = None) -> dict:
-    pattern = f"%{query}%"
     owned = Course.owner_id == user_id_for_username(db, owner_username)
     scope = [owned, *([Course.id == course_id] if course_id else [])]
     lesson_scope = [*scope, *([Lesson.id == lesson_id] if lesson_id else [])]
     courses = db.scalars(
-        select(Course).where(*scope, Course.name.ilike(pattern)).order_by(Course.created_at.desc()).limit(20)
+        select(Course).where(*scope, search_condition(query, Course.name, Course.semester)).order_by(Course.created_at.desc()).limit(20)
     ).all() if kind in ("all", "courses") else []
     lessons = db.scalars(
         select(Lesson).join(Course, Lesson.course_id == Course.id)
-        .where(*lesson_scope, Lesson.title.ilike(pattern)).order_by(Lesson.created_at.desc()).limit(20)
+        .where(*lesson_scope, search_condition(query, Lesson.title)).order_by(Lesson.created_at.desc()).limit(20)
     ).all() if kind in ("all", "lessons") else []
 
     transcript_rows = db.execute(
         select(TranscriptSegment, Lesson, Course)
         .join(Lesson, TranscriptSegment.lesson_id == Lesson.id)
         .join(Course, Lesson.course_id == Course.id)
-        .where(*lesson_scope, TranscriptSegment.text.ilike(pattern))
+        .where(*lesson_scope, search_condition(query, TranscriptSegment.text))
         .order_by(Lesson.created_at.desc(), TranscriptSegment.start_ms)
         .limit(30)
     ).all() if kind in ("all", "transcript") else []
@@ -43,7 +49,7 @@ def search_all(db: Session, query: str, owner_username: str, course_id: str | No
         select(LessonSummary, Lesson, Course)
         .join(Lesson, LessonSummary.lesson_id == Lesson.id)
         .join(Course, Lesson.course_id == Course.id)
-        .where(*lesson_scope, LessonSummary.content.ilike(pattern))
+        .where(*lesson_scope, search_condition(query, LessonSummary.content))
         .limit(15)
     ).all() if kind in ("all", "summaries") else []
 
@@ -51,7 +57,7 @@ def search_all(db: Session, query: str, owner_username: str, course_id: str | No
         select(ReviewCard, Lesson, Course)
         .join(Lesson, ReviewCard.lesson_id == Lesson.id)
         .join(Course, Lesson.course_id == Course.id)
-        .where(*lesson_scope, ReviewCard.title.ilike(pattern) | ReviewCard.body.ilike(pattern))
+        .where(*lesson_scope, search_condition(query, ReviewCard.title, ReviewCard.body))
         .order_by(ReviewCard.created_at.desc())
         .limit(30)
     ).all() if kind in ("all", "review_cards") else []
@@ -63,7 +69,7 @@ def search_all(db: Session, query: str, owner_username: str, course_id: str | No
         if lesson_id:
             material_scope.append(CourseMaterial.lesson_id == lesson_id)
         rows = db.execute(active_chunks().add_columns(CourseMaterial).join(Course, Course.id == CourseMaterial.course_id).where(
-            owned, *material_scope, MaterialChunk.content.ilike(pattern)).order_by(
+            owned, *material_scope, search_condition(query, MaterialChunk.content)).order_by(
             CourseMaterial.created_at.desc(), MaterialChunk.position).limit(30)).all()
         material_rows = [{**chunk_read(chunk, material), "snippet": _snippet(chunk.content, query)} for chunk, material in rows]
 

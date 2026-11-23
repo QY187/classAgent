@@ -22,11 +22,15 @@ function escapeRegExp(value: string) {
 
 function Highlight({ text, query }: { text: string; query: string }) {
   if (!query) return <>{text}</>;
-  const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, "ig"));
+  const tokens = query.trim().split(/\s+/u).filter(Boolean);
+  const terms = tokens.flatMap((token) => text.toLowerCase().includes(token.toLowerCase())
+    ? [token] : /^[\u3400-\u9fff]{2,12}$/u.test(token) ? [...token] : [token]);
+  const pattern = [...new Set(terms)].sort((left, right) => right.length - left.length).map(escapeRegExp).join("|");
+  const parts = text.split(new RegExp('(' + pattern + ')', "ig"));
   return (
     <>
       {parts.map((part, index) =>
-        part.toLowerCase() === query.toLowerCase() ? <mark key={index}>{part}</mark> : <span key={index}>{part}</span>,
+        index % 2 === 1 ? <mark key={index}>{part}</mark> : <span key={index}>{part}</span>,
       )}
     </>
   );
@@ -103,12 +107,12 @@ function SearchResultsPage() {
   return (
     <main className="content page-search">
       <div className="page-heading">
-        <div><div className="eyebrow">站内检索</div><h1>全局搜索</h1><p>搜索课程、课次、文字记录、智能纪要、知识点和课件正文。</p></div>
+        <div><div className="eyebrow">站内检索</div><h1>全局搜索</h1><p>搜索课程及课堂内容。支持中文简写，如「软工」；多个关键词可用空格分开，如「软件 测试」。</p></div>
       </div>
 
       <form className="search-page-form" role="search" onSubmit={submitSearch}>
         <label className="sr-only" htmlFor="search-page-query">搜索关键词</label>
-        <input id="search-page-query" className="field" type="search" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="输入想查找的课程或内容…" autoComplete="off" />
+        <input id="search-page-query" className="field" type="search" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="输入课程、简写或多个关键词…" autoComplete="off" maxLength={100} />
         <button className="button button-primary" type="submit">搜索</button>
       </form>
 

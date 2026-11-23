@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { request } from "../lib/api";
+import { errorMessage, request } from "../lib/api";
 import { materialHref, type MaterialChunk } from "../lib/materials";
 
 type SearchResults = {
@@ -23,11 +23,15 @@ function escapeRegExp(value: string) {
 
 function Highlight({ text, query }: { text: string; query: string }) {
   if (!query) return <>{text}</>;
-  const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, "ig"));
+  const tokens = query.trim().split(/\s+/u).filter(Boolean);
+  const terms = tokens.flatMap((token) => text.toLowerCase().includes(token.toLowerCase())
+    ? [token] : /^[\u3400-\u9fff]{2,12}$/u.test(token) ? [...token] : [token]);
+  const pattern = [...new Set(terms)].sort((left, right) => right.length - left.length).map(escapeRegExp).join("|");
+  const parts = text.split(new RegExp('(' + pattern + ')', "ig"));
   return (
     <>
       {parts.map((part, index) =>
-        part.toLowerCase() === query.toLowerCase() ? <mark key={index}>{part}</mark> : <span key={index}>{part}</span>,
+        index % 2 === 1 ? <mark key={index}>{part}</mark> : <span key={index}>{part}</span>,
       )}
     </>
   );
@@ -39,12 +43,15 @@ export default function SearchBox() {
   const [results, setResults] = useState<SearchResults | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
   const [scope, setScope] = useState<SearchScope>("all");
   const containerRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const term = query.trim();
+    setError("");
     if (!term) {
       setResults(null);
       setLoading(false);
@@ -56,14 +63,14 @@ export default function SearchBox() {
     const timer = window.setTimeout(() => {
       request<SearchResults>(`/search?q=${encodeURIComponent(term)}`, { signal: controller.signal })
         .then((value) => { if (!controller.signal.aborted) setResults(value); })
-        .catch(() => {})
+        .catch((cause) => { if (!controller.signal.aborted) setError(errorMessage(cause)); })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, retry]);
 
   useEffect(() => {
     if (!open) return;
@@ -97,7 +104,8 @@ export default function SearchBox() {
         className="search-input"
         type="search"
         value={query}
-        placeholder="搜索课程、文字、课件或知识点…"
+        placeholder="搜索课程或内容，支持中文简写…"
+        maxLength={100}
         aria-label="站内搜索"
         aria-expanded={showDropdown}
         aria-controls="search-suggestions"
@@ -118,6 +126,7 @@ export default function SearchBox() {
           </div>
           <div className="search-dropdown-results" ref={resultsRef}>
           {loading && !results && <div className="search-empty">搜索中…</div>}
+          {error && <div className="search-empty" role="alert">{error}<button type="button" className="button button-quiet" onClick={() => setRetry((value) => value + 1)}>重试搜索</button></div>}
           {!loading && results && scopeCount === 0 && <div className="search-empty">{scope === "all" ? `没有找到与“${term}”相关的内容` : `这一类没有匹配“${term}”的内容`}</div>}
           {results && scope === "all" && results.courses.length > 0 && (
             <>
