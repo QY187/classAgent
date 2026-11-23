@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { request } from "../lib/api";
+import { materialHref, type MaterialChunk } from "../lib/materials";
 
 type SearchResults = {
   query: string;
@@ -12,8 +13,9 @@ type SearchResults = {
   transcript: { segment_id: string; lesson_id: string; course_id: string; lesson_title: string; course_name: string; speaker: string; start_ms: number; text: string; snippet: string }[];
   summaries: { lesson_id: string; course_id: string; lesson_title: string; course_name: string }[];
   review_cards: { id: string; lesson_id: string; course_id: string; lesson_title: string; course_name: string; title: string; snippet: string }[];
+  materials: (MaterialChunk & { snippet: string })[];
 };
-type SearchScope = "all" | "transcript" | "summaries" | "review_cards";
+type SearchScope = "all" | "transcript" | "summaries" | "review_cards" | "materials";
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -73,9 +75,11 @@ export default function SearchBox() {
   }, [open]);
 
   const term = query.trim();
+  const materials = results?.materials ?? [];
   const total = results
-    ? results.courses.length + results.lessons.length + results.transcript.length + results.summaries.length + results.review_cards.length
+    ? results.courses.length + results.lessons.length + results.transcript.length + results.summaries.length + results.review_cards.length + materials.length
     : 0;
+  const scopeCount = scope === "all" ? total : scope === "materials" ? materials.length : results?.[scope].length ?? 0;
   const showDropdown = open && term.length > 0;
   const previewLimit = scope === "all" ? 2 : undefined;
   const scopes: { id: SearchScope; label: string; count: number }[] = [
@@ -83,6 +87,7 @@ export default function SearchBox() {
     { id: "transcript", label: "文字记录", count: results?.transcript.length ?? 0 },
     { id: "summaries", label: "智能纪要", count: results?.summaries.length ?? 0 },
     { id: "review_cards", label: "知识点", count: results?.review_cards.length ?? 0 },
+    { id: "materials", label: "课件正文", count: materials.length },
   ];
   const searchUrl = (kind?: Exclude<SearchScope, "all">) => `/search?q=${encodeURIComponent(term)}${kind ? `&kind=${kind}` : ""}`;
 
@@ -92,7 +97,7 @@ export default function SearchBox() {
         className="search-input"
         type="search"
         value={query}
-        placeholder="搜索课程、课次、文字或知识点…"
+        placeholder="搜索课程、文字、课件或知识点…"
         aria-label="站内搜索"
         aria-expanded={showDropdown}
         aria-controls="search-suggestions"
@@ -100,12 +105,9 @@ export default function SearchBox() {
         onFocus={() => setOpen(true)}
         onKeyDown={(event) => {
           if (event.key === "Escape") setOpen(false);
-          if (event.key === "Enter") {
-            const term = query.trim();
-            if (term) {
-              setOpen(false);
-              router.push(`/search?q=${encodeURIComponent(term)}`);
-            }
+          if (event.key === "Enter" && term && !event.nativeEvent.isComposing) {
+            setOpen(false);
+            router.push(searchUrl(scope === "all" ? undefined : scope));
           }
         }}
       />
@@ -116,7 +118,7 @@ export default function SearchBox() {
           </div>
           <div className="search-dropdown-results" ref={resultsRef}>
           {loading && !results && <div className="search-empty">搜索中…</div>}
-          {!loading && results && (scope === "all" ? total === 0 : results[scope].length === 0) && <div className="search-empty">{scope === "all" ? `没有找到与“${term}”相关的内容` : `这一类没有匹配“${term}”的内容`}</div>}
+          {!loading && results && scopeCount === 0 && <div className="search-empty">{scope === "all" ? `没有找到与“${term}”相关的内容` : `这一类没有匹配“${term}”的内容`}</div>}
           {results && scope === "all" && results.courses.length > 0 && (
             <>
               <div className="search-section-label"><span>课程 <b>{results.courses.length}</b></span><Link href={searchUrl()} onClick={() => setOpen(false)}>查看全部 →</Link></div>
@@ -168,6 +170,17 @@ export default function SearchBox() {
                 <Link key={card.id} className="search-item" href={`/lessons/${card.lesson_id}/review#review-card-${card.id}`} onClick={() => setOpen(false)}>
                   <div className="search-item-title"><Highlight text={card.title} query={term} /><span className="search-count">{card.course_name} · {card.lesson_title}</span></div>
                   <div className="search-item-snippet"><Highlight text={card.snippet} query={term} /></div>
+                </Link>
+              ))}
+            </>
+          )}
+          {(scope === "all" || scope === "materials") && materials.length > 0 && (
+            <>
+              <div className="search-section-label"><span>课件正文 <b>{materials.length}</b></span><Link href={searchUrl("materials")} onClick={() => setOpen(false)}>查看全部 →</Link></div>
+              {materials.slice(0, previewLimit).map((item) => (
+                <Link key={item.chunk_id} className="search-item" href={materialHref(item)} onClick={() => setOpen(false)}>
+                  <div className="search-item-title">{item.filename}<span className="search-count">{item.locator_label}</span></div>
+                  <div className="search-item-snippet"><Highlight text={item.snippet} query={term} /></div>
                 </Link>
               ))}
             </>

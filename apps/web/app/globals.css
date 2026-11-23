@@ -128,7 +128,7 @@ a { color: inherit; text-decoration: none; }
   background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 24px 60px rgba(31, 49, 88, .16);
   padding: 8px; max-height: 72vh; display: flex; flex-direction: column; overflow: hidden; z-index: 30; animation: fade-in .15s ease;
 }
-.search-scope-switch { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; padding: 3px 3px 9px; border-bottom: 1px solid #e8edf7; flex: none; }
+.search-scope-switch { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; padding: 3px 3px 9px; border-bottom: 1px solid #e8edf7; flex: none; }
 .search-scope-switch button { display: grid; place-items: center; gap: 2px; min-width: 0; padding: 8px 2px; border: 1px solid transparent; border-radius: 10px; background: #f5f7fc; color: #5f6d86; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .search-scope-switch button b { font-size: 11px; font-weight: 650; color: #8b98ae; }
 .search-scope-switch button:hover { color: var(--blue); background: #eef1ff; }
