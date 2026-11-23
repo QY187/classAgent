@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { errorMessage, request } from "../../../../lib/api";
 
 type Course = { id: string; name: string };
+type DateRange = { start: string; end: string };
+const allDates: DateRange = { start: "", end: "" };
 type Progress = {
   course_id: string;
   lesson_total: number;
@@ -25,22 +27,50 @@ export default function CourseProgressPage() {
   const [course, setCourse] = useState<Course | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState("");
+  const [draft, setDraft] = useState(allDates);
+  const [range, setRange] = useState(allDates);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      request<Course[]>("/courses"),
-      request<Progress>(`/courses/${courseId}/progress`),
-    ]).then(([courses, result]) => {
-      if (!active) return;
-      setCourse(courses.find((item) => item.id === courseId) ?? null);
-      setProgress(result);
-    }).catch((cause) => { if (active) setError(errorMessage(cause)); });
+    request<Course[]>("/courses").then((courses) => {
+      if (active) setCourse(courses.find((item) => item.id === courseId) ?? null);
+    }).catch(() => { if (active) setCourse(null); });
     return () => { active = false; };
   }, [courseId]);
 
-  if (error) return <main className="content"><div className="notice">{error}</div><Link href={`/courses/${courseId}`}>返回课程</Link></main>;
-  if (!progress) return <main className="content"><p role="status">正在加载学习进度…</p></main>;
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    const query = new URLSearchParams();
+    if (range.start) query.set("start_date", range.start);
+    if (range.end) query.set("end_date", range.end);
+    const path = `/courses/${courseId}/progress`;
+    request<Progress>(query.size ? `${path}?${query}` : path)
+      .then((result) => { if (active) setProgress(result); })
+      .catch((cause) => { if (active) setError(errorMessage(cause)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [courseId, range]);
+
+  function applyRange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setRange({ ...draft });
+  }
+
+  function resetRange() {
+    setDraft(allDates);
+    setLoading(true);
+    setRange({ ...allDates });
+  }
+
+  if (!progress || progress.course_id !== courseId) {
+    return <main className="content">{error && !loading
+      ? <><div className="notice" role="alert">{error}</div><Link href={`/courses/${courseId}`}>返回课程</Link></>
+      : <p role="status">正在加载学习进度…</p>}</main>;
+  }
 
   return <main className="content course-progress-page">
     <div className="breadcrumb"><Link href={`/courses/${courseId}`}>{course?.name ?? "课程"}</Link><span> / 学习进度</span></div>
@@ -68,15 +98,27 @@ export default function CourseProgressPage() {
     </section>
     <section className="panel course-progress-panel">
       <div className="panel-header"><h2>课堂小测</h2><span>仅统计我的答题记录</span></div>
-      <div className="course-progress-grid">
-        <div className="course-progress-metric"><span>作答次数</span><strong>{progress.quizzes.attempt_count}</strong><small>重复作答也计入</small></div>
-        <div className="course-progress-metric"><span>平均得分</span><strong>{progress.quizzes.average_score === null ? "—" : `${progress.quizzes.average_score}%`}</strong><small>每次小测正确率的平均值</small></div>
-        <div className="course-progress-metric"><span>曾答错的题目</span><strong>{progress.quizzes.wrong_question_count}</strong><small>同一道题只计一次</small></div>
-      </div>
-      {progress.quizzes.recent_attempt && <div className="course-progress-recent">
-        <div><span>最近一次作答</span><strong>{progress.quizzes.recent_attempt.title}</strong><small>{new Date(progress.quizzes.recent_attempt.created_at).toLocaleString("zh-CN")} · 答对 {progress.quizzes.recent_attempt.correct_count} / {progress.quizzes.recent_attempt.total_count} 题</small></div>
-        <Link href={`/quiz-attempts/${progress.quizzes.recent_attempt.id}`}>查看结果 →</Link>
-      </div>}
+      <form className="course-progress-filter" onSubmit={applyRange}>
+        <label className="field-label">开始日期<input className="field" type="date" min="0001-01-01" max={draft.end || "9999-12-31"} value={draft.start} onChange={(event) => setDraft({ ...draft, start: event.target.value })} /></label>
+        <label className="field-label">结束日期<input className="field" type="date" min={draft.start || "0001-01-01"} max="9999-12-31" value={draft.end} onChange={(event) => setDraft({ ...draft, end: event.target.value })} /></label>
+        <button className="button button-primary" type="submit" disabled={loading}>筛选</button>
+        <button className="button button-secondary" type="button" onClick={resetRange} disabled={loading}>重置</button>
+        <small>筛选只应用于小测作答，按北京时间统计，所选日期包含当天。日期留空时不限。</small>
+      </form>
+      {loading ? <p className="course-progress-footer" role="status">正在更新小测统计…</p> : error
+        ? <p className="course-progress-footer" role="alert">{error}</p>
+        : <>
+          <div className="course-progress-grid">
+            <div className="course-progress-metric"><span>作答次数</span><strong>{progress.quizzes.attempt_count}</strong><small>重复作答也计入</small></div>
+            <div className="course-progress-metric"><span>平均得分</span><strong>{progress.quizzes.average_score === null ? "—" : `${progress.quizzes.average_score}%`}</strong><small>每次小测正确率的平均值</small></div>
+            <div className="course-progress-metric"><span>曾答错的题目</span><strong>{progress.quizzes.wrong_question_count}</strong><small>同一道题只计一次</small></div>
+          </div>
+          {progress.quizzes.recent_attempt && <div className="course-progress-recent">
+            <div><span>最近一次作答</span><strong>{progress.quizzes.recent_attempt.title}</strong><small>{new Date(progress.quizzes.recent_attempt.created_at).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })} · 答对 {progress.quizzes.recent_attempt.correct_count} / {progress.quizzes.recent_attempt.total_count} 题</small></div>
+            <Link href={`/quiz-attempts/${progress.quizzes.recent_attempt.id}`}>查看结果 →</Link>
+          </div>}
+          {progress.quizzes.attempt_count === 0 && <p className="course-progress-footer">所选范围内没有作答记录。</p>}
+        </>}
       <div className="course-progress-footer"><Link href={`/courses/${courseId}/quizzes`}>查看课堂小测 →</Link></div>
     </section>
   </main>;

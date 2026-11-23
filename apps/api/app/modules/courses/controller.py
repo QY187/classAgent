@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -45,8 +47,14 @@ def list_courses(username: str = Depends(get_current_user), db: Session = Depend
 
 
 @router.get("/courses/{course_id}/progress")
-def get_course_progress(course_id: str, username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    return service.get_course_progress(db, course_id, username)
+def get_course_progress(
+    course_id: str,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    username: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    return service.get_course_progress(db, course_id, username, start_date=start_date, end_date=end_date)
 
 
 @router.patch("/courses/{course_id}", response_model=CourseRead)

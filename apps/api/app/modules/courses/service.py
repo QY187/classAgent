@@ -1,3 +1,5 @@
+from datetime import date, datetime, time, timedelta, timezone
+
 from ...core.visibility import visible_get
 from fastapi import HTTPException
 from sqlalchemy import select, func
@@ -18,10 +20,23 @@ def list_courses(db: Session, owner_username: str) -> list[Course]:
     return mapper.find_courses(db, user_id_for_username(db, owner_username))
 
 
-def get_course_progress(db: Session, course_id: str, owner_username: str) -> dict:
+def get_course_progress(
+    db: Session, course_id: str, owner_username: str,
+    *, start_date: date | None = None, end_date: date | None = None,
+) -> dict:
     course = mapper.find_course(db, course_id)
     if course is None or course.owner_id != user_id_for_username(db, owner_username):
         raise HTTPException(status_code=404, detail="课程不存在")
+
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=422, detail="开始日期不能晚于结束日期")
+    attempt_filters = [Quiz.course_id == course_id, QuizAttempt.user_id == course.owner_id]
+    # 页面按北京时间选择日期，数据库中的作答时间使用 UTC。
+    offset = timedelta(hours=8)
+    if start_date and start_date != date.min:
+        attempt_filters.append(QuizAttempt.created_at >= datetime.combine(start_date, time.min, timezone.utc) - offset)
+    if end_date:
+        attempt_filters.append(QuizAttempt.created_at <= datetime.combine(end_date, time.max, timezone.utc) - offset)
 
     lesson_total = db.scalar(select(func.count(Lesson.id)).where(Lesson.course_id == course_id)) or 0
     transcript_lessons = db.scalar(
@@ -51,14 +66,12 @@ def get_course_progress(db: Session, course_id: str, owner_username: str) -> dic
         select(
             func.count(QuizAttempt.id),
             func.avg(100.0 * QuizAttempt.correct_count / func.nullif(QuizAttempt.total_count, 0)),
-        ).join(Quiz, QuizAttempt.quiz_id == Quiz.id).where(
-            Quiz.course_id == course_id, QuizAttempt.user_id == course.owner_id
-        )
+        ).join(Quiz, QuizAttempt.quiz_id == Quiz.id).where(*attempt_filters)
     ).one()
     recent = db.execute(
         select(QuizAttempt, Quiz.title)
         .join(Quiz, QuizAttempt.quiz_id == Quiz.id)
-        .where(Quiz.course_id == course_id, QuizAttempt.user_id == course.owner_id)
+        .where(*attempt_filters)
         .order_by(QuizAttempt.created_at.desc(), QuizAttempt.id.desc())
         .limit(1)
     ).first()
@@ -66,7 +79,7 @@ def get_course_progress(db: Session, course_id: str, owner_username: str) -> dic
         select(func.count(func.distinct(QuizAnswer.question_id)))
         .join(QuizAttempt, QuizAnswer.attempt_id == QuizAttempt.id)
         .join(Quiz, QuizAttempt.quiz_id == Quiz.id)
-        .where(Quiz.course_id == course_id, QuizAttempt.user_id == course.owner_id, QuizAnswer.is_correct.is_(False))
+        .where(*attempt_filters, QuizAnswer.is_correct.is_(False))
     ) or 0
     return {
         "course_id": course_id,

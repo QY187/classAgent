@@ -1,18 +1,22 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
-from app.core.db import Base
+from app.core.db import Base, get_db
+from app.core.deps import get_current_user
+from app.modules.courses.controller import router
 from app.modules.courses.service import get_course_progress
 from app.shared.models import Course, Lesson, LessonSummary, Quiz, QuizAnswer, QuizAttempt, QuizQuestion, ReviewCard, TranscriptSegment, User
 
 
 class CourseProgressTest(unittest.TestCase):
     def setUp(self):
-        self.engine = create_engine("sqlite:///:memory:")
+        self.engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(self.engine)
         with Session(self.engine) as db:
             db.add_all([
@@ -86,6 +90,54 @@ class CourseProgressTest(unittest.TestCase):
             with self.assertRaises(HTTPException) as context:
                 get_course_progress(db, "course", "other")
         self.assertEqual(context.exception.status_code, 404)
+
+    def test_date_filter_uses_beijing_midnight_for_all_quiz_metrics(self):
+        with Session(self.engine) as db:
+            lower = datetime(2026, 1, 1, 16, tzinfo=timezone.utc)
+            db.get(QuizAttempt, "attempt-1").created_at = lower
+            db.get(QuizAttempt, "attempt-2").created_at = datetime(2026, 1, 2, 16, tzinfo=timezone.utc)
+            db.get(QuizAttempt, "attempt-other-user").created_at = lower
+            db.get(QuizAttempt, "attempt-other-course").created_at = lower
+            db.commit()
+            progress = get_course_progress(db, "course", "owner", start_date=date(2026, 1, 2), end_date=date(2026, 1, 2))
+            until = get_course_progress(db, "course", "owner", end_date=date(2026, 1, 2))
+            after = get_course_progress(db, "course", "owner", start_date=date(2026, 1, 3))
+
+        self.assertEqual(progress["lesson_total"], 3)
+        self.assertEqual(progress["review_cards"]["total"], 3)
+        self.assertEqual(progress["quizzes"]["attempt_count"], 1)
+        self.assertEqual(progress["quizzes"]["average_score"], 50)
+        self.assertEqual(progress["quizzes"]["wrong_question_count"], 1)
+        self.assertEqual(progress["quizzes"]["recent_attempt"]["id"], "attempt-1")
+        self.assertEqual(until["quizzes"], progress["quizzes"])
+        self.assertEqual(after["quizzes"]["recent_attempt"]["id"], "attempt-2")
+        self.assertEqual(after["quizzes"]["wrong_question_count"], 0)
+
+    def test_empty_and_reversed_date_ranges(self):
+        with Session(self.engine) as db:
+            progress = get_course_progress(db, "course", "owner", end_date=date(2025, 12, 31))
+            with self.assertRaises(HTTPException) as context:
+                get_course_progress(db, "course", "owner", start_date=date(2026, 1, 2), end_date=date(2026, 1, 1))
+        self.assertEqual(context.exception.status_code, 422)
+        self.assertEqual(progress["quizzes"], {
+            "attempt_count": 0, "average_score": None, "wrong_question_count": 0, "recent_attempt": None,
+        })
+
+    def test_progress_route_accepts_dates_and_validates_input(self):
+        def test_db():
+            with Session(self.engine) as db:
+                yield db
+
+        app = FastAPI()
+        app.include_router(router)
+        app.dependency_overrides.update({get_db: test_db, get_current_user: lambda: "owner"})
+        with TestClient(app) as client:
+            path = "/courses/course/progress"
+            response = client.get(path, params={"start_date": "2026-01-02", "end_date": "2026-01-02"})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["quizzes"]["attempt_count"], 1)
+            self.assertEqual(client.get(path, params={"start_date": "2026-02-30"}).status_code, 422)
+            self.assertEqual(client.get(path, params={"start_date": "2026-01-02", "end_date": "2026-01-01"}).status_code, 422)
 
 
 if __name__ == "__main__":
