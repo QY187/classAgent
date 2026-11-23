@@ -165,3 +165,16 @@ curl --fail --silent --show-error --output /dev/null https://101.200.198.62/
 公网验收通过：匿名401、其他用户404、回收站课次400、旧附件字段422；实际授权导出含四类PDF及课程目录，手动纪要和说话人保留，小测不泄露答案解析。390/1440宽度各实际下载一次ZIP，共10个PDF逐一核对并渲染，无浏览器异常或横向溢出。仅使用临时固定课堂样例，无模型调用；样例初次写入因遗漏既有必填字段回滚，补齐后通过，未修改产品代码。临时账号、资料、令牌及候选容器均清理，原30张表行数与发布前一致，四应用无新增关键日志异常或重启循环；首页、登录页、健康接口均200，Worker ping通过。
 
 回退使用`/opt/classagent-releases/1347ca8-20261122/rollback/docker-compose.rollback.yml`，旧fc924f5镜像和数据库备份保留，不自动覆盖数据库。证据保存在本地忽略目录`test-results/deployment-1347ca8-20261122/`与线上`activation-evidence/`。本条为部署记录，单独本地提交；不代表再次授权推送或预览功能已上线。
+
+
+## 十、PDF真实预览与稳定性修复上线（2026-11-22）
+
+已部署完整提交`a78b8535a316aa472feb8f2409d73f9569f52368`至`https://njust.shop`，发布目录`/opt/classagent-releases/a78b853-20261122`。web为`classagent-web:a78b853`，api/worker/beat统一为`classagent-api:a78b853`。本次上线下载前真实PDF预览、页面内翻页与缩放，以及普通滚动条引起的持续重绘修复。Git提交日期此前按用户要求设为11月24日，实际发布发生在11月22日。
+
+前端使用固定Git归档在本机构建Linux amd64镜像，生产编译、类型检查、同源`/api`、注册关闭、public及版本化PDF.js Worker资源验证通过。后端依赖、Dockerfile和模型未变，按简化流程复用已核实的线上`classagent-api:1347ca8`环境（镜像ID`9cf18bd80721fcacccf93674c2dbb4e1b29dc7a79f55f066f196a1891f458f4e`），在服务器移除旧应用并复制完整目标应用目录形成新镜像；requirements哈希、pip check和候选165份源码/依赖哈希与发布输入一致，无业务补丁或数据库迁移。
+
+更新前备份`rollback/database-before.dump`488585字节，pg_restore目录可读，SHA256为`d3cb3ce472c77b017851871b4d146fcffb6d80514b71afd9a3844aa20d58ab6a`。生产env逐字节保留。候选API/web通过后，确认active/reserved为空，正常停止beat和worker再切换应用；PostgreSQL、Redis标识和启动时间、数据挂载不变。
+
+公网临时固定资料验证：预览接口本人访问、匿名401、跨用户404、回收站400、非法文档404，课程目录及四类PDF正常，编辑内容和说话人保留，小测无答案解析。390/1440验证实际Canvas内容、5页纪要翻页、缩放和ZIP下载，页面异常与失败资源0；两份ZIP内10个PDF有效。普通15px滚动条稳定性专项在公网通过，静置/滚动无重复绘制、缩放时保留旧Canvas、窗口变化后稳定。复用同代码已通过的本地28项后端、42项前端及主项目验证，无模型调用。
+
+临时账号、资料、令牌、候选容器及上传包已清理，原30张表行数与发布前一致，四应用无重启循环或新增关键日志异常，首页/login/api/health均200，Worker ping通过。回退使用本次目录`rollback/docker-compose.rollback.yml`，旧1347ca8镜像及数据库备份保留，不自动覆盖数据库。证据位于本地忽略目录`test-results/deployment-a78b853-20261122/`及线上`activation-evidence/`。本条仅部署记录，本地提交，不额外推送。
