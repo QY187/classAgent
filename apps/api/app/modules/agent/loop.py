@@ -27,6 +27,8 @@ from .assistant_profile import ASSISTANT_INSTRUCTION
 MAX_ROUNDS = 6
 MAX_CALLS = 8
 MAX_SECONDS = 90
+QUIZ_MAX_SECONDS = 180
+QUIZ_FINISH_RESERVE = 20
 MAX_CONTEXT_CHARACTERS = 160000
 
 SYSTEM_PROMPT = """你是课堂学习 Agent，只使用提供的工具完成用户的问题。
@@ -198,7 +200,7 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             wrapped[name] = checked_action
         context = replace(context, actions=wrapped)
         messages.insert(1, {"role": "system", "content": "本次已授权的写工具：" + ", ".join(context.actions) + "。必须实际执行才能声称完成；历史中的成功结果不能代替本次执行。只允许用户明确指定的目标与参数。后端识别的当前指令参数：" + json.dumps({name: value for name, value in context.action_hints.items() if name in context.actions}, ensure_ascii=False)})
-    deadline = monotonic() + MAX_SECONDS
+    deadline = monotonic() + (QUIZ_MAX_SECONDS if context.generate_quiz is not None else MAX_SECONDS)
     calls_used = 0
     repaired = False
     execution_state = ExecutionState()
@@ -416,7 +418,16 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
             with span("tool.dispatch", tool_call_id=call["id"], round=round_index + 1):
                 result = execution_state.before(name, call["function"]["arguments"])
                 if result is None:
-                    result = execute_tool(db, context, name, call["function"]["arguments"])
+                    if name in {"generate_quiz", "generate_practice_quiz"}:
+                        from ..quizzes.generation import generation_deadline
+                        budget_token = generation_deadline.set(deadline - QUIZ_FINISH_RESERVE)
+                        try:
+                            result = (failure(name, "generation_failed", actions.errors[name]) if name in actions.errors
+                                      else execute_tool(db, context, name, call["function"]["arguments"]))
+                        finally:
+                            generation_deadline.reset(budget_token)
+                    else:
+                        result = execute_tool(db, context, name, call["function"]["arguments"])
             if name in {"generate_quiz", "generate_practice_quiz"} and result["ok"]:
                 if on_check:
                     on_check()
@@ -447,9 +458,11 @@ def run_agent(db: Session, context: ToolContext, question: str, *, history: list
                             "citations": [], "outcome": "quiz_created", "steps": steps}
                 actions.results[name] = {"message": message_text}
             if name in {"generate_quiz", "generate_practice_quiz"} and result.get("error", {}).get("code") == "generation_failed":
-                previous_actions = actions.answer() if actions.results else ""
-                return {"answer": (previous_actions + "\n\n" if previous_actions else "") + result["error"]["message"],
-                        "citations": [], "outcome": "operation_failed", "steps": steps}
+                actions.errors[name] = result["error"]["message"]
+                if not context.action_hints.get("semantic_queries") and not requested_outputs(context):
+                    previous_actions = actions.answer() if actions.results else ""
+                    return {"answer": (previous_actions + "\n\n" if previous_actions else "") + result["error"]["message"],
+                            "citations": [], "outcome": "operation_failed", "steps": steps}
             messages.append({"role": "tool", "tool_call_id": call["id"],
                              "content": json.dumps(result, ensure_ascii=False)})
             calls_used += 1

@@ -115,7 +115,8 @@ def _request_questions(segments: list[TranscriptSegment], count: int, question_t
 def _generate_questions(segments, count, question_type="mixed", *, focus_topics=None, source_windows=None):
     from time import monotonic
     from .generation import generation_deadline
-    token = generation_deadline.set(monotonic() + 150)
+    outer_deadline = generation_deadline.get()
+    token = generation_deadline.set(min(monotonic() + 150, outer_deadline) if outer_deadline is not None else monotonic() + 150)
     try:
         return _generate_batches(segments, count, question_type, focus_topics=focus_topics, source_windows=source_windows)
     finally:

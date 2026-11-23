@@ -17,6 +17,44 @@ class CombinedActionTest(unittest.TestCase):
     tearDown=fixtures.RecycleVisibilityTest.tearDown
 
     @patch("app.modules.agent.loop.complete")
+    def test_quiz_failure_preserves_reads_and_continues_independent_queries(self, model):
+        from fastapi import HTTPException
+        from app.modules.agent.loop import run_agent
+        from app.modules.agent.tools import ToolContext
+        with Session(self.engine) as db:
+            def fail(args): raise HTTPException(502, "小测生成暂时失败")
+            context = ToolContext("owner", course_id="c", generate_quiz=fail,
+                action_hints={"semantic_queries": ["workflow"]})
+            model.side_effect = [call("quiz", "generate_quiz", {"course_id":"c","count":3,"question_type":"true_false"}),
+                call("read", "list_unanswered_quizzes", {}),
+                {"content":'{"claims":[],"workflow":{"query_ids":["W1"]}}'}]
+            result = run_agent(db, context, "生成三道题，同时列出没做的小测")
+            self.assertIn("小测生成暂时失败", result["answer"])
+            self.assertIn("小测", result["answer"])
+            self.assertEqual(len(result["steps"]), 2)
+            self.assertEqual(model.call_count, 3)
+
+    @patch("app.modules.agent.loop.complete")
+    def test_slow_successful_quiz_keeps_combined_answer(self, model):
+        from app.modules.agent.loop import run_agent
+        from app.modules.agent.tools import ToolContext
+        clock = [0.0]
+        def generate(args):
+            from app.modules.quizzes.generation import generation_deadline
+            self.assertEqual(generation_deadline.get(), 160)
+            clock[0] = 100.0
+            return {"question_count":3}
+        with Session(self.engine) as db, patch("app.modules.agent.loop.monotonic", side_effect=lambda:clock[0]):
+            context = ToolContext("owner", course_id="c", generate_quiz=generate,
+                action_hints={"semantic_queries":["workflow"]})
+            model.side_effect = [call("read","list_unanswered_quizzes",{}),
+                call("quiz","generate_quiz",{"course_id":"c","count":3,"question_type":"true_false"}),
+                {"content":'{"claims":[],"workflow":{"query_ids":["W1"]}}'}]
+            result = run_agent(db, context, "生成三道题，同时列出没做的小测")
+            self.assertIn("已生成 3 道", result["answer"])
+            self.assertEqual(model.call_count, 3)
+
+    @patch("app.modules.agent.loop.complete")
     def test_invalid_final_can_render_completed_queries_without_using_model_text(self, model):
         from app.modules.agent.loop import run_agent
         from app.modules.agent.tools import ToolContext
