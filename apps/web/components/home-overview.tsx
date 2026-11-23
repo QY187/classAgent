@@ -8,7 +8,7 @@ type RecentLearning = { at: string; kind: "quiz" | "review" | "chat"; title: str
 type Overview = { pending_lessons: number; recent_learning: RecentLearning | null };
 const labels = { quiz: "课堂小测", review: "知识点复习", chat: "问答" };
 
-export default function HomeOverview() {
+export default function HomeOverview({ compact = false }: { compact?: boolean }) {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -27,12 +27,12 @@ export default function HomeOverview() {
     <div className="stat-card">
       <div className="stat-label">待处理课次</div>
       <div className="stat-value">{loading || error ? "—" : <Link className="pending-overview-link" href="/pending-lessons" aria-label={`查看${data?.pending_lessons ?? 0}节待处理课次`}>{data?.pending_lessons}<span aria-hidden="true">↗</span></Link>}</div>
-      <div className="stat-note">{loading ? "正在统计…" : error ? retry : data?.pending_lessons === 0 ? "全部课次已完成转写与纪要" : <Link href="/pending-lessons">查看具体课次与处理状态 →</Link>}</div>
+      <div className="stat-note">{loading ? "正在统计…" : error ? retry : data?.pending_lessons === 0 ? (compact ? "已全部处理" : "全部课次已完成转写与纪要") : <Link href="/pending-lessons">{compact ? "查看课次 →" : "查看具体课次与处理状态 →"}</Link>}</div>
     </div>
     <div className="stat-card">
       <div className="stat-label">最近学习</div>
       <div className="stat-value">{loading || error || !recent ? "—" : <Link href={recent.href} title={new Date(recent.at).toLocaleString("zh-CN")}>{date}</Link>}</div>
-      <div className="stat-note">{loading ? "正在加载…" : error ? retry : recent ? <Link className="overview-activity" href={recent.href} title={`${recent.course_name ? recent.course_name + " · " : ""}${recent.title}`}>{labels[recent.kind]} · {recent.title} →</Link> : "还没有小测、知识点复习或已完成问答记录"}</div>
+      <div className="stat-note">{loading ? "正在加载…" : error ? retry : recent ? <Link className="overview-activity" href={recent.href} title={`${recent.course_name ? recent.course_name + " · " : ""}${recent.title}`}>{labels[recent.kind]} · {recent.title} →</Link> : compact ? "暂无记录" : "还没有小测、知识点复习或已完成问答记录"}</div>
     </div>
   </>;
 }

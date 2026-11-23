@@ -28,6 +28,7 @@ from .modules.chat.migrations import prepare_chat_intent_state, prepare_chat_mod
 from .modules.monitoring.controller import router as monitoring_router
 from .modules.monitoring.persistence import start_persistence
 from .modules.quotas.controller import router as quotas_router
+from .modules.timetable.controller import router as timetable_router
 
 
 configure_trace_logging()
@@ -169,5 +170,6 @@ app.include_router(recycle_bin_router)
 app.include_router(chat_router)
 app.include_router(monitoring_router)
 app.include_router(quotas_router)
+app.include_router(timetable_router)
 
 app.include_router(exports_router)

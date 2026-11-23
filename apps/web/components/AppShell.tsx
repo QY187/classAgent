@@ -76,6 +76,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const settingsActive = pathname === "/settings";
   const quotasActive = pathname === "/quotas";
   const monitoringActive = pathname === "/monitoring";
+  const timetableActive = pathname === "/timetable";
 
   useEffect(() => {
     if (isLogin) {
@@ -142,6 +143,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <nav className="nav" aria-label="主导航">
           <Link className={`nav-item ${libraryActive && !activeCourseId ? "active" : ""}`} href="/" aria-label="课程库" title="课程库"><span className="nav-icon"><SidebarIcon name="library" /></span><span>课程库</span></Link>
           <Link className={`nav-item ${searchActive ? "active" : ""}`} href="/search" aria-label="全局搜索" title="全局搜索"><span className="nav-icon"><SidebarIcon name="search" /></span><span>全局搜索</span></Link>
+          <Link className={`nav-item ${timetableActive ? "active" : ""}`} href="/timetable" aria-label="我的课程表" title="我的课程表"><span className="nav-icon"><SidebarIcon name="library" /></span><span>我的课程表</span></Link>
           <Link className={`nav-item ${reviewActive ? "active" : ""}`} href="/review" aria-label="知识点清单" title="知识点清单"><span className="nav-icon"><SidebarIcon name="knowledge" /></span><span>知识点清单</span></Link>
           <Link className={`nav-item ${chatActive ? "active" : ""}`} href="/chat" aria-label="问答工作台" title="问答工作台"><span className="nav-icon"><SidebarIcon name="chat" /></span><span>问答工作台</span></Link>
           <Link className={`nav-item ${wrongBookActive ? "active" : ""}`} href="/wrong-questions" aria-label="错题本" title="错题本"><span className="nav-icon"><SidebarIcon name="notebook" /></span><span>错题本</span></Link>
@@ -170,12 +172,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <button ref={toggleRef} type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-controls="app-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"} title={sidebarCollapsed ? "展开左侧导航" : "收起左侧导航"}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /><path d={sidebarCollapsed ? "m13 9 3 3-3 3" : "m16 9-3 3 3 3"} /></svg></button>
           <nav className="breadcrumb" aria-label="当前位置">
-            {courseMatch || lessonMatch || chatActive || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive || quotasActive || pendingActive || monitoringActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
+            {courseMatch || lessonMatch || chatActive || searchActive || reviewActive || wrongBookActive || recycleActive || settingsActive || quotasActive || pendingActive || monitoringActive || timetableActive ? <Link className="breadcrumb-link" href="/">我的学习空间</Link> : <span className="breadcrumb-current" aria-current="page">我的学习空间</span>}
             {pendingActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">待处理课次</span></>}
             {chatActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">问答工作台</span></>}
             {recycleActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">回收站</span></>}
             {wrongBookActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">错题本</span></>}
             {searchActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">全局搜索</span></>}
+            {timetableActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">我的课程表</span></>}
             {reviewActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">知识点清单</span></>}
             {settingsActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">个人设置</span></>}
             {quotasActive && <><span className="breadcrumb-separator" aria-hidden="true">/</span><span className="breadcrumb-current" aria-current="page">Token 额度</span></>}

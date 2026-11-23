@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import VECTOR
 
@@ -122,6 +122,44 @@ class MaterialChunk(Base):
     locator_number: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float]] = mapped_column(VECTOR(1536))
+
+
+class TimetableSemester(Base):
+    __tablename__ = "timetable_semesters"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    start_date: Mapped[date] = mapped_column(Date)
+    week_count: Mapped[int] = mapped_column(Integer)
+    periods_json: Mapped[str] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    entries: Mapped[list["TimetableEntry"]] = relationship(back_populates="semester", cascade="all, delete-orphan")
+
+
+class TimetableEntry(Base):
+    __tablename__ = "timetable_entries"
+    __table_args__ = (
+        CheckConstraint("weekday BETWEEN 1 AND 7", name="ck_timetable_weekday"),
+        CheckConstraint("start_period >= 1 AND end_period >= start_period", name="ck_timetable_periods"),
+        CheckConstraint("start_week >= 1 AND end_week >= start_week", name="ck_timetable_weeks"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    semester_id: Mapped[str] = mapped_column(ForeignKey("timetable_semesters.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[str | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    title: Mapped[str] = mapped_column(String(100))
+    room: Mapped[str] = mapped_column(String(100), default="")
+    teacher: Mapped[str] = mapped_column(String(100), default="")
+    weekday: Mapped[int] = mapped_column(Integer)
+    start_period: Mapped[int] = mapped_column(Integer)
+    end_period: Mapped[int] = mapped_column(Integer)
+    start_week: Mapped[int] = mapped_column(Integer)
+    end_week: Mapped[int] = mapped_column(Integer)
+    week_pattern: Mapped[str] = mapped_column(String(8), default="all")
+    color: Mapped[str] = mapped_column(String(12), default="teal")
+    semester: Mapped[TimetableSemester] = relationship(back_populates="entries")
 
 
 class ProcessingJob(Base):

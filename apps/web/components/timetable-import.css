@@ -1,0 +1,28 @@
+.timetable-import-modal { width: min(1040px, calc(100vw - 32px)); max-height: 90vh; overflow: auto; }
+.import-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.import-heading p { margin: 8px 0; color: var(--muted); font-size: 12px; }
+.import-upload { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 20px 0; padding: 16px; border-radius: 12px; background: #f6f8fc; flex-wrap: wrap; }
+.import-upload input { max-width: 100%; font-size: 12px; }
+.import-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 20px 0 8px; }
+.import-summary span { color: var(--muted); font-size: 12px; }
+.import-table-scroll { max-height: 49vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.import-table { width: 100%; min-width: 840px; border-collapse: collapse; font-size: 12px; }
+.import-table th { position: sticky; top: 0; z-index: 1; background: #f3f5fa; padding: 10px 6px; text-align: left; }
+.import-table td { padding: 7px 4px; vertical-align: top; }
+.import-table .field { min-width: 0; width: 100%; padding: 7px 5px; font-size: 11px; border-radius: 6px; }
+.import-table th:first-child { width: 36px; }
+.import-table th:nth-child(2) { width: 160px; }
+.import-table th:nth-child(3), .import-table th:nth-child(6) { width: 75px; }
+.import-table th:nth-child(4), .import-table th:nth-child(5) { width: 115px; }
+.import-table th:nth-child(7) { width: 110px; }
+.import-table th:nth-child(8) { width: 90px; }
+.import-range { display: flex; gap: 3px; }
+.import-range input { width: 48px; }
+.import-row-warning { background: #fffaf0; }
+.import-source-row td { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.import-status { font-size: 11px; color: #16866b; margin-right: 12px; }
+.import-status.is-warning { color: #a36b18; }
+.import-note { display: inline-block; font-size: 11px; color: #a36b18; margin-right: 10px; }
+.import-source-row details { margin-top: 5px; color: var(--muted); font-size: 11px; }
+.import-source-row summary { cursor: pointer; }
+.import-source-row pre { margin: 8px 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }

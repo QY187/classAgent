@@ -4,6 +4,9 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { apiUrl, errorMessage, request } from "../lib/api";
 import HomeOverview from "../components/home-overview";
+import HomeTimetable from "../components/HomeTimetable";
+import HomeToday from "../components/HomeToday";
+import "../components/home-dashboard.css";
 
 type Course = { id: string; name: string; semester?: string | null; created_at: string };
 
@@ -58,10 +61,22 @@ export default function Home() {
         </div>
         <div className="page-hero-actions"><button className="button button-primary" onClick={() => setShowModal(true)}>＋ 新建课程</button></div>
       </section>
-      <div className="stats-grid">
-        <div className="stat-card"><div className="stat-label">课程总数</div><div className="stat-value">{courses.length}</div><div className="stat-note">持续积累你的学习资料</div></div>
-        <HomeOverview />
-      </div>
+      <section className="home-dashboard" aria-label="本周课表与学习概览">
+        <div className="home-timetable-pane"><HomeTimetable /></div>
+        <div className="home-right-column">
+          <div className="home-overview-stats" aria-label="学习概览">
+            <div className="stat-card"><div className="stat-label">课程总数</div><div className="stat-value">{courses.length}<span className="home-stat-unit">门</span></div><div className="stat-note">已加入的课程</div></div>
+            <HomeOverview compact />
+          </div>
+          <HomeToday />
+          <section className="panel home-shortcuts" aria-label="常用功能"><div className="home-widget-heading"><h2>常用功能</h2></div><div className="home-shortcut-grid">
+            <Link href="/chat"><strong>课程问答 <span>↗</span></strong><small>回到课堂资料中找答案</small></Link>
+            <Link href="/review"><strong>知识点复习 <span>↗</span></strong><small>查看待复习内容</small></Link>
+            <Link href="/wrong-questions"><strong>我的错题 <span>↗</span></strong><small>整理练习中的薄弱点</small></Link>
+            <Link href="/timetable?import=1"><strong>导入课表 <span>↗</span></strong><small>解析教务处 PDF</small></Link>
+          </div></section>
+        </div>
+      </section>
       <div className="section-head"><h2>最近课程</h2><span>{courses.length ? `${courses.length} 门课程` : "还没有课程"}</span></div>
       {message && <div className="notice" style={{ marginBottom: 16 }}>{message}</div>}
       {loading ? <div className="empty-state"><div className="empty-icon">◌</div><p>正在加载课程…</p></div> : courses.length === 0 ? (
