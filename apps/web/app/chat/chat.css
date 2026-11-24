@@ -333,3 +333,5 @@
 /* 消息区不再重复范围和标题，只保留紧凑的会话操作。 */
 .chat-thread-header.chat-thread-tools { justify-content: flex-end; min-height: 38px; padding: 4px 24px; border-bottom: 0; }
 @media (max-width: 640px) { .chat-thread-header.chat-thread-tools { min-height: 52px; padding: 6px 12px 6px 62px; } }
+
+.chat-memory-controls{position:relative}.chat-memory-controls>summary{cursor:pointer}.chat-memory-controls[open]>div{position:absolute;right:0;top:28px;z-index:30;width:min(340px,80vw);background:var(--surface,#fff);border:1px solid #dce3f0;border-radius:12px;box-shadow:0 8px 30px #182d5318;font-size:14px;line-height:1.6}.chat-memory-sources{margin-top:12px;font-size:13px;color:var(--muted,#667085)}.chat-memory-sources>div{border-left:2px solid #dce3f0;padding:4px 12px;margin:8px 0;overflow-wrap:anywhere}.chat-memory-sources p{white-space:pre-wrap}

@@ -95,6 +95,9 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         return read_messages(db, conversation_id, username)
     if is_generating(conversation):
         raise HTTPException(409, "这个对话正在回答，请稍后再试")
+    from ..memory.service import explicit_command
+    if explicit_command(db, conversation, question, request_id, existing):
+        return read_messages(db, conversation_id, username)
     selected = select_chat_model(get_settings(), requested_model)
     model_info = selected.public()
     if prior_model and any(prior_model[key] != model_info[key] for key in ("provider", "model")):
@@ -235,7 +238,9 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
                 nonlocal failure_stage
                 failure_stage = "answer"
                 try:
-                    summarized = synthesize_result(question, read_result, on_check=check)
+                    preferences = [r["text"] for r in getattr(context,"references",[]) if r.get("kind")=="user_stated_memory"]
+                    summarized = synthesize_result(question, read_result, on_check=check,
+                        **({"memory_preferences": preferences} if preferences else {}))
                 except ChatRequestFailure:
                     if not read_result.get("diagnostic"):
                         raise
@@ -282,6 +287,12 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
                 agent_model_json=user_message.agent_model_json)
             db.add(answer_message)
             db.flush()
+            from ..memory.usage import save_usage
+            try:
+                with db.begin_nested():
+                    save_usage(db, answer_message, context, conversation.user_id)
+            except Exception:
+                trace_event("memory.provenance_unavailable")
             conversation.generation_token = None
             conversation.generation_preview_json = None
             conversation.generating_at = None

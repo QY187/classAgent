@@ -7,6 +7,7 @@ import ChatMessageList from "./ChatMessageList";
 import ChatComposer from "./ChatComposer";
 import ChatModelSelect from "./ChatModelSelect";
 import ChatArchiveButton from "./ChatArchiveButton";
+import ChatMemoryControls from "./ChatMemoryControls";
 import ChatDeleteButton from "./ChatDeleteButton";
 import { streamAnswer, type AnswerPreview } from "../../lib/chat-stream";
 import { chatFailureMessage } from "../../lib/chat-errors";
@@ -192,6 +193,7 @@ export default function ChatThread({ conversationId, onLoaded, onChanged, onDele
   const canStop = !stopping && (sending ? !!readyRequestId : !!history?.conversation.generating && history.messages.some((item) => item.role === "user" && item.status === "pending"));
   return <><header className="chat-thread-header chat-thread-tools" aria-label="对话操作">
     {history && <div className="chat-thread-actions">
+      <ChatMemoryControls conversationId={conversationId} disabled={sending || history.conversation.generating} />
       <ChatArchiveButton conversation={history.conversation} onChanged={(item) => { setHistory({ ...history, conversation: item }); onChanged(); }} />
       <ChatDeleteButton conversation={history.conversation} disabled={sending || history.conversation.generating} onDeleted={onDeleted} />
     </div>}

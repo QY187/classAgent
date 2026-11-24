@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ...shared.models import ChatMessage, Quiz, AgentAction, Course, Lesson
@@ -41,6 +42,16 @@ def read_messages(db: Session, conversation_id: str, username: str) -> dict:
     from ..materials.content import refresh_material_citation
     conversation = owned_conversation(db, conversation_id, username)
     items = list(db.scalars(select(ChatMessage).where(ChatMessage.conversation_id == conversation_id).order_by(ChatMessage.position)))
+    from ...shared.models import ChatMemoryUse
+    from ..memory.settings import effective_settings
+    memory_entries=defaultdict(list)
+    try:
+        with db.begin_nested():
+            memory_policy=effective_settings(db,conversation.user_id,conversation_id)
+            for entry in db.scalars(select(ChatMemoryUse).where(ChatMemoryUse.message_id.in_([item.id for item in items]))):
+                memory_entries[entry.message_id].append(entry)
+    except Exception:
+        memory_policy={"history_enabled":False,"long_term_enabled":False}
     quizzes = db.scalars(select(Quiz).where(Quiz.agent_request_key.in_([item.id for item in items if item.role == "user"])))
     artifacts = {quiz.agent_request_key: quiz_card(db, quiz) for quiz in quizzes}
     action_artifacts = {}
@@ -56,6 +67,8 @@ def read_messages(db: Session, conversation_id: str, username: str) -> dict:
         message = message_read(item)
         message["citations"] = [refresh_material_citation(db, citation, username) for citation in message["citations"]]
         message["artifacts"] = ([artifacts[item.id]] if item.id in artifacts else []) + action_artifacts.get(item.id, [])
+        from ..memory.usage import read_usage
+        message["memory_sources"] = read_usage(db,item.id,conversation.user_id,conversation_id,entries=memory_entries[item.id],policy=memory_policy) if item.role=="assistant" else []
         messages.append(message)
     enrich_citations(db, [citation for message in messages for citation in message["citations"]], conversation.user_id)
     return {"conversation": conversation_read(conversation), "messages": messages}

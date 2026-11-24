@@ -173,3 +173,6 @@ app.include_router(quotas_router)
 app.include_router(timetable_router)
 
 app.include_router(exports_router)
+
+from .modules.memory.controller import router as memory_router
+app.include_router(memory_router)

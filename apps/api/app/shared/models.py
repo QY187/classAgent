@@ -422,3 +422,38 @@ class ChatMemoryIndex(Base):
     embedding: Mapped[list[float]] = mapped_column(VECTOR(1536))
     model: Mapped[str] = mapped_column(String(100))
     content_hash: Mapped[str] = mapped_column(String(64))
+
+
+class UserMemorySettings(Base):
+    __tablename__ = "user_memory_settings"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    history_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    long_term_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ConversationMemoryPolicy(Base):
+    __tablename__ = "conversation_memory_policies"
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("chat_conversations.id", ondelete="CASCADE"), primary_key=True)
+    temporary: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class UserMemory(Base):
+    __tablename__ = "user_memories"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[str | None] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), nullable=True)
+    source_message_id: Mapped[str | None] = mapped_column(ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=True)
+    content: Mapped[str] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class ChatMemoryUse(Base):
+    __tablename__ = "chat_memory_uses"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    message_id: Mapped[str] = mapped_column(ForeignKey("chat_messages.id", ondelete="CASCADE"), index=True)
+    source_message_id: Mapped[str | None] = mapped_column(ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=True)
+    memory_id: Mapped[str | None] = mapped_column(ForeignKey("user_memories.id", ondelete="CASCADE"), nullable=True)
+    memory_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    excerpt: Mapped[str] = mapped_column(Text, default="")

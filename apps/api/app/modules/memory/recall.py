@@ -6,7 +6,7 @@ from sqlalchemy import select, or_, and_, tuple_
 from ...core.config import get_settings
 from ...core.telemetry import traced, annotate
 from ...core.model_budget import quota_user
-from ...shared.models import ChatConversation, ChatMessage, ChatMemoryIndex, Lesson
+from ...shared.models import ChatConversation, ChatMessage, ChatMemoryIndex, Lesson, ConversationMemoryPolicy
 from .context import SECRET, MEMORY_COMMAND, cost
 from .embeddings import embed
 
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 def scoped_messages(conversation, before_position):
     query = select(ChatMessage).join(ChatConversation, ChatConversation.id == ChatMessage.conversation_id).where(
         ChatConversation.user_id == conversation.user_id, ChatMessage.status == "completed",
+        ChatConversation.id.not_in(select(ConversationMemoryPolicy.conversation_id).where(ConversationMemoryPolicy.temporary.is_(True))),
         or_(ChatMessage.conversation_id != conversation.id, ChatMessage.position < before_position))
     commands=select(ChatMessage.conversation_id,ChatMessage.request_id).where(ChatMessage.role=="user",
         or_(*(ChatMessage.content.like(prefix+mark+"%") for prefix in ("记住","全局记住","忘记","修改记忆") for mark in (":","："))))

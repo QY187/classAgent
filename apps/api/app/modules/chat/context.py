@@ -22,6 +22,8 @@ def recent_context(db, conversation_id, before_position, question="", *, budget=
             if question:
                 conversation=db.scalar(select(ChatConversation).where(ChatConversation.id==conversation_id))
                 if conversation:
+                    from ..memory.service import long_term_references
+                    context.references.extend(long_term_references(db,conversation,question,budget=min(1000,remaining())))
                     context.references.extend(recall(db,conversation,question,before_position,budget=min(1600,remaining())))
             annotate(result_count=len(context.references),strategy="budgeted_memory")
             return context

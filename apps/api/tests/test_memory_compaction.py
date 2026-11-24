@@ -66,6 +66,15 @@ def test_rolling_checkpoint_retains_old_constraints(db,monkeypatch):
     assert "Python" in str(build_context(db,"c",60).references)
 
 
+def test_disabled_history_skips_compaction(db,monkeypatch):
+    from app.shared.models import ConversationMemoryPolicy
+    populate(db)
+    db.add(ConversationMemoryPolicy(conversation_id="c",temporary=True));db.commit()
+    with patch.object(summaries,"complete") as call:
+        ensure_compacted(db,"c",32,6000)
+        call.assert_not_called()
+
+
 def test_empty_summary_cannot_claim_coverage(db,monkeypatch):
     populate(db)
     monkeypatch.setattr(summaries,"complete",lambda *a,**k:{"content":"[]"})

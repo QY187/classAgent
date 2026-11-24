@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { errorMessage, request } from "../../lib/api";
 import { clearSession, getStoredUser, type AuthUser } from "../../lib/auth";
@@ -96,7 +97,7 @@ export default function SettingsPage() {
 
   return (
     <main className="content settings-page">
-      <div className="settings-heading"><span className="eyebrow">我的账号</span><h1>个人设置</h1><p>管理你的头像和登录密码。</p></div>
+      <div className="settings-heading"><span className="eyebrow">我的账号</span><h1>个人设置</h1><Link href="/memories">管理学习记忆 →</Link><p>管理你的头像和登录密码。</p></div>
       {error && <div className="notice login-notice settings-message" role="alert">{error}</div>}
       {notice && <div className="notice login-success settings-message" role="status">{notice}</div>}
 
