@@ -6,6 +6,7 @@ from .generation import GenerationStopped
 from ...shared.models import ChatMessage
 
 LABELS = {
+    "compact_context": "压缩较早对话，保留近期上下文",
     "list_materials": "查询课件资料",
     "get_material_content": "读取课件原文",
     "update_course": "修改课程信息",
@@ -31,6 +32,7 @@ LABELS = {
     "generate_practice_quiz": "生成薄弱点练习",
 }
 ERRORS = {
+    "context_compaction_failed": "上下文压缩未完成，本次暂停回答，原记录保留",
     "action_rejected": "操作未执行，请查看回答说明",
     "unknown_tool": "不支持该操作",
     "invalid_arguments": "查询条件不符合要求",
@@ -59,7 +61,7 @@ def save_agent_step(db, conversation_id, username, request_id, token, raw):
     steps = json.loads(question.agent_steps_json)
     index = next((i for i, item in enumerate(steps) if item["id"] == identity), None)
     if index is None:
-        if len(steps) >= 8:
+        if len(steps) >= (9 if any(s.get("id")=="memory-compaction" for s in steps) else 8):
             raise ValueError("工具进度超过限制")
         steps.append(step)
     else:

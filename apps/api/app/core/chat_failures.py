@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 
 REASONS = {
+    "context_compaction_failed": (503, "较早对话尚未能完成上下文压缩，本次已暂停回答，原聊天记录仍保留。请重试；也可新建对话并补充必要背景。"),
     "quota_exhausted": (429, "今日大模型 Token 剩余额度不足以完成本次调用，请减少上下文，或等待北京时间零点额度重置；也可联系管理员调整额度。"),
     "quota_identity_required": (503, "无法确认本次模型调用的用户归属，已停止调用，请联系管理员。"),
     "quota_storage_unavailable": (503, "暂时无法核对 Token 额度，已停止新的模型调用，请稍后重试。"),

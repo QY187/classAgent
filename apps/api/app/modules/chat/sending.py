@@ -132,7 +132,7 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
         lesson = db.scalar(select(Lesson).where(Lesson.id == lesson_id))
         course_id = lesson.course_id
     position = existing.position
-    context = recent_context(db, conversation_id, position)
+    context = []
     intent_snapshot = start_request(existing, conversation)
     db.commit()
     question_id = existing.id
@@ -156,6 +156,11 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
             progress = save_agent_step(db, conversation_id, username, request_id, token, raw)
             if on_step is not None:
                 on_step(progress)
+        from ..memory.compaction import ensure_compacted
+        from ..memory.context import cost
+        context_budget=max(256,getattr(get_settings(),"memory_context_budget",16000)-cost(question)-128)
+        ensure_compacted(db,conversation_id,position,context_budget,on_check=check,on_step=publish_step)
+        context = recent_context(db, conversation_id, position, question, budget=context_budget)
         with span("intent.context"):
             bound_course = owned_course(db, course_id, username).name if course_id else None
             bound_lesson = owned_lesson(db, lesson_id, username).title if lesson_id else None
@@ -272,14 +277,27 @@ def _send_message(db: Session, conversation_id: str, username: str, content: str
             user_message.status = "completed"
             user_message.error_message = None
             conversation.pending_task_json = next_pending(db, conversation, user_message, intent_snapshot, decision, result)
-            db.add(ChatMessage(conversation_id=conversation_id, request_id=request_id, position=position + 1,
+            answer_message=ChatMessage(conversation_id=conversation_id, request_id=request_id, position=position + 1,
                 role="assistant", content=result["answer"], citations_json=json.dumps(result["citations"], ensure_ascii=False),
-                agent_model_json=user_message.agent_model_json))
+                agent_model_json=user_message.agent_model_json)
+            db.add(answer_message)
+            db.flush()
             conversation.generation_token = None
             conversation.generation_preview_json = None
             conversation.generating_at = None
             conversation.updated_at = now_utc()
             db.commit()
+            db.refresh(answer_message)
+        from ..memory.summaries import candidates, dispatch_summary
+        try:
+            from ...infrastructure.tasks import index_conversation_memory
+            if get_settings().memory_semantic_enabled and get_settings().dashscope_api_key:
+                index_conversation_memory.delay(conversation_id)
+            if candidates(db, conversation_id)[0]:
+                dispatch_summary(conversation_id)
+        except Exception:
+            db.rollback()
+            trace_event("memory.dispatch_unavailable")
         failure_stage = "history"
         return read_messages(db, conversation_id, username)
     except GenerationStopped:

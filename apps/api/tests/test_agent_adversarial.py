@@ -170,7 +170,7 @@ class AdversarialAgentLoopTest(unittest.TestCase):
         self.assertIsNone(status_request(current, history))
         self.assertFalse(wants_quiz(current, history))
 
-    def test_recent_context_drops_old_clarification_after_window(self):
+    def test_recent_context_excludes_orphan_clarification_messages(self):
         chat = create_global_conversation(self.db, "owner")
         for position in range(1, 11):
             role = "assistant" if position == 2 else "user"
@@ -179,7 +179,7 @@ class AdversarialAgentLoopTest(unittest.TestCase):
                                     role=role, content=content, status="completed"))
         self.db.commit()
         context = recent_context(self.db, chat["id"], 11)
-        self.assertEqual(len(context), 8)
+        self.assertEqual(context, [])
         self.assertNotIn("课程名称是什么？", [item["content"] for item in context])
 
     def test_foreign_scope_is_rejected_before_tool_execution(self):
@@ -202,7 +202,12 @@ class AdversarialAgentLoopTest(unittest.TestCase):
         self.assertEqual(result["outcome"], "insufficient_evidence")
         model.assert_called_once()
         prompt = model.call_args.args[0]
-        self.assertLessEqual(len([item for item in prompt if item["role"] in {"user", "assistant"}]), 8 + 2)
+        from app.modules.memory.context import cost
+        history_messages=[item for item in prompt if item["role"] in {"user","assistant"}]
+        self.assertGreater(len(history_messages),8)
+        self.assertLessEqual(sum(cost(item["content"]) for item in history_messages),6000)
+        from app.shared.models import AgentAction
+        self.assertEqual(self.db.query(AgentAction).count(),0)
 
     def test_near_limit_question_is_accepted_but_over_limit_is_rejected(self):
         question = "查询" + "课程内容" * 199

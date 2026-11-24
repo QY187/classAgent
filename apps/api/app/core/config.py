@@ -53,6 +53,9 @@ class Settings(BaseSettings):
             raise ValueError("模型编号不能重复或使用保留编号 default/deepseek/dashscope")
         return items
 
+    memory_context_budget: int = Field(default=16000, ge=512, le=24000)
+    memory_semantic_enabled: bool = True
+    memory_summary_enabled: bool = True
     token_quota_enabled: bool = True
     daily_token_limit: int = Field(default=100000, ge=0, le=1000000000)
     secret_key: str = "dev-secret-change-me"

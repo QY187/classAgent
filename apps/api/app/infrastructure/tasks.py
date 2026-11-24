@@ -215,3 +215,29 @@ def reindex_course(course_id: str) -> int:
     for lesson_id in lesson_ids:
         reindex_lesson.delay(lesson_id)
     return len(lesson_ids)
+
+
+@celery_app.task(name="classagent.update_conversation_memory", soft_time_limit=45, time_limit=60)
+def update_conversation_memory(conversation_id):
+    from ..core.db import SessionLocal
+    from ..modules.memory.summaries import update_summary
+    with SessionLocal() as db:
+        try:
+            return update_summary(db, conversation_id)
+        except Exception:
+            db.rollback()
+            logger.warning("Memory summary update unavailable", exc_info=False)
+            return False
+
+
+@celery_app.task(name="classagent.index_conversation_memory", soft_time_limit=50, time_limit=60)
+def index_conversation_memory(conversation_id):
+    from ..core.db import SessionLocal
+    from ..modules.memory.recall import index_conversation
+    with SessionLocal() as db:
+        try:
+            return index_conversation(db, conversation_id)
+        except Exception:
+            db.rollback()
+            logger.warning("Memory indexing unavailable", exc_info=False)
+            return 0

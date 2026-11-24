@@ -9,10 +9,10 @@ from .model_selection import active_chat_model
 
 
 @traced("model.chat", kind="model")
-def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
+def complete(messages: list[dict], tools: list[dict], timeout: float, *, purpose: str = "chat") -> dict:
     settings = get_settings()
     model = active_chat_model() or resolve_chat_model(settings)
-    annotate(provider=model.provider, model=model.model, timeout_seconds=timeout)
+    annotate(provider=model.provider, model=model.model, timeout_seconds=timeout, purpose=purpose)
     if not model.api_key:
         raise ChatRequestFailure("ai_not_configured")
     try:
@@ -21,6 +21,7 @@ def complete(messages: list[dict], tools: list[dict], timeout: float) -> dict:
             headers={"Authorization": f"Bearer {model.api_key}"},
             json=model.request_body(messages, tools),
             timeout=timeout,
+            purpose=purpose,
         )
         response.raise_for_status()
         payload = response.json()

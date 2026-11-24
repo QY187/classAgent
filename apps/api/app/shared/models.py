@@ -405,3 +405,20 @@ class AgentAction(Base):
     arguments_json: Mapped[str] = mapped_column(Text)
     result_json: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class ConversationMemorySummary(Base):
+    __tablename__ = "conversation_memory_summaries"
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("chat_conversations.id", ondelete="CASCADE"), primary_key=True)
+    summary_json: Mapped[str] = mapped_column(Text, default="[]")
+    through_position: Mapped[int] = mapped_column(Integer, default=-1)
+    version: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class ChatMemoryIndex(Base):
+    __tablename__ = "chat_memory_indexes"
+    message_id: Mapped[str] = mapped_column(ForeignKey("chat_messages.id", ondelete="CASCADE"), primary_key=True)
+    embedding: Mapped[list[float]] = mapped_column(VECTOR(1536))
+    model: Mapped[str] = mapped_column(String(100))
+    content_hash: Mapped[str] = mapped_column(String(64))
