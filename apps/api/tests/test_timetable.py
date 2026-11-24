@@ -202,3 +202,17 @@ def test_color_palette_extends_without_reusing_colors():
     colors = allocate_colors(entries)
     assert len(set(colors.values())) == 40
     assert allocate_colors(list(reversed(entries))) == colors
+
+
+def test_all_day_activities_can_coexist_but_still_check_regular_lesson_conflicts(timetable_api):
+    client, _, _ = timetable_api
+    semester = create_semester(client)
+    path = f"/timetable/semesters/{semester['id']}/entries"
+    base = entry_payload(course_id=None, weekday=1, start_period=1, end_period=10, start_week=1, end_week=3, is_all_day=True)
+    first = client.post(path, json={**base, "title": "毕业实习"})
+    assert first.status_code == 201 and first.json()["is_all_day"] is True
+    assert client.post(path, json={**base, "title": "硬件课程设计"}).status_code == 201
+    assert client.post(path, json={**base, "title": "普通课", "is_all_day": False}).status_code == 409
+    assert client.post(path, json={**base, "title": "其他日期", "weekday": 3}).status_code == 201
+    assert len(client.get("/timetable/week", params={"week": 1}).json()["entries"]) == 3
+    assert client.get("/timetable/week", params={"week": 4}).json()["entries"] == []

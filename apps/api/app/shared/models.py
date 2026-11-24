@@ -159,6 +159,7 @@ class TimetableEntry(Base):
     end_week: Mapped[int] = mapped_column(Integer)
     week_pattern: Mapped[str] = mapped_column(String(8), default="all")
     color: Mapped[str] = mapped_column(String(12), default="teal")
+    is_all_day: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     semester: Mapped[TimetableSemester] = relationship(back_populates="entries")
 
 

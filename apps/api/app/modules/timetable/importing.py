@@ -22,7 +22,7 @@ class Grid:
 
 
 def clean(value) -> str:
-    return unicodedata.normalize("NFKC", str(value or "")).replace("\r", "\n").strip()
+    return unicodedata.normalize("NFKC", str(value or "")).replace("⻢", "马").replace("\r", "\n").strip()
 
 
 def weekday(value: str) -> int:
@@ -60,6 +60,7 @@ def period_ranges(text: str) -> list[tuple[int, int]]:
 
 def week_ranges(text: str, week_count: int) -> tuple[list[tuple[int, int]], str, list[str]]:
     text = clean(text)
+    text = re.sub(r"[\[(]\s*周\s*[\])]", "周", text)
     odd = bool(re.search(r"单周|周\s*\(?\s*单|\(单\)", text)) or text.strip() == "单"
     even = bool(re.search(r"双周|周\s*\(?\s*双|\(双\)", text)) or text.strip() == "双"
     pattern = "odd" if odd else "even" if even else "all"
@@ -95,7 +96,7 @@ ALIASES = {
 
 def _pdf_grids(data: bytes) -> tuple[list[Grid], list[str]]:
     import pdfplumber
-    grids, warnings = [], []
+    grids, warnings, scan_pages = [], [], []
     try:
         with pdfplumber.open(io.BytesIO(data)) as document:
             if len(document.pages) > 15:
@@ -105,8 +106,10 @@ def _pdf_grids(data: bytes) -> tuple[list[Grid], list[str]]:
                 total_chars += len(page.chars)
                 if total_chars > 80000 or len(page.edges) > 12000:
                     raise HTTPException(422, "PDF 内容过于复杂，请只保留课表页后重试")
-                if not page.chars:
-                    warnings.append(f"第 {page_number} 页没有可提取文字，可能是扫描图片，未参与识别")
+                text = page.extract_text(layout=False) or ""
+                if not page.chars or (page.images and (len(page.chars) < 20 or not re.search(r"(?:周|星期)[一二三四五六日天1-7]", text))):
+                    scan_pages.append(page_number - 1)
+                    page.close()
                     continue
                 tables = page.find_tables()
                 if not tables:
@@ -124,7 +127,6 @@ def _pdf_grids(data: bytes) -> tuple[list[Grid], list[str]]:
                                 spans[(row_index, col)] = sum(top >= cell[1] - 1 and top < cell[3] - 1 for top in tops)
                     grids.append(Grid(f"第{page_number}页·表{number}", rows, spans))
                 # 无边框 PDF 的逐行课程列表：课程名称 周一 第1-3节 第1-16周。
-                text = page.extract_text(layout=False) or ""
                 free_rows = [[line] for line in text.splitlines() if re.search(r"(?:周|星期)[一二三四五六日天1-7]", line) and period_ranges(line)]
                 if not tables and free_rows:
                     grids.append(Grid(f"第{page_number}页·文字列表", free_rows))
@@ -133,8 +135,12 @@ def _pdf_grids(data: bytes) -> tuple[list[Grid], list[str]]:
         raise
     except Exception as exc:
         raise HTTPException(422, "PDF 无法读取，请确认文件完整、未加密，并从教务系统重新导出") from exc
+    if scan_pages:
+        from .ocr import scanned_grids
+        grids.extend(scanned_grids(data, scan_pages))
+        warnings.append(f"第 {', '.join(str(index + 1) for index in scan_pages)} 页已使用本地 OCR 识别。扫描识别可能有误，请逐项核对课程名、星期、节次和周次后确认导入。")
     if not grids:
-        raise HTTPException(422, "未找到可识别的文字课表。扫描图片版暂不支持，请上传教务系统直接导出的文字版 PDF")
+        raise HTTPException(422, "未找到可识别的课表，请使用清晰扫描件或教务系统直接导出的 PDF")
     return grids, warnings
 
 
@@ -143,12 +149,17 @@ def read_grids(filename: str, data: bytes) -> tuple[list[Grid], list[str]]:
         raise HTTPException(422, "文件为空")
     if len(data) > MAX_FILE_BYTES:
         raise HTTPException(413, "课表文件不能超过 8 MB")
+    if filename.lower().endswith(".xls"):
+        if not data.startswith(bytes.fromhex("D0CF11E0A1B11AE1")):
+            raise HTTPException(422, "文件内容不是有效的 .xls Excel，请从教务系统重新导出")
+        from .excel import xls_grids
+        return xls_grids(data)
     if filename.lower().endswith(".pdf"):
         if not data.startswith(b"%PDF-"):
             raise HTTPException(422, "文件内容不是有效的 PDF")
         return _pdf_grids(data)
     if not filename.lower().endswith(".csv"):
-        raise HTTPException(422, "请选择 PDF 课表或 CSV 课程清单")
+        raise HTTPException(422, "请选择 PDF、XLS 课表或 CSV 课程清单")
     for encoding in ("utf-8-sig", "gb18030"):
         try:
             text = data.decode(encoding)
@@ -173,15 +184,21 @@ def _name_and_details(raw: str) -> tuple[str, str, str]:
     lines = [line.strip() for line in clean(raw).splitlines() if line.strip()]
     title = re.sub(r"^(?:课程名称|课程名|课程)\s*[:：]\s*", "", lines[0]) if lines else ""
     teacher = re.search(r"(?:任课教师|授课教师|教师)\s*[:：]\s*([^\n;；]+)", raw)
+    if not teacher and len(lines) > 1 and re.search(r"\((?:讲师|副教授|教授|助教|教师|研究员|副研究员)\)", lines[1]):
+        teacher_value = lines[1]
+    else:
+        teacher_value = teacher[1].strip() if teacher else ""
     room = re.search(r"(?:上课地点|教室|地点)\s*[:：]\s*([^\n;；]+)", raw)
     if not room:
         room = next((re.match(r"^((?:[A-Za-zⅠ-Ⅻ]+[-－]?[A-Za-z]?\d{2,5})|(?:[^\n]*[楼馆室]\s*\d{2,5}))$", line) for line in lines if re.match(r"^(?:[A-Za-zⅠ-Ⅻ]+[-－]?[A-Za-z]?\d{2,5}|[^\n]*[楼馆室]\s*\d{2,5})$", line)), None)
     # 连续文字列表的标题只取星期之前的部分。
     title = re.split(r"(?:星期|周|礼拜)[一二三四五六日天1-7]", title)[0].strip(" ;；")
-    return title, teacher[1].strip() if teacher else "", room[1].strip() if room else ""
+    return title, teacher_value, room[1].strip() if room else ""
 
 
 def _block_range(text: str, periods: list[dict]) -> list[tuple[int, int]]:
+    if clean(text) == "全天":
+        return [(1, min(10, len(periods))) ]
     match = re.search(r"第?([一二三四五六七八九]|\d{1,2})大节", text)
     if not match:
         return period_ranges(text)
@@ -197,6 +214,12 @@ def _block_range(text: str, periods: list[dict]) -> list[tuple[int, int]]:
 
 
 def parse_candidates(grids: list[Grid], semester: dict) -> tuple[list[dict], list[str]]:
+    from .reconciliation import reconcile_grids
+    reconciled = reconcile_grids(grids, semester)
+    if reconciled is not None:
+        rows, notes = reconciled
+        candidates, warnings = parse_candidates(rows, semester)
+        return candidates, notes + warnings
     candidates, warnings = [], []
 
     def add(raw, source, day, period_pairs, weeks_text="", title=None, room="", teacher=""):
@@ -210,7 +233,7 @@ def parse_candidates(grids: list[Grid], semester: dict) -> tuple[list[dict], lis
                 entry = {"title": (title if title is not None else parsed_title), "teacher": teacher or parsed_teacher,
                     "room": room or parsed_room, "course_id": None, "weekday": day,
                     "start_period": start, "end_period": end, "start_week": first, "end_week": last,
-                    "week_pattern": pattern, "color": "teal"}
+                    "week_pattern": pattern, "color": "teal", "is_all_day": bool(re.search(r"(?:^|\n)全天(?:$|\n)", raw))}
                 errors = []
                 try:
                     payload = EntryWrite.model_validate(entry)
@@ -271,5 +294,5 @@ def parse_candidates(grids: list[Grid], semester: dict) -> tuple[list[dict], lis
         if not recognized:
             warnings.append(f"{grid.name}未识别到课程结构，已跳过")
     if not candidates:
-        raise HTTPException(422, "未识别到课程。请上传包含星期、节次和课程名称的文字版 PDF；也可使用课程清单 CSV")
+        raise HTTPException(422, "未识别到课程。扫描件请确保文字清晰、方向端正且包含星期、节次和课程名称；也可上传文字版 PDF 或课程清单 CSV")
     return candidates, warnings

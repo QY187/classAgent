@@ -20,6 +20,7 @@ export type Entry = {
   end_week: number;
   week_pattern: "all" | "odd" | "even";
   color: string;
+  is_all_day?: boolean;
 };
 export type WeekView = {
   semester: Semester | null;
@@ -54,4 +55,15 @@ export function groupPeriods(periods: Period[]) {
 export function calendarDate(value: string) {
   // 日期由服务端按北京时间给出，以 UTC 读取日历字段可避免浏览器时区偏移。
   return new Date(value + "T00:00:00Z");
+}
+
+// 连通的重叠时段共用一组卡片；前后相邻但不重叠的课程仍独立展示。
+export function overlappingEntries(entries: Entry[]) {
+  const clusters: Entry[][] = [];
+  for (const entry of [...entries].sort((a, b) => a.start_period - b.start_period || a.title.localeCompare(b.title, "zh-CN"))) {
+    const last = clusters.at(-1);
+    if (last && entry.start_period <= Math.max(...last.map((item) => item.end_period))) last.push(entry);
+    else clusters.push([entry]);
+  }
+  return clusters;
 }

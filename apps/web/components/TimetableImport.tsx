@@ -26,12 +26,12 @@ export default function TimetableImport({ semester, existing, onClose, onImporte
   async function parse(event: FormEvent) {
     event.preventDefault();
     if (!file || busy) return;
-    if (!/\.(pdf|csv)$/i.test(file.name)) { setError("请选择 PDF 或 CSV 课表文件"); return; }
+    if (!/\.(pdf|csv|xls)$/i.test(file.name)) { setError("请选择 PDF、XLS 或 CSV 课表文件"); return; }
     if (file.size > 8 * 1024 * 1024) { setError("文件不能超过 8 MB"); return; }
     setBusy(true); setError(""); setPreview(null); setRows([]);
     try {
       const body = new FormData(); body.append("file", file);
-      const result = await request<ImportPreview>(`/timetable/semesters/${semester.id}/import/preview`, { method: "POST", body, signal: AbortSignal.timeout(60000) });
+      const result = await request<ImportPreview>(`/timetable/semesters/${semester.id}/import/preview`, { method: "POST", body, signal: AbortSignal.timeout(180000) });
       setPreview(result);
       setRows(result.candidates.map((row) => ({ ...row, selected: row.status === "ready" })));
     } catch (cause) { setError(errorMessage(cause)); }
@@ -51,9 +51,9 @@ export default function TimetableImport({ semester, existing, onClose, onImporte
   }
   return <div className="modal-backdrop"><section className="modal timetable-import-modal" role="dialog" aria-modal="true" aria-label="导入解析课程表" onKeyDown={(event) => { if (event.key === "Escape" && !busy) onClose(); }}>
     <div className="import-heading"><div><h2>导入解析课程表</h2><p>导入到「{semester.name}」 · {semester.start_date} 开学 · {semester.week_count} 周</p></div><button className="button button-secondary" disabled={busy} onClick={onClose}>关闭</button></div>
-    <p className="timetable-help">上传教务系统导出的文字版 PDF（也支持 CSV 清单），最大 8 MB、15 页。图片扫描版暂不支持。解析后请先核对课程、节次和周次，确认才会保存。</p>
+    <p className="timetable-help">支持 XLS Excel、文字版和扫描版 PDF、CSV 清单，最大 8 MB。PDF 最多 15 页，其中扫描页最多 5 页，会自动使用本地 OCR。解析结果可在下方查看和校对，确认后才会保存。</p>
     <form onSubmit={parse} className="import-upload">
-      <label className="field-label">选择课表文件<input type="file" accept=".pdf,.csv,application/pdf,text/csv" disabled={busy} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setPreview(null); setRows([]); setError(""); }} /></label>
+      <label className="field-label">选择课表文件<input type="file" accept=".pdf,.csv,.xls,application/pdf,text/csv,application/vnd.ms-excel" disabled={busy} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setPreview(null); setRows([]); setError(""); }} /></label>
       <button className="button button-primary" disabled={!file || busy} type="submit">{busy && !preview ? "正在解析…" : "解析文件"}</button>
     </form>
     {error && <p className="notice" role="alert">{error}</p>}

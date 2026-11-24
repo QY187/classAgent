@@ -55,6 +55,7 @@ class EntryWrite(BaseModel):
     start_week: int = Field(default=1, ge=1, le=52)
     end_week: int = Field(default=20, ge=1, le=52)
     week_pattern: Literal["all", "odd", "even"] = "all"
+    is_all_day: bool = False
     color: str = Field(default="teal", pattern=r"^(?:teal|purple|blue|amber|rose|#[0-9a-fA-F]{6})$")
 
     @model_validator(mode="after")

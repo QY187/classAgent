@@ -51,6 +51,7 @@ def prepare_database() -> None:
     bootstrap_roles = _prepare_user_role_column()
     _prepare_course_material_columns()
     _prepare_lesson_sort_column()
+    _prepare_timetable_day_column()
     prepare_deleted_columns(engine)
     prepare_chat_scope(engine)
     prepare_chat_cancellation(engine)
@@ -72,6 +73,13 @@ def close_trace_persistence() -> None:
     trace_engine = getattr(app.state, "trace_engine", None)
     if trace_engine is not None:
         trace_engine.dispose()
+
+
+def _prepare_timetable_day_column() -> None:
+    inspector = inspect(engine)
+    if inspector.has_table("timetable_entries") and "is_all_day" not in {column["name"] for column in inspector.get_columns("timetable_entries")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE timetable_entries ADD COLUMN is_all_day BOOLEAN NOT NULL DEFAULT FALSE"))
 
 
 def _prepare_user_role_column() -> bool:
