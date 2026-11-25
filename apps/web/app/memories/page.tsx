@@ -15,7 +15,7 @@ export default function MemoriesPage(){
   async function load(){setLoading(true);setError("");try{const [m,s,c]=await Promise.all([request<Memory[]>("/memories"),request<Settings>("/memory-settings"),request<Course[]>("/courses")]);setItems(m);setSettings(s);setCourses(c);}catch(e){setError(errorMessage(e));}finally{setLoading(false);}}
   useEffect(()=>{void load();},[]);
   async function action(work:()=>Promise<void>){if(busy)return;setBusy(true);setError("");setNotice("");try{await work();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
-  function changeSetting(key:keyof Settings,value:boolean){if(!settings)return;void action(async()=>{const updated=await request<Settings>("/memory-settings",{method:"PATCH",body:JSON.stringify({...settings,[key]:value})});setSettings(updated);setNotice("记忆设置已更新");});}
+  function changeSetting(key:keyof Settings,value:boolean){if(!settings)return;void action(async()=>{const updated=await request<Settings>("/memory-settings",{method:"PATCH",body:JSON.stringify({history_enabled:settings.history_enabled,long_term_enabled:settings.long_term_enabled,[key]:value})});setSettings(updated);setNotice("记忆设置已更新");});}
   function add(e:FormEvent){e.preventDefault();void action(async()=>{await request("/memories",{method:"POST",body:JSON.stringify({content:text,course_id:courseId||null})});setText("");await load();setNotice("已保存记忆");});}
   return <main className="content memory-page"><div className="page-heading"><span className="eyebrow">我的学习空间</span><h1>记忆管理</h1><p>管理你明确保存的学习偏好与目标。课程资料和学习记录仍以实际数据为准。</p></div>
     {error&&<p className="notice" role="alert">{error} <button onClick={()=>void load()} disabled={busy}>重新加载</button></p>}
