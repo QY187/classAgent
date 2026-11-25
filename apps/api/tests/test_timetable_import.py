@@ -116,7 +116,7 @@ def test_incomplete_rows_are_returned_for_manual_correction():
 @pytest.mark.parametrize("name,data,status", [
     ("image.png", b"data", 422), ("fake.pdf", b"not a PDF", 422),
     ("empty.pdf", b"", 422), ("huge.pdf", b"x" * (MAX_FILE_BYTES + 1), 413),
-])
+], ids=["unsupported-type", "invalid-pdf", "empty-pdf", "oversized-pdf"])
 def test_invalid_uploads_are_rejected(name, data, status):
     with pytest.raises(HTTPException) as error:
         read_grids(name, data)
@@ -139,3 +139,161 @@ def test_import_rejects_out_of_bounds_and_empty_batches(timetable_api):
     assert client.post(path, json={"entries": []}).status_code == 422
     assert client.post(path, json={"entries": [entry_payload(end_period=14)]}).status_code == 422
     assert client.get(f"/timetable/semesters/{semester['id']}/entries").json() == []
+
+
+def make_scanned_pdf(matrix=True):
+    import pypdfium2 as pdfium
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.lib.utils import ImageReader
+
+    stream = io.BytesIO()
+    with pdfium.PdfDocument(make_pdf(matrix)) as source:
+        page = source[0]
+        bitmap = page.render(scale=3)
+        try:
+            image = bitmap.to_pil()
+            canvas = Canvas(stream, pagesize=page.get_size())
+            canvas.drawImage(ImageReader(image), 0, 0, width=page.get_width(), height=page.get_height())
+            canvas.showPage(); canvas.save()
+        finally:
+            bitmap.close(); page.close()
+    return stream.getvalue()
+
+
+@pytest.mark.parametrize("matrix", [True, False])
+def test_real_ocr_scanned_pdf_preview_requires_confirmation(timetable_api, matrix):
+    client, _, _ = timetable_api
+    semester = create_semester(client)
+    response = preview(client, semester, make_scanned_pdf(matrix))
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert any("OCR" in warning for warning in result["warnings"])
+    entries = [row["entry"] for row in result["candidates"]]
+    if matrix:
+        first = next(item for item in entries if item["title"] == "软件工程")
+        assert (first["weekday"], first["start_period"], first["end_period"]) == (1, 1, 3)
+    else:
+        assert entries[0]["title"].startswith("导入验证课程")
+        assert (entries[0]["weekday"], entries[0]["start_period"], entries[0]["end_period"]) == (4, 6, 7)
+    assert client.get(f"/timetable/semesters/{semester['id']}/entries").json() == []
+    assert client.post(f"/timetable/semesters/{semester['id']}/import", json={"entries": entries}).status_code == 200
+
+
+def test_ocr_limits_and_concurrent_request_have_actionable_errors():
+    from app.modules.timetable import ocr
+    with pytest.raises(HTTPException) as error:
+        ocr.scanned_grids(b"", list(range(6)))
+    assert error.value.status_code == 422
+    with ocr._lock:
+        with pytest.raises(HTTPException) as error:
+            ocr.scanned_grids(b"", [0])
+    assert error.value.status_code == 429
+
+
+def test_text_pdf_does_not_call_ocr(monkeypatch):
+    from app.modules.timetable import ocr
+    def unexpected(*_args):
+        raise AssertionError("文字 PDF 不应走 OCR")
+    monkeypatch.setattr(ocr, "scanned_grids", unexpected)
+    assert read_grids("文字课表.pdf", make_pdf())[0]
+
+
+def test_ocr_process_timeout_and_crash_are_isolated(monkeypatch):
+    import subprocess
+    from types import SimpleNamespace
+    from app.modules.timetable import ocr
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], 120)
+    monkeypatch.setattr(ocr.subprocess, "run", timeout)
+    with pytest.raises(HTTPException) as error:
+        ocr.scanned_grids(b"test", [0])
+    assert "120" in error.value.detail and not ocr._lock.locked()
+    monkeypatch.setattr(ocr.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1, stdout=b""))
+    with pytest.raises(HTTPException) as error:
+        ocr.scanned_grids(b"test", [0])
+    assert "进程异常" in error.value.detail and not ocr._lock.locked()
+
+
+def test_mixed_pdf_extracts_text_and_dispatches_only_scanned_page(monkeypatch):
+    from pypdf import PdfReader, PdfWriter
+    from app.modules.timetable import ocr
+    writer = PdfWriter()
+    writer.add_page(PdfReader(io.BytesIO(make_pdf())).pages[0])
+    writer.add_page(PdfReader(io.BytesIO(make_scanned_pdf(False))).pages[0])
+    stream = io.BytesIO(); writer.write(stream)
+    called = []
+    def recognize(data, indexes):
+        called.extend(indexes)
+        return [Grid("第2页·OCR", [["软件测试 周二 第4-5节 第1-16周"]])]
+    monkeypatch.setattr(ocr, "scanned_grids", recognize)
+    grids, warnings = read_grids("混合课表.pdf", stream.getvalue())
+    assert called == [1] and len(grids) >= 2
+    assert any("OCR" in warning for warning in warnings)
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("5,7-20(周)", [(5, 5), (7, 20)]),
+    ("10-13（周）", [(10, 13)]),
+    ("第1-8,10-16周(双)", [(1, 8), (10, 16)]),
+])
+def test_parenthesized_teaching_weeks(text, expected):
+    from app.modules.timetable.importing import week_ranges
+    weeks, _pattern, warnings = week_ranges(text, 20)
+    assert weeks == expected and warnings == []
+
+
+def test_combined_week_grid_and_detail_list_preserve_names_weeks_and_partial_periods():
+    semester = SemesterWrite(name="测试学期", start_date="2026-08-24").model_dump(mode="json")
+    rows = [
+        ["", "星期一", "星期二", "星期三"],
+        ["第一大节", "课程甲\n测试教师甲\n10-13(周)\nA101\n--------\n----\n课程乙\n测试教师乙\n5,7-8(周)\nA102", "", "数理\n基础(I)\nB\n测试教师丙\n5,7-20(周)\nB201"],
+        ["课程名称", "教师", "时间", "地点"],
+        ["课程甲", "测试教师甲", "星期一(02-03小\n节)", "A101"],
+        ["课程乙", "测试教师乙", "星期一(01-03小节)", "A102"],
+        ["数理基础(I)", "测试教师丙", "星期三(01-02小节)", "B201"],
+    ]
+    candidates, warnings = parse_candidates([Grid("网页打印型课表", rows)], semester)
+    assert len(candidates) == 5
+    assert all(not row["warnings"] and not row["errors"] for row in candidates)
+    first = next(row["entry"] for row in candidates if row["entry"]["title"] == "课程甲")
+    assert (first["start_period"], first["end_period"], first["start_week"], first["end_week"]) == (2, 3, 10, 13)
+    math = [row["entry"] for row in candidates if row["entry"]["title"] == "数理基础(I)"]
+    assert all((row["weekday"], row["start_period"], row["end_period"], row["teacher"]) == (3, 1, 2, "测试教师丙") for row in math)
+    assert [(row["start_week"], row["end_week"]) for row in math] == [(5, 5), (7, 20)]
+    assert any("交叉核对" in warning for warning in warnings)
+
+
+def test_excel_week_grid_keeps_titles_teachers_and_square_bracket_weeks():
+    semester = SemesterWrite(name="测试学期", start_date="2026-08-24").model_dump(mode="json")
+    rows = [["", "星期一", "星期二"],
+            ["第二大节", "课程甲\n测试教师(副教授)\n4-6,8-10[周]\nA101\n\n课程乙\n另一教师(讲师)\n13-16[周]\nA102", ""]]
+    candidates, _ = parse_candidates([Grid("Excel", rows)], semester)
+    assert len(candidates) == 3
+    first = candidates[0]["entry"]
+    assert (first["start_period"], first["end_period"], first["start_week"], first["end_week"], first["teacher"]) == (4, 5, 4, 6, "测试教师(副教授)")
+    assert all(not row["errors"] and not row["warnings"] for row in candidates)
+
+
+def test_excel_whole_week_activities_are_displayed_without_fake_daily_entries(monkeypatch):
+    import xlrd
+    from types import SimpleNamespace
+    from app.modules.timetable.excel import xls_grids
+    rows = [["", "星期一", "星期二", "", ""],
+            ["第一大节", "课程甲\n测试教师(讲师)\n1-16[周]\nA101", "", "", ""],
+            ["", "毕业实习", "全周", "1-3周(50学时)", "测试教师"]]
+    sheet = SimpleNamespace(name="课表", nrows=3, ncols=5, merged_cells=[], cell_value=lambda r,c: rows[r][c])
+    book = SimpleNamespace(nsheets=1, sheets=lambda: [sheet], release_resources=lambda: None)
+    monkeypatch.setattr(xlrd, "open_workbook", lambda **kwargs: book)
+    grids, warnings = xls_grids(b"test")
+    candidates, _ = parse_candidates(grids, SemesterWrite(name="学期", start_date="2026-08-24").model_dump(mode="json"))
+    assert len(candidates) == 3 and candidates[0]["entry"]["title"] == "课程甲"
+    activities = [row["entry"] for row in candidates if row["entry"]["is_all_day"]]
+    assert {row["weekday"] for row in activities} == {1, 2}
+    assert all(row["start_period"] == 1 and row["end_period"] == 10 for row in activities)
+    assert len(warnings) == 1 and "毕业实习" in warnings[0] and "1-3周" in warnings[0]
+
+
+def test_fake_excel_has_actionable_error():
+    with pytest.raises(HTTPException) as error:
+        read_grids("课表.xls", b"not an Excel")
+    assert error.value.status_code == 422 and "xls" in error.value.detail

@@ -46,16 +46,19 @@ function formatTime(ms: number): string {
 function SearchResultsPage() {
   const params = useSearchParams();
   const router = useRouter();
-  const query = params.get("q")?.trim() ?? "";
+  const urlQuery = params.get("q")?.trim() ?? "";
   const courseId = params.get("course_id") ?? "";
   const kind = params.get("kind") ?? "all";
   const [results, setResults] = useState<SearchResults | null>(null);
   const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [draft, setDraft] = useState(query);
+  const [draft, setDraft] = useState(urlQuery);
+  const [composing, setComposing] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const query = draft.trim();
 
-  useEffect(() => { setDraft(query); }, [query]);
+  useEffect(() => { setDraft(urlQuery); }, [urlQuery]);
 
   useEffect(() => {
     request<{ id: string; name: string }[]>("/courses").then(setCourses).catch(() => {});
@@ -65,11 +68,15 @@ function SearchResultsPage() {
     const next = new URLSearchParams(params.toString());
     if (value && value !== "all") next.set(key, value);
     else next.delete(key);
+    if (query) next.set("q", query);
+    else next.delete("q");
     router.replace(`/search?${next.toString()}`, { scroll: false });
   }
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (composing) return;
+    setRetry((value) => value + 1);
     const term = draft.trim();
     if (!term) {
       router.push("/search");
@@ -81,7 +88,8 @@ function SearchResultsPage() {
   }
 
   useEffect(() => {
-    if (!query) {
+    setError("");
+    if (!query || composing) {
       setResults(null);
       setLoading(false);
       return;
@@ -93,12 +101,14 @@ function SearchResultsPage() {
     const search = new URLSearchParams({ q: query });
     if (courseId) search.set("course_id", courseId);
     if (kind !== "all") search.set("kind", kind);
-    request<SearchResults>(`/search?${search.toString()}`, { signal: controller.signal })
+    const timer = window.setTimeout(() => {
+      request<SearchResults>(`/search?${search.toString()}`, { signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setResults(value); })
       .catch((err) => { if (!controller.signal.aborted) setError(errorMessage(err)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [query, courseId, kind]);
+    }, 300);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [query, courseId, kind, composing, retry]);
 
   const total = results
     ? results.courses.length + results.lessons.length + results.transcript.length + results.summaries.length + results.review_cards.length + (results.materials?.length || 0)
@@ -112,7 +122,7 @@ function SearchResultsPage() {
 
       <form className="search-page-form" role="search" onSubmit={submitSearch}>
         <label className="sr-only" htmlFor="search-page-query">搜索关键词</label>
-        <input id="search-page-query" className="field" type="search" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="输入课程、简写或多个关键词…" autoComplete="off" maxLength={100} />
+        <input id="search-page-query" className="field" type="search" value={draft} onChange={(event) => setDraft(event.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)} placeholder="输入即搜索：课程、简写或多个关键词…" autoComplete="off" maxLength={100} />
         <button className="button button-primary" type="submit">搜索</button>
       </form>
 
@@ -129,7 +139,7 @@ function SearchResultsPage() {
         <div className="empty-state">
           <div className="empty-icon">⌕</div>
           <strong>还没有检索词</strong>
-          <p>在上方输入关键词，按回车或点击“搜索”查看结果。</p>
+          <p>输入课程名称或内容关键词，即可自动显示匹配结果；也可按回车或点击“搜索”。</p>
         </div>
       )}
 

@@ -13,9 +13,10 @@ function weeks(entry: ImportEntry) {
 }
 function same(left: ImportEntry, right: ImportEntry) {
   const keys: (keyof ImportEntry)[] = ["title", "room", "teacher", "weekday", "start_period", "end_period", "start_week", "end_week", "week_pattern"];
-  return keys.every((key) => left[key] === right[key]);
+  return keys.every((key) => left[key] === right[key]) && !!left.is_all_day === !!right.is_all_day;
 }
 function overlaps(left: ImportEntry, right: ImportEntry) {
+  if (left.is_all_day && right.is_all_day) return false;
   if (left.weekday !== right.weekday || left.start_period > right.end_period || left.end_period < right.start_period) return false;
   const rightWeeks = new Set(weeks(right));
   return weeks(left).some((week) => rightWeeks.has(week));

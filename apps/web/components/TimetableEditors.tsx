@@ -143,6 +143,7 @@ export function EntryEditor({ initial, semester, courses, onClose, onSave, onDel
           <label className="field-label">开始周次<input className="field" required type="number" min={1} max={semester.week_count} value={draft.start_week || ""} onChange={(event) => number("start_week", event.target.value)} /></label>
           <label className="field-label">结束周次<input className="field" required type="number" min={1} max={semester.week_count} value={draft.end_week || ""} onChange={(event) => number("end_week", event.target.value)} /></label>
         </div>
+        <label className="field-label"><span><input type="checkbox" checked={!!draft.is_all_day} onChange={(event) => setDraft({ ...draft, is_all_day: event.target.checked, ...(event.target.checked ? { start_period: 1, end_period: Math.min(10, semester.periods.length) } : {}) })} /> 全天实践（跨大节展示，同一时段的多门课叠放）</span></label>
         <p className="timetable-help">颜色按课程自动分配，同一门课在整个学期保持同色。手动录入时请使用一致的课程名称，或关联同一门课程。</p>
       </fieldset>
       <div className="modal-actions">

@@ -113,7 +113,7 @@ def save_entry(db: Session, semester_id: str, username: str, payload: EntryWrite
         TimetableEntry.weekday == payload.weekday, TimetableEntry.start_period <= payload.end_period,
         TimetableEntry.end_period >= payload.start_period))
     for other in overlapping:
-        if other.id != entry_id and payload.weeks() & EntryWrite.model_validate(entry_read(other)).weeks():
+        if other.id != entry_id and not (payload.is_all_day and other.is_all_day) and payload.weeks() & EntryWrite.model_validate(entry_read(other)).weeks():
             raise HTTPException(409, f"与「{other.title}」的上课时间冲突，请调整节次或周次")
     # 先固化旧课表的兼容配色，新增课程不能抢走原来已展示的颜色。
     existing_entries = list(db.scalars(select(TimetableEntry).where(TimetableEntry.semester_id == semester.id)))
@@ -144,7 +144,7 @@ def save_entry(db: Session, semester_id: str, username: str, payload: EntryWrite
 
 
 def _entry_identity(entry: dict) -> tuple:
-    return tuple(entry[field] for field in ("title", "room", "teacher", "weekday", "start_period", "end_period", "start_week", "end_week", "week_pattern"))
+    return tuple(entry[field] for field in ("title", "room", "teacher", "weekday", "start_period", "end_period", "start_week", "end_week", "week_pattern")) + (bool(entry.get("is_all_day", False)),)
 
 
 def preview_import(db: Session, semester_id: str, username: str, filename: str, content: bytes) -> dict:
@@ -164,7 +164,7 @@ def preview_import(db: Session, semester_id: str, username: str, filename: str, 
                 candidate["status"] = "duplicate"
                 candidate["warnings"].append("该排课已存在，再次导入会自动跳过")
                 break
-            if other["weekday"] == payload.weekday and other["start_period"] <= payload.end_period and other["end_period"] >= payload.start_period and payload.weeks() & EntryWrite.model_validate(other).weeks():
+            if not (payload.is_all_day and other.get("is_all_day")) and other["weekday"] == payload.weekday and other["start_period"] <= payload.end_period and other["end_period"] >= payload.start_period and payload.weeks() & EntryWrite.model_validate(other).weeks():
                 candidate["status"] = "conflict"
                 candidate["errors"].append(f"与已有排课「{other['title']}」时间冲突")
                 break
