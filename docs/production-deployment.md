@@ -4,23 +4,23 @@
 
 ## 一、当前生产基线
 
-以下为2026-11-02发布完成时的状态。每次部署前读取实际运行容器，不能长期把此版本当成最新版本。
+以下为 2026-11-25 完成发布后的记录，包含问答记忆、课表/OCR 与记忆开关修复。每次部署前仍须读取实际运行容器，不能将本表当作实时查询。详细经过、校验与验收边界见第十一节。
 
 | 项目 | 当前值 |
 | --- | --- |
-| 线上地址 | `https://101.200.198.62` |
+| 线上地址 | `https://njust.shop` |
 | SSH | `root@101.200.198.62`，使用现有密钥，不在文档记录凭证 |
 | Compose项目 | `classagentprod` |
-| 发布目录 | `/opt/classagent-releases/61ce07a` |
-| 后端镜像 | `classagent-api:61ce07a`，api、worker、beat共用 |
-| 前端镜像 | `classagent-web:61ce07a` |
+| 发布目录 | `/opt/classagent-releases/3d490da-20261125` |
+| 后端镜像 | `classagent-api:3d490da`，api、worker、beat 共用 |
+| 前端镜像 | `classagent-web:3d490da` |
 | API访问方式 | 浏览器请求同源`/api`，由现有反向代理转发 |
 | 前端生产参数 | `NEXT_PUBLIC_API_URL=/api`、`NEXT_PUBLIC_ALLOW_REGISTRATION=false` |
 | 持久卷 | `classagentprod_postgres_data`、`classagentprod_redis_data`、`classagentprod_audio_data` |
 
 生产Compose始终同时指定`.env.production`、`docker-compose.prod.yml`和`docker-compose.release.yml`。不要直接运行开发Compose，也不要用`latest`猜测线上版本。
 
-当前前端镜像还包含一处打包修复：最终镜像复制`public/`，确保logo等资源存在。该修复已应用在线上，但记录本手册时仍未提交；后续构建必须确认它已经包含在发布输入中。
+前端 Dockerfile 已复制 `public/`，生产构建还会生成版本化 PDF.js Worker 静态资源；后续发布须继续检查两者随镜像打包。前端功能源码对应 `3d490da` 加 `a2f2792` 的记忆开关修复；修复及部署记录已按用户后续要求推送。镜像标签并不单独代表源码完全没有附加补丁。
 
 ## 二、默认简化流程：五步完成
 
@@ -87,7 +87,7 @@
 以下命令在**服务器Bash**中执行。目标发布目录和镜像必须已经准备好；这是切换命令示例，不是一键准备环境脚本。示例使用本次发布目录，后续需换成实际新目录。
 
 ```bash
-release_dir=/opt/classagent-releases/61ce07a
+release_dir=/opt/classagent-releases/3d490da-20261125
 compose=(docker compose -p classagentprod
   --env-file "$release_dir/.env.production"
   -f "$release_dir/docker-compose.prod.yml"
@@ -111,12 +111,14 @@ docker exec classagentprod-worker-1 celery -A app.infrastructure.tasks.celery_ap
 curl --fail --silent --show-error http://127.0.0.1:8000/health
 # API就绪后启动后台服务。
 "${compose[@]}" up -d --no-deps --no-build worker beat
-docker exec classagentprod-worker-1 celery -A app.infrastructure.tasks.celery_app inspect ping
+docker exec classagentprod-worker-1 celery -A app.infrastructure.tasks.celery_app inspect ping --timeout 5
 
 # 最小公网检查，curl非零退出或状态异常时停止并排查。
-curl --fail --silent --show-error https://101.200.198.62/api/health
-curl --fail --silent --show-error --output /dev/null https://101.200.198.62/
+curl --fail --silent --show-error https://njust.shop/api/health
+curl --fail --silent --show-error --output /dev/null https://njust.shop/
 ```
+
+Worker 冷启动可能晚于容器显示运行；首次 ping 未响应时先核对状态和日志，在有界启动窗口内重试，持续失败才按回退流程处理，不能把单次过早检查当成已经确认的启动失败。
 
 不要把前端与后端两组示例无差别整段执行。完整输出的`docker inspect`、`docker compose config`可能包含密钥，仅提取需要的非敏感字段。不得通过`down -v`、清理卷或覆盖配置来解决发布问题。
 
@@ -182,7 +184,7 @@ curl --fail --silent --show-error --output /dev/null https://101.200.198.62/
 
 ## 十一、问答记忆与课程表更新上线（2026-11-25）
 
-已将基线 `3d490da5c7b95d1d24ec21ca5b7227da1085878c` 的问答记忆、课程表、扫描 PDF 本地 OCR、XLS 导入和自动搜索部署至 `https://njust.shop`。发布目录为 `/opt/classagent-releases/3d490da-20261125`，web 使用 `classagent-web:3d490da`，api/worker/beat 共用 `classagent-api:3d490da`。另包含前端记忆开关保存修复 `a2f2792c7cd2d29194acabef101314d3ece1e16f`：只提交两个可写设置字段，避免接口响应中的只读 temporary 字段导致 422；该修复与本条部署记录仅本地提交，未另行推送。发布清单记录基线、补丁及对应提交；前端修复文件的归档与构建输入仅换行形式不同，内容一致。
+已将基线 `3d490da5c7b95d1d24ec21ca5b7227da1085878c` 的问答记忆、课程表、扫描 PDF 本地 OCR、XLS 导入和自动搜索部署至 `https://njust.shop`。发布目录为 `/opt/classagent-releases/3d490da-20261125`，web 使用 `classagent-web:3d490da`，api/worker/beat 共用 `classagent-api:3d490da`。另包含前端记忆开关保存修复 `a2f2792c7cd2d29194acabef101314d3ece1e16f`：只提交两个可写设置字段，避免接口响应中的只读 temporary 字段导致 422；该修复与本条部署记录在发布时仅本地提交，随后已按用户要求推送至 main。发布清单记录基线、补丁及对应提交；前端修复文件的归档与构建输入仅换行形式不同，内容一致。
 
 前后端均在本机完成 Linux amd64 生产构建。后端依赖和系统包发生变化，已完整重建运行环境，pip check 及 OCR/PDF/XLS 模块导入通过。下载超时、不完整字体包与上传链路波动导致本次准备耗时较长；最终依赖校验和安装成功。前端构建、类型检查、同源 /api、关闭注册与 public 资源检查通过，已有同代码回归结果复用。
 

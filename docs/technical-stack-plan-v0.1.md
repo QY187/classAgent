@@ -1,5 +1,7 @@
 # ClassAgent 技术栈方案 v0.1
 
+> 本文保留 2026-09-28 的历史选型提案，表中的 Tailwind/shadcn、Auth.js、FFmpeg、Sentry 等不能据此视为已接入。当前实现采用 Next.js/React/TypeScript、原生 CSS 与 Tiptap，FastAPI/SQLAlchemy、Celery Worker + Beat、Redis、PostgreSQL + pgvector，后端自有令牌鉴权；开发和当前生产默认本地文件卷。PDF 导出使用 ReportLab/PDF.js，课表解析使用 pdfplumber/xlrd/RapidOCR。现行启动与配置见 [README](../README.md) 和 [本地开发](local-development.md)，不以此历史表作为安装清单。
+
 日期：2026-09-28  
 状态：首版技术方案，待用真实课堂样本验证  
 适用范围：个人用户 Web 版 MVP
